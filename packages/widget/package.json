@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": { ".": "./src/index.ts", "./widget.js": "./dist/widget.iife.js" },
   "scripts": { "build": "vite build", "check-types": "tsc --noEmit" },
   "devDependencies": { "@repo/typescript-config": "workspace:*", "vite": "^7.0.0" }
 }

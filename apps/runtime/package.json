@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @cradle/widget build && node scripts/copy-widget.mjs && node --env-file=../../.env node_modules/next/dist/bin/next dev --port 3002",
-    "build": "pnpm --filter @cradle/widget build && node scripts/copy-widget.mjs && next build",
+    "predev": "pnpm --filter @cradle/widget build",
+    "dev": "next dev --port 3002",
+    "prebuild": "pnpm --filter @cradle/widget build",
+    "build": "next build",
     "start": "next start -p 3002",
     "lint": "eslint --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit"

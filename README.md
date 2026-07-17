@@ -23,12 +23,13 @@ This is intentionally infrastructure, not another fixed "sales bot" or "support 
 
 ```sh
 pnpm install
-cp .env.example .env
+cp apps/runtime/.env.example apps/runtime/.env.local
+cp apps/studio/.env.example apps/studio/.env.local
 pnpm --filter runtime dev
 pnpm --filter studio dev
 ```
 
-Set `OPENAI_API_KEY` and `FIRECRAWL_API_KEY` in the root `.env`. The local `runtime` and `studio` commands load that one file automatically. Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
+Next.js natively loads `.env.local` from each app directory. Set the OpenAI and Firecrawl keys in `apps/runtime/.env.local`; set Studio's public runtime URL in `apps/studio/.env.local`. Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
 
 ```html
 <script src="https://runtime.example/widget.js"></script>
@@ -57,7 +58,7 @@ This is suitable for testing the integration and demoing the flow only. A Render
 - `apps/studio` — URL onboarding and installation snippet.
 - `apps/runtime` — crawl onboarding, installation, streaming, and widget delivery.
 - `apps/site` — integration target for local verification.
-- `packages/widget` — framework-free `cradle-resident` custom element.
+- `packages/widget` — framework-free `cradle-resident` custom element, compiled and served by Runtime at `/widget.js`.
 - `packages/crawler` — bounded, same-origin Firecrawl ingestion.
 - `packages/core` — Zod contracts shared by every deployment.
 - `packages/db` — store contract and development-only memory store.

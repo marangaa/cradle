@@ -4,6 +4,6 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
 ARG APP
-RUN pnpm --filter ${APP} build
+RUN pnpm --filter @cradle/widget build && pnpm --filter ${APP} build
 WORKDIR /app/apps/${APP}
 CMD ["sh", "-c", "pnpm exec next start -p ${PORT:-3000}"]
