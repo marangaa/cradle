@@ -1,1 +1,1 @@
-{ "extends": "@repo/typescript-config/base.json", "include": ["src/**/*.ts"] }
+{ "extends": "@repo/typescript-config/base.json", "include": ["src/**/*.ts", "drizzle.config.ts"] }

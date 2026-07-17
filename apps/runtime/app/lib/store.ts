@@ -1,3 +1,3 @@
-import { MemoryStore } from "@cradle/db";
+import { createCradleStore } from "@cradle/db";
 
-export const store = new MemoryStore();
+export const store = createCradleStore();
