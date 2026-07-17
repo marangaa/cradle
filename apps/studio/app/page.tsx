@@ -3,6 +3,14 @@ import { useState } from "react";
 
 export default function StudioHome() {
   const [url, setUrl] = useState("");
-  const [ready, setReady] = useState(false);
-  return <main><p className="eyebrow">CRADLE / BY QUALRA</p><h1>Give your website<br />someone to be.</h1><p className="lede">Cradle builds the representative. You decide what it knows, remembers, and does.</p><form onSubmit={(event) => { event.preventDefault(); setReady(true); }}><label htmlFor="site">Website URL</label><div className="row"><input id="site" type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://yourcompany.com" /><button>Build resident</button></div></form>{ready && <section className="result"><p>Next: Cradle will crawl public pages, prepare a reviewable knowledge snapshot, and generate your installation.</p><code>{`<script src="https://runtime.example/widget.js"></script>\n<cradle-resident installation-id="YOUR_INSTALLATION" api-base="https://runtime.example"></cradle-resident>`}</code></section>}</main>;
+  const [result, setResult] = useState<{ installation: { id: string }; knowledge: { pages: unknown[] } } | null>(null);
+  const [error, setError] = useState("");
+  async function onboard(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError("");
+    const response = await fetch(`${process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ?? "http://localhost:3002"}/api/onboarding`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
+    const payload = await response.json();
+    if (!response.ok) { setError(payload.error ?? "Cradle could not prepare this site."); return; }
+    setResult(payload);
+  }
+  return <main><p className="eyebrow">CRADLE / BY QUALRA</p><h1>Give your website<br />someone to be.</h1><p className="lede">Cradle builds the representative. You decide what it knows, remembers, and does.</p><form onSubmit={onboard}><label htmlFor="site">Website URL</label><div className="row"><input id="site" type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://yourcompany.com" /><button>Build resident</button></div></form>{error && <p role="alert">{error}</p>}{result && <section className="result"><p>Prepared {result.knowledge.pages.length} reviewable pages. Install this after reviewing the snapshot.</p><code>{`<script src="${process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ?? "http://localhost:3002"}/widget.js"></script>\n<cradle-resident installation-id="${result.installation.id}" api-base="${process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ?? "http://localhost:3002"}"></cradle-resident>`}</code></section>}</main>;
 }

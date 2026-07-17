@@ -66,9 +66,15 @@ importers:
       '@cradle/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cradle/crawler':
+        specifier: workspace:*
+        version: link:../../packages/crawler
       '@cradle/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@cradle/widget':
+        specifier: workspace:*
+        version: link:../../packages/widget
       ai:
         specifier: ^7.0.31
         version: 7.0.31(zod@3.25.76)
