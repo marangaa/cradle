@@ -1,5 +1,5 @@
 {
-  "name": "@cradle/db",
+  "name": "@cradle/media",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,9 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@cradle/core": "workspace:*",
-    "postgres": "^3.4.9"
+    "@aws-sdk/client-s3": "^3.1090.0",
+    "@aws-sdk/s3-request-presigner": "^3.1090.0",
+    "@cradle/core": "workspace:*"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*"
