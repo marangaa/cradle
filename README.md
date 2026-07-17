@@ -28,7 +28,7 @@ pnpm --filter runtime dev
 pnpm --filter studio dev
 ```
 
-Set `OPENAI_API_KEY` and `FIRECRAWL_API_KEY` in `.env`. Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
+Set `OPENAI_API_KEY` and `FIRECRAWL_API_KEY` in the root `.env`. The local `runtime` and `studio` commands load that one file automatically. Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
 
 ```html
 <script src="https://runtime.example/widget.js"></script>
