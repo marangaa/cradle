@@ -1,0 +1,21 @@
+{
+  "name": "@cradle/crawler",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cradle/core": "workspace:*",
+    "firecrawl": "^4.30.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3"
+  }
+}

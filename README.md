@@ -1,14 +1,26 @@
-# Turborepo starter
+# Cradle
 
-This Turborepo starter is maintained by the Turborepo core team.
+Cradle is open infrastructure for embedding a living company representative on any website. Run it yourself, or let Qualra operate the same Cradle contract with its relationship-intelligence backend.
 
-## Using this example
+## Self-hosting
 
-Run the following command:
+Run the platform locally:
 
 ```sh
-npx create-turbo@latest
+    pnpm install
+    cp .env.example .env
+    docker compose up --build
 ```
+
+Set `OPENAI_API_KEY` and optionally `FIRECRAWL_API_KEY`. The crawler uses Firecrawl's bounded crawl API, keeps robots behavior enabled, and requires knowledge review before publishing.
+
+## Architecture
+
+- `apps/studio`: configuration and installation experience.
+- `apps/runtime`: scoped chat streaming and visitor event boundary.
+- `apps/site`: production integration fixture.
+- `packages/widget`: framework-free `cradle-resident` custom element.
+- `packages/core`: versioned configuration, event, crawl, and runtime contracts.
 
 ## What's inside?
 
