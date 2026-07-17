@@ -18,5 +18,5 @@
       "persistent": true
     }
   },
-  "globalEnv": ["CRADLE_MODEL_ID"]
+  "globalEnv": ["CRADLE_MODEL_ID", "CRADLE_STUDIO_ORIGIN", "CRADLE_DEVELOPMENT_EMBED_ORIGIN", "NODE_ENV"]
 }
