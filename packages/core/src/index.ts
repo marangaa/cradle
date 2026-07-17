@@ -1,5 +1,21 @@
 import { z } from "zod";
 
+export const familiarSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(48),
+  archetype: z.enum(["wayfinder", "witness", "keeper"]),
+  role: z.string().min(1).max(160),
+  traits: z.array(z.string().min(1).max(32)).min(2).max(4),
+  motif: z.string().min(1).max(160),
+  greeting: z.string().min(1).max(320),
+  rationale: z.string().min(1).max(640),
+  evidence: z.array(z.string().url()).min(1).max(5),
+  palette: z.tuple([z.string(), z.string(), z.string()]),
+  version: z.number().int().positive(),
+});
+
+export type Familiar = z.infer<typeof familiarSchema>;
+
 export const installationSchema = z.object({
   id: z.string().uuid(),
   publicKey: z.string().min(12),
@@ -8,6 +24,7 @@ export const installationSchema = z.object({
   instructions: z.string().max(12_000),
   knowledgeVersion: z.number().int().positive(),
   runtime: z.enum(["cradle", "qualra"]),
+  familiar: familiarSchema.optional(),
 });
 
 export type Installation = z.infer<typeof installationSchema>;
