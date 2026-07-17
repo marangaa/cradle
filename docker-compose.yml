@@ -6,6 +6,7 @@ services:
   runtime:
     build: { context: ., dockerfile: deploy/Dockerfile, args: { APP: runtime } }
     environment:
+      PORT: 3002
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
       CRADLE_MODEL_ID: ${CRADLE_MODEL_ID:-gpt-5.6-sol}

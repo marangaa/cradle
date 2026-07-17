@@ -6,4 +6,4 @@ RUN pnpm install --frozen-lockfile
 ARG APP
 RUN pnpm --filter ${APP} build
 WORKDIR /app/apps/${APP}
-CMD ["sh", "-c", "pnpm start"]
+CMD ["sh", "-c", "pnpm exec next start -p ${PORT:-3000}"]
