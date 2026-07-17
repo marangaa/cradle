@@ -8,6 +8,13 @@ const onboardingSchema = crawlRequestSchema.extend({
   runtime: installationSchema.shape.runtime.default("cradle"),
 });
 
+function resolveInstallationOrigin(sourceUrl: string) {
+  const sourceOrigin = new URL(sourceUrl).origin;
+  const developmentOrigin = process.env.CRADLE_DEVELOPMENT_EMBED_ORIGIN;
+  if (process.env.NODE_ENV !== "development" || !developmentOrigin) return sourceOrigin;
+  return new URL(developmentOrigin).origin;
+}
+
 function studioCorsHeaders(request: Request) {
   const origin = request.headers.get("origin");
   const configuredOrigin = process.env.CRADLE_STUDIO_ORIGIN;
@@ -30,7 +37,7 @@ export async function POST(request: Request) {
   const headers = studioCorsHeaders(request);
   if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
   const input = onboardingSchema.parse(await request.json());
-  const origin = new URL(input.url).origin;
+  const origin = resolveInstallationOrigin(input.url);
   const installation = installationSchema.parse({
     id: crypto.randomUUID(), publicKey: crypto.randomUUID().replaceAll("-", ""), origin,
     name: input.name ?? new URL(input.url).hostname,
