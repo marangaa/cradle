@@ -1,171 +1,49 @@
 # Cradle
 
-Cradle is open infrastructure for embedding a living company representative on any website. Run it yourself, or let Qualra operate the same Cradle contract with its relationship-intelligence backend.
+Open infrastructure for adding a persistent website representative to any public site. Cradle crawls reviewed public content, produces one portable custom element, and streams grounded conversations through a provider-neutral runtime.
 
-## Self-hosting
+Qualra Cloud runs the same contract as managed infrastructure and can forward verified conversations into Qualra's relationship intelligence. Cradle itself does not prescribe a sales, support, or research workflow.
 
-Run the platform locally:
-
-```sh
-    pnpm install
-    cp .env.example .env
-    docker compose up --build
-```
-
-Set `OPENAI_API_KEY` and optionally `FIRECRAWL_API_KEY`. The crawler uses Firecrawl's bounded crawl API, keeps robots behavior enabled, and requires knowledge review before publishing.
-
-## Architecture
-
-- `apps/studio`: configuration and installation experience.
-- `apps/runtime`: scoped chat streaming and visitor event boundary.
-- `apps/site`: production integration fixture.
-- `packages/widget`: framework-free `cradle-resident` custom element.
-- `packages/core`: versioned configuration, event, crawl, and runtime contracts.
-
-## What's inside?
-
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+## Quick start
 
 ```sh
-cd my-turborepo
-turbo build
+pnpm install
+cp .env.example .env
+pnpm --filter runtime dev
+pnpm --filter studio dev
 ```
 
-Without global `turbo`, use your package manager:
+Set `OPENAI_API_KEY` and `FIRECRAWL_API_KEY` in `.env`. Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
+
+```html
+<script src="https://runtime.example/widget.js"></script>
+<cradle-resident installation-id="YOUR_INSTALLATION" api-base="https://runtime.example"></cradle-resident>
+```
+
+The widget runs in a Shadow DOM, preserves a first-party anonymous visitor and conversation ID, and only the configured installation origin can use its chat endpoint.
+
+## Repository
+
+- `apps/studio` — URL onboarding and installation snippet.
+- `apps/runtime` — crawl onboarding, installation, streaming, and widget delivery.
+- `apps/site` — integration target for local verification.
+- `packages/widget` — framework-free `cradle-resident` custom element.
+- `packages/crawler` — bounded, same-origin Firecrawl ingestion.
+- `packages/core` — Zod contracts shared by every deployment.
+- `packages/db` — store contract and development-only memory store.
+
+## Operations
+
+`docker compose up --build` starts the local stack, including Postgres, Redis, and MinIO for the forthcoming durable adapters. The runtime currently uses the development `MemoryStore`; restarting it clears installations, knowledge, and conversations. That makes this repository safe to evaluate and extend, **not yet a production-ready self-host deployment**. Do not put customer traffic on it until the Postgres/object-store adapter and credential management are completed.
+
+The crawler is deliberately public, same-domain, bounded (20 pages by default), and leaves Firecrawl's robots behavior enabled. Content is returned as a snapshot for review; the remaining review/publish screen is the next product slice.
+
+## Development
 
 ```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+pnpm lint
+pnpm check-types
+pnpm --filter runtime build
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+Use `pnpm` for all package operations. See `CONTRIBUTING.md` for contribution and release guidance, `SECURITY.md` for vulnerability reporting, and `LICENSE` for Apache-2.0 terms.
