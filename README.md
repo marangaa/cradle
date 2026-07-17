@@ -45,6 +45,7 @@ For a short-lived Qualra test, deploy `apps/runtime` to Render from the reposito
 OPENAI_API_KEY=...
 FIRECRAWL_API_KEY=...
 CRADLE_MODEL_ID=gpt-5.6-sol
+CRADLE_STUDIO_ORIGIN=https://your-studio.vercel.app
 ```
 
 Then open Studio, enter the exact public Qualra origin (for example, `https://qualra.example`), and paste the generated snippet into that site. The installation origin must exactly match the browser origin: `www` and non-`www` are different origins.
