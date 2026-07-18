@@ -92,7 +92,7 @@ The runtime falls back to memory only when `DATABASE_URL` is intentionally omitt
 
 ## Operations
 
-For the complete Docker stack, copy `.env.example` to the root `.env` once, then run `pnpm dev:docker`. Compose loads that file directly into Runtime and Worker, applies the committed database migrations, then starts Studio, Runtime, and the durable identity worker. These are separate containers: Studio serves the owner UI, Runtime serves the public API/widget, Worker runs durable generation jobs, and PostgreSQL persists data. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `pnpm dev:docker:down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
+For the complete Docker stack, configure `apps/runtime/.env` or `apps/runtime/.env.local`, then run `pnpm dev:docker`. Compose loads that existing Runtime configuration directly into Runtime and Worker, applies the committed database migrations, then starts Studio, Runtime, and the durable identity worker. These are separate containers: Studio serves the owner UI, Runtime serves the public API/widget, Worker runs durable generation jobs, and PostgreSQL persists data. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `pnpm dev:docker:down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
 
 The core review/publish pipeline is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until owner accounts/key recovery, encrypted secrets, rate limiting, automated asset QA, and operational monitoring are complete.
 

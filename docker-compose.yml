@@ -5,12 +5,13 @@ services:
       dockerfile: deploy/Dockerfile
       args:
         APP: studio
-        NEXT_PUBLIC_CRADLE_RUNTIME_URL: ${CRADLE_STUDIO_RUNTIME_URL:-http://localhost:3002}
     ports: ["3000:3000"]
   runtime:
     build: { context: ., dockerfile: deploy/Dockerfile, args: { APP: runtime } }
     env_file:
-      - path: ./.env
+      - path: ./apps/runtime/.env
+        required: false
+      - path: ./apps/runtime/.env.local
         required: false
     environment:
       PORT: 3002
@@ -24,7 +25,9 @@ services:
   worker:
     build: { context: ., dockerfile: deploy/Dockerfile, args: { APP: worker } }
     env_file:
-      - path: ./.env
+      - path: ./apps/runtime/.env
+        required: false
+      - path: ./apps/runtime/.env.local
         required: false
     environment:
       DATABASE_URL: postgres://cradle:cradle@postgres:5432/cradle
@@ -43,7 +46,8 @@ services:
         condition: service_healthy
   postgres:
     image: pgvector/pgvector:pg16
-    environment: { POSTGRES_USER: cradle, POSTGRES_PASSWORD: cradle, POSTGRES_DB: cradle }
+    environment:
+      { POSTGRES_USER: cradle, POSTGRES_PASSWORD: cradle, POSTGRES_DB: cradle }
     volumes: ["cradle-postgres:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cradle -d cradle"]
