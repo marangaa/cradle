@@ -16,8 +16,8 @@
     "@ai-sdk/openai": "^4.0.16",
     "@cradle/agent": "workspace:*",
     "@cradle/core": "workspace:*",
-    "@cradle/db": "workspace:*",
     "@cradle/crawler": "workspace:*",
+    "@cradle/db": "workspace:*",
     "@cradle/jobs": "workspace:*",
     "@cradle/media": "workspace:*",
     "@cradle/widget": "workspace:*",
@@ -33,6 +33,7 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "eslint": "^9.39.1",
+    "tsx": "^4.23.1",
     "typescript": "5.9.2"
   }
 }
