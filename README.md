@@ -46,6 +46,8 @@ pnpm --filter studio dev
 
 Next.js natively loads `.env.local` from each app directory. Set the OpenAI and Firecrawl keys in `apps/runtime/.env.local`; set Studio's public runtime URL in `apps/studio/.env.local`. The commands above start the local PostgreSQL service and apply the committed Drizzle migrations. Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
 
+Set `CRADLE_WIDGET_TOKEN_SECRET` to a random 32-byte secret in every production Runtime deployment. Runtime mints five-minute, origin-bound bearer tokens from the widget manifest endpoint; chat rejects requests without one.
+
 To test a public crawl on a local website, set `CRADLE_DEVELOPMENT_EMBED_ORIGIN=http://localhost:3004` in Runtime's `.env.local`. It is honored only while Runtime runs in development mode, so production installations always use the crawled site's own origin.
 
 ```html
