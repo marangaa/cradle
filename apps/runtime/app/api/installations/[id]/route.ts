@@ -29,10 +29,35 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const assets = revision ? await store.listAssetRevisions(revision.id) : [];
   const published = assets.filter((asset) => asset.status === "published");
   const atlas = published.find((asset) => asset.state === "atlas");
+  const companion = await store.getCompanionPackage(id);
+  const companionAtlas = companion ? {
+    url: `/api/installations/${id}/sprite`,
+    columns: companion.columns,
+    rows: companion.rows,
+    cellWidth: companion.cellWidth,
+    cellHeight: companion.cellHeight,
+    states: {
+      idle: { row: 0, frames: 6, durationMs: 1100 },
+      "running-right": { row: 1, frames: 8, durationMs: 1060 },
+      "running-left": { row: 2, frames: 8, durationMs: 1060 },
+      waving: { row: 3, frames: 4, durationMs: 700 },
+      jumping: { row: 4, frames: 5, durationMs: 840 },
+      failed: { row: 5, frames: 8, durationMs: 1220 },
+      waiting: { row: 6, frames: 6, durationMs: 1010 },
+      running: { row: 7, frames: 6, durationMs: 820 },
+      review: { row: 8, frames: 6, durationMs: 1030 },
+    },
+  } : null;
   return Response.json({
     name: installation.name,
     token: issueWidgetToken(id, installation.origin),
     familiar: installation.familiar ?? null,
+    companion: companion ? {
+      name: companion.displayName,
+      greeting: `Hi — I can help with ${installation.name}. What would you like to know?`,
+      palette: ["#5e6ad2", "#e2e5f8", "#f7f7fb"] as const,
+      source: { provider: companion.provider, slug: companion.slug, submittedBy: companion.submittedBy },
+    } : null,
     assets: atlas ? {
       atlas: {
         id: atlas.id,
@@ -53,7 +78,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           review: { row: 8, frames: 6, durationMs: 1030 },
         },
       },
-    } : null,
+    } : companionAtlas ? { atlas: companionAtlas } : null,
   }, { headers });
 }
 

@@ -25,6 +25,14 @@ export const codexPetStates = [
 
 export type CodexPetState = (typeof codexPetStates)[number];
 
+/** Rejects an upstream spritesheet that cannot be rendered by Cradle's runtime contract. */
+export async function validatePetAtlas(source: Uint8Array): Promise<void> {
+  const metadata = await sharp(source).metadata();
+  if (metadata.width !== CODEX_PET_SHEET_WIDTH || metadata.height !== CODEX_PET_SHEET_HEIGHT) {
+    throw new Error(`Pet spritesheet must be ${CODEX_PET_SHEET_WIDTH}x${CODEX_PET_SHEET_HEIGHT}; received ${metadata.width ?? "unknown"}x${metadata.height ?? "unknown"}.`);
+  }
+}
+
 export const codexPetStateMetadata: Record<
   CodexPetState,
   { row: number; frames: number; durationMs: number }

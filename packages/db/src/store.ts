@@ -1,10 +1,10 @@
-import type { AssetRevision, ChatEvent, IdentityRevision, Installation, KnowledgeSnapshot } from "@cradle/core";
+import type { AssetRevision, ChatEvent, CompanionPackage, IdentityRevision, Installation, KnowledgeSnapshot } from "@cradle/core";
 import { asc, desc, eq } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { assetRevisions, conversationEvents, identityRevisions, installations, knowledgeSnapshots } from "#schema";
+import { assetRevisions, companionPackages, conversationEvents, identityRevisions, installations, knowledgeSnapshots } from "#schema";
 
-const schema = { installations, knowledgeSnapshots, conversationEvents, identityRevisions, assetRevisions };
+const schema = { installations, knowledgeSnapshots, conversationEvents, identityRevisions, assetRevisions, companionPackages };
 type CradleDatabase = NodePgDatabase<typeof schema>;
 
 /** Storage contract shared by self-hosted and managed Cradle runtimes. */
@@ -20,6 +20,8 @@ export interface CradleStore {
   listAssetRevisions(identityRevisionId: string): Promise<AssetRevision[]>;
   getAssetRevision(id: string): Promise<AssetRevision | null>;
   saveAssetRevision(asset: AssetRevision): Promise<void>;
+  getCompanionPackage(installationId: string): Promise<CompanionPackage | null>;
+  saveCompanionPackage(companion: CompanionPackage): Promise<void>;
 }
 
 /** Lightweight development store used only when a database is deliberately not configured. */
@@ -29,6 +31,7 @@ export class MemoryStore implements CradleStore {
   private readonly events: ChatEvent[] = [];
   private readonly identities = new Map<string, IdentityRevision>();
   private readonly assets = new Map<string, AssetRevision[]>();
+  private readonly companions = new Map<string, CompanionPackage>();
 
   async getInstallation(id: string) { return this.installations.get(id) ?? null; }
   async saveInstallation(installation: Installation) { this.installations.set(installation.id, installation); }
@@ -53,6 +56,8 @@ export class MemoryStore implements CradleStore {
     if (index >= 0) assets[index] = asset; else assets.push(asset);
     this.assets.set(asset.identityRevisionId, assets);
   }
+  async getCompanionPackage(installationId: string) { return this.companions.get(installationId) ?? null; }
+  async saveCompanionPackage(companion: CompanionPackage) { this.companions.set(companion.installationId, companion); }
 }
 
 /** Drizzle-backed store for local Docker, self-hosted, and Cradle Cloud deployments. */
@@ -245,6 +250,38 @@ export class PostgresStore implements CradleStore {
     }).onConflictDoUpdate({
       target: assetRevisions.id,
       set: { status: asset.status },
+    });
+  }
+
+  async getCompanionPackage(installationId: string): Promise<CompanionPackage | null> {
+    const row = await this.database.query.companionPackages.findFirst({ where: eq(companionPackages.installationId, installationId) });
+    if (!row) return null;
+    return {
+      id: row.id,
+      installationId: row.installationId,
+      provider: row.provider,
+      slug: row.slug,
+      displayName: row.displayName,
+      description: row.description,
+      kind: row.kind,
+      submittedBy: row.submittedBy,
+      sourceUrl: row.sourceUrl,
+      petJsonUrl: row.petJsonUrl,
+      objectKey: row.objectKey,
+      checksum: row.checksum,
+      contentType: row.contentType,
+      columns: row.columns as 8,
+      rows: row.rows as 9,
+      cellWidth: row.cellWidth as 192,
+      cellHeight: row.cellHeight as 208,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async saveCompanionPackage(companion: CompanionPackage): Promise<void> {
+    await this.database.insert(companionPackages).values({ ...companion, createdAt: new Date(companion.createdAt) }).onConflictDoUpdate({
+      target: companionPackages.installationId,
+      set: { provider: companion.provider, slug: companion.slug, displayName: companion.displayName, description: companion.description, kind: companion.kind, submittedBy: companion.submittedBy, sourceUrl: companion.sourceUrl, petJsonUrl: companion.petJsonUrl, objectKey: companion.objectKey, checksum: companion.checksum, contentType: companion.contentType, columns: companion.columns, rows: companion.rows, cellWidth: companion.cellWidth, cellHeight: companion.cellHeight, createdAt: new Date(companion.createdAt) },
     });
   }
 }

@@ -113,16 +113,17 @@ class CradleResident extends HTMLElement {
   private async loadCharacter(apiBase: string, installationId: string, messages: HTMLElement, pet: HTMLButtonElement) {
     const response = await fetch(`${apiBase}/api/installations/${installationId}`);
     if (!response.ok) return;
-    const payload = await response.json() as { token: string; familiar: { name: string; greeting: string; palette: [string, string, string] } | null; assets: { atlas: PetAtlas } | null };
+    const payload = await response.json() as { token: string; familiar: { name: string; greeting: string; palette: [string, string, string] } | null; companion: { name: string; greeting: string; palette: [string, string, string] } | null; assets: { atlas: PetAtlas } | null };
     this.token = payload.token;
-    if (!payload.familiar) return;
-    const [main, accent, wash] = payload.familiar.palette;
+    const presence = payload.companion ?? payload.familiar;
+    if (!presence) return;
+    const [main, accent, wash] = presence.palette;
     this.style.setProperty("--familiar-main", main);
     this.style.setProperty("--familiar-accent", accent);
     this.style.setProperty("--familiar-wash", wash);
     const title = this.shadow.querySelector(".title");
-    if (title) title.textContent = payload.familiar.name;
-    messages.textContent = payload.familiar.greeting;
+    if (title) title.textContent = presence.name;
+    messages.textContent = presence.greeting;
     if (!payload.assets?.atlas) return;
     const atlas = { ...payload.assets.atlas, url: `${apiBase}${payload.assets.atlas.url}` };
     pet.dataset.cradleAtlas = JSON.stringify(atlas);

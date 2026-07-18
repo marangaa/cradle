@@ -29,6 +29,13 @@
       "when": 1784340000000,
       "tag": "0003_brave_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784389963683,
+      "tag": "0004_companion-packages",
+      "breakpoints": true
     }
   ]
 }

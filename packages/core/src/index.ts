@@ -16,6 +16,41 @@ export const familiarSchema = z.object({
 
 export type Familiar = z.infer<typeof familiarSchema>;
 
+export const companionPackageSchema = z.object({
+  id: z.string().uuid(),
+  installationId: z.string().uuid(),
+  provider: z.literal("petdex"),
+  slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  displayName: z.string().min(1).max(80),
+  description: z.string().min(1).max(500).default("An animated companion from the Petdex curated collection."),
+  kind: z.enum(["character", "creature", "object"]),
+  submittedBy: z.string().min(1).max(120),
+  sourceUrl: z.string().url(),
+  petJsonUrl: z.string().url(),
+  objectKey: z.string().min(1).max(500),
+  checksum: z.string().regex(/^[a-f0-9]{64}$/),
+  contentType: z.literal("image/webp"),
+  columns: z.literal(8),
+  rows: z.literal(9),
+  cellWidth: z.literal(192),
+  cellHeight: z.literal(208),
+  createdAt: z.string().datetime(),
+});
+
+export type CompanionPackage = z.infer<typeof companionPackageSchema>;
+
+export const petdexCatalogItemSchema = z.object({
+  slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  displayName: z.string().min(1).max(80),
+  description: z.string().min(1).max(500).default("An animated companion from the Petdex curated collection."),
+  kind: z.enum(["character", "creature", "object"]),
+  submittedBy: z.string().min(1).max(120),
+  spritesheetUrl: z.string().url(),
+  petJsonUrl: z.string().url(),
+});
+
+export type PetdexCatalogItem = z.infer<typeof petdexCatalogItemSchema>;
+
 export const identityDirectionSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(48),

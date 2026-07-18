@@ -18,11 +18,13 @@
     "@cradle/db": "workspace:*",
     "@cradle/jobs": "workspace:*",
     "@cradle/media": "workspace:*",
+    "@cradle/pet": "workspace:*",
     "@cradle/widget": "workspace:*",
     "ai": "^7.0.31",
     "next": "16.2.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

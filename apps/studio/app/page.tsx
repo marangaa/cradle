@@ -1,135 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 type Page = { url: string; title: string; markdown: string };
-type Direction = {
-  id: string;
-  name: string;
-  archetype: "wayfinder" | "witness" | "keeper";
-  role: string;
-  traits: string[];
-  motif: string;
-  greeting: string;
-  rationale: string;
-  evidence: Array<{ sourceUrl: string; reason: string }>;
-  palette: [string, string, string];
-};
-type Revision = {
-  id: string;
-  status: "queued" | "generating" | "ready" | "selected" | "failed";
-  identity?: {
-    summary: string;
-    audience: string;
-    voice: string[];
-    visualLanguage: string;
-    directions: Direction[];
-  };
-  selectedDirectionId?: string;
-  error?: string;
-};
 type Onboarding = {
   installation: { id: string; name: string; managementKey: string };
-  knowledge: { pages: Page[]; sourceUrl: string };
+  knowledge: { pages: Page[]; sourceUrl: string; version?: number };
 };
-type Asset = {
+type CatalogCompanion = {
+  slug: string;
+  displayName: string;
+  description: string;
+  kind: "character" | "creature" | "object";
+  submittedBy: string;
+  spritesheetUrl: string;
+  petJsonUrl: string;
+};
+type ImportedCompanion = CatalogCompanion & {
   id: string;
-  state: string;
-  status: "draft" | "published" | "failed";
+  installationId: string;
+  provider: "petdex";
+  sourceUrl: string;
+  objectKey: string;
+  checksum: string;
+  contentType: "image/webp";
+  columns: 8;
+  rows: 9;
+  cellWidth: 192;
+  cellHeight: 208;
+  createdAt: string;
 };
 
-const runtime =
-  process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ?? "http://localhost:3002";
-const pending = new Set<Revision["status"]>(["queued", "generating"]);
-const states = [
-  "canonical",
-  "atlas",
-  "contact-sheet",
-];
-const animationRows = [
-  "idle",
-  "running-right",
-  "running-left",
-  "waving",
-  "jumping",
-  "failed",
-  "waiting",
-  "running",
-  "review",
-];
+const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ?? "http://localhost:3002";
 
-function hasCompleteAssetPack(assets: Asset[]) {
-  return states.every((state) =>
-    assets.some(
-      (asset) =>
-        asset.state === state &&
-        (asset.status === "draft" || asset.status === "published"),
-    ),
-  );
-}
-
-function AssetPackPreview({
-  assets,
-  previewUrls,
-}: {
-  assets: Asset[];
-  previewUrls: Record<string, string>;
-}) {
-  return (
-    <div className="asset-pack" aria-label="Generated state pack">
-      {assets
-        .filter((asset) => ["canonical", "atlas", "contact-sheet"].includes(asset.state))
-        .filter((asset) => asset.status !== "failed")
-        .map((asset) => (
-          <figure key={asset.id}>
-            <div>
-              {previewUrls[asset.id] ? (
-                <Image
-                  src={previewUrls[asset.id] ?? ""}
-                  alt={`Generated ${asset.state} state`}
-                  width={400}
-                  height={400}
-                  unoptimized
-                />
-              ) : (
-                <span className="asset-placeholder">Preparing</span>
-              )}
-            </div>
-            <figcaption>{asset.state}</figcaption>
-          </figure>
-        ))}
-    </div>
-  );
-}
-
-function InstallSnippet({
-  installationId,
-  onCopy,
-  copied,
-}: {
-  installationId: string;
-  onCopy: (value: string, label: string) => Promise<void>;
-  copied: boolean;
-}) {
+function InstallSnippet({ installationId, copied, onCopy }: { installationId: string; copied: boolean; onCopy: (value: string) => Promise<void> }) {
   const snippet = `<script src="${runtime}/widget.js"></script>\n<cradle-resident installation-id="${installationId}" api-base="${runtime}"></cradle-resident>`;
-  return (
-    <section className="install">
-      <p className="kicker">04 / Install</p>
-      <h2>Connect the runtime.</h2>
-      <p>
-        Add one script tag before your closing <code>&lt;/body&gt;</code> tag.
-        The Cradle surface works on any website, not only Next.js.
-      </p>
-      <pre>
-        <code>{snippet}</code>
-      </pre>
-      <button onClick={() => void onCopy(snippet, "Install snippet")}>
-        {copied ? "Install snippet copied" : "Copy install snippet"}
-      </button>
-    </section>
-  );
+  return <section className="install" id="install">
+    <p className="kicker">03 / Install</p>
+    <h2>Ship the bundle.</h2>
+    <p>Paste this before your site’s closing <code>&lt;/body&gt;</code> tag. It works on static sites, React, Next.js, and any page that can load a script.</p>
+    <pre><code>{snippet}</code></pre>
+    <button onClick={() => void onCopy(snippet)}>{copied ? "Install snippet copied" : "Copy install snippet"}</button>
+  </section>;
 }
 
 export default function StudioHome() {
@@ -137,117 +50,32 @@ export default function StudioHome() {
   const [resumeInstallationId, setResumeInstallationId] = useState("");
   const [resumeManagementKey, setResumeManagementKey] = useState("");
   const [result, setResult] = useState<Onboarding | null>(null);
-  const [revision, setRevision] = useState<Revision | null>(null);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [includedUrls, setIncludedUrls] = useState<Set<string>>(new Set());
   const [knowledgeReviewed, setKnowledgeReviewed] = useState(false);
-  const [error, setError] = useState("");
+  const [catalog, setCatalog] = useState<CatalogCompanion[]>([]);
+  const [selectedSlug, setSelectedSlug] = useState("");
+  const [companion, setCompanion] = useState<ImportedCompanion | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
-  const [copiedLabel, setCopiedLabel] = useState("");
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
   const busy = busyAction !== null;
-  const managementHeaders = useMemo<Record<string, string>>(() => {
-    const key = result?.installation.managementKey;
-    return key
-      ? { "x-cradle-installation-key": key }
-      : ({} as Record<string, string>);
-  }, [result?.installation.managementKey]);
+  const managementHeaders = useMemo<Record<string, string>>(() => result ? { "x-cradle-installation-key": result.installation.managementKey } : ({} as Record<string, string>), [result]);
 
   useEffect(() => {
-    if (!result || !revision || !pending.has(revision.status)) return;
-    const interval = window.setInterval(async () => {
-      const response = await fetch(
-        `${runtime}/api/installations/${result.installation.id}/identity`,
-        { headers: managementHeaders },
-      );
-      const payload = await response.json();
-      if (response.ok) setRevision(payload.revision);
-    }, 2_000);
-    return () => window.clearInterval(interval);
-  }, [managementHeaders, result, revision]);
-
-  useEffect(() => {
-    if (
-      !result ||
-      revision?.status !== "selected" ||
-      revision.error ||
-      hasCompleteAssetPack(assets)
-    )
-      return;
-    const refresh = async () => {
-      const response = await fetch(
-        `${runtime}/api/installations/${result.installation.id}/assets`,
-        { headers: managementHeaders },
-      );
-      const payload = await response.json();
-      if (response.ok)
-        setAssets((current) =>
-          JSON.stringify(current) === JSON.stringify(payload.assets)
-            ? current
-            : payload.assets,
-        );
-    };
-    void refresh();
-    const interval = window.setInterval(refresh, 5_000);
-    return () => window.clearInterval(interval);
-  }, [assets, managementHeaders, result, revision?.error, revision?.status]);
-
-  useEffect(() => {
-    if (!result || assets.length === 0) return;
+    if (!result || !knowledgeReviewed) return;
     let cancelled = false;
-    const controller = new AbortController();
-    void Promise.all(
-      assets
-        .filter((asset) => asset.status !== "failed")
-        .map(async (asset) => {
-          const response = await fetch(
-            `${runtime}/api/installations/${result.installation.id}/assets/${asset.id}`,
-            { headers: managementHeaders, signal: controller.signal },
-          );
-          if (!response.ok)
-            throw new Error(`Could not load the ${asset.state} preview.`);
-          return [
-            asset.id,
-            URL.createObjectURL(await response.blob()),
-          ] as const;
-        }),
-    )
-      .then((entries) => {
-        if (cancelled) {
-          entries.forEach(([, previewUrl]) => URL.revokeObjectURL(previewUrl));
-          return;
-        }
-        setPreviewUrls((current) => ({
-          ...current,
-          ...Object.fromEntries(entries),
-        }));
+    void fetch(`${runtime}/api/companions/petdex`)
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error ?? "Could not load the companion catalog.");
+        if (!cancelled) setCatalog(payload.companions);
       })
       .catch((cause: unknown) => {
-        if (
-          !cancelled &&
-          !(cause instanceof DOMException && cause.name === "AbortError")
-        )
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "Could not load generated asset previews.",
-          );
+        if (!cancelled) setError(cause instanceof Error ? cause.message : "Could not load the companion catalog.");
       });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [assets, managementHeaders, result]);
-
-  useEffect(
-    () => () => {
-      Object.values(previewUrls).forEach((previewUrl) =>
-        URL.revokeObjectURL(previewUrl),
-      );
-    },
-    [previewUrls],
-  );
+    return () => { cancelled = true; };
+  }, [knowledgeReviewed, result]);
 
   function begin(action: string) {
     setBusyAction(action);
@@ -255,52 +83,34 @@ export default function StudioHome() {
     setNotice(action);
   }
 
-  function jumpToStage(stage: string) {
-    document.getElementById(stage)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  async function copyToClipboard(value: string, label: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopiedLabel(label);
-      setNotice(`${label} copied to your clipboard.`);
-    } catch {
-      setError(
-        `Could not copy the ${label.toLowerCase()}. Select it manually instead.`,
-      );
-    }
+  function togglePage(urlToToggle: string) {
+    setKnowledgeReviewed(false);
+    setCompanion(null);
+    setSelectedSlug("");
+    setIncludedUrls((current) => {
+      const next = new Set(current);
+      if (next.has(urlToToggle)) next.delete(urlToToggle); else next.add(urlToToggle);
+      return next;
+    });
   }
 
   async function discover(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     begin("Reading the public website…");
     try {
-      const response = await fetch(`${runtime}/api/onboarding`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
+      const response = await fetch(`${runtime}/api/onboarding`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
       const payload = await response.json();
-      if (!response.ok)
-        throw new Error(payload.error ?? "Cradle could not prepare this site.");
+      if (!response.ok) throw new Error(payload.error ?? "Cradle could not prepare this site.");
       setResult(payload);
-      setRevision(null);
-      setAssets([]);
-      setPreviewUrls({});
-      setIncludedUrls(
-        new Set(payload.knowledge.pages.map((page: Page) => page.url)),
-      );
+      setIncludedUrls(new Set(payload.knowledge.pages.map((page: Page) => page.url)));
       setKnowledgeReviewed(false);
+      setCatalog([]);
+      setSelectedSlug("");
+      setCompanion(null);
       setNotice("Website ready for source review.");
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Cradle Studio could not reach the runtime.",
-      );
-    } finally {
-      setBusyAction(null);
-    }
+      setError(cause instanceof Error ? cause.message : "Cradle Studio could not reach the runtime.");
+    } finally { setBusyAction(null); }
   }
 
   async function resume(event: React.FormEvent<HTMLFormElement>) {
@@ -308,609 +118,108 @@ export default function StudioHome() {
     begin("Restoring the installation…");
     try {
       const headers = { "x-cradle-installation-key": resumeManagementKey };
-      const [knowledgeResponse, identityResponse] = await Promise.all([
-        fetch(
-          `${runtime}/api/installations/${resumeInstallationId}/knowledge`,
-          { headers },
-        ),
-        fetch(`${runtime}/api/installations/${resumeInstallationId}/identity`, {
-          headers,
-        }),
+      const [knowledgeResponse, companionResponse] = await Promise.all([
+        fetch(`${runtime}/api/installations/${resumeInstallationId}/knowledge`, { headers }),
+        fetch(`${runtime}/api/installations/${resumeInstallationId}/companion`, { headers }),
       ]);
       const knowledgePayload = await knowledgeResponse.json();
-      const identityPayload = await identityResponse.json();
-      if (!knowledgeResponse.ok)
-        throw new Error(
-          knowledgePayload.error ?? "Could not restore this installation.",
-        );
-      if (!identityResponse.ok)
-        throw new Error(
-          identityPayload.error ?? "Could not restore this installation.",
-        );
-      setResult({
-        installation: {
-          ...knowledgePayload.installation,
-          managementKey: resumeManagementKey,
-        },
-        knowledge: knowledgePayload.knowledge,
-      });
-      setRevision(identityPayload.revision);
-      setAssets([]);
-      setPreviewUrls({});
-      setIncludedUrls(
-        new Set(knowledgePayload.knowledge.pages.map((page: Page) => page.url)),
-      );
+      const companionPayload = await companionResponse.json();
+      if (!knowledgeResponse.ok) throw new Error(knowledgePayload.error ?? "Could not restore this installation.");
+      if (!companionResponse.ok) throw new Error(companionPayload.error ?? "Could not restore this installation.");
+      setResult({ installation: { ...knowledgePayload.installation, managementKey: resumeManagementKey }, knowledge: knowledgePayload.knowledge });
+      setIncludedUrls(new Set(knowledgePayload.knowledge.pages.map((page: Page) => page.url)));
       setKnowledgeReviewed(knowledgePayload.knowledge.version > 1);
+      setCompanion(companionPayload.companion);
+      setSelectedSlug(companionPayload.companion?.slug ?? "");
       setNotice("Installation restored.");
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not restore this installation.",
-      );
-    } finally {
-      setBusyAction(null);
-    }
+      setError(cause instanceof Error ? cause.message : "Could not restore this installation.");
+    } finally { setBusyAction(null); }
   }
 
   async function saveKnowledgeReview() {
     if (!result) return;
     begin("Saving reviewed sources…");
     try {
-      const response = await fetch(
-        `${runtime}/api/installations/${result.installation.id}/knowledge`,
-        {
-          method: "PATCH",
-          headers: { "content-type": "application/json", ...managementHeaders },
-          body: JSON.stringify({ includedUrls: [...includedUrls] }),
-        },
-      );
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/knowledge`, { method: "PATCH", headers: { "content-type": "application/json", ...managementHeaders }, body: JSON.stringify({ includedUrls: [...includedUrls] }) });
       const payload = await response.json();
-      if (!response.ok)
-        throw new Error(
-          payload.error ?? "Could not save the reviewed sources.",
-        );
-      setResult((current) =>
-        current ? { ...current, knowledge: payload.knowledge } : current,
-      );
+      if (!response.ok) throw new Error(payload.error ?? "Could not save the reviewed sources.");
+      setResult((current) => current ? { ...current, knowledge: payload.knowledge } : current);
       setKnowledgeReviewed(true);
-      setNotice("Reviewed sources saved. You can generate directions.");
+      setNotice("Source bundle saved. Choose its companion.");
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not save the reviewed sources.",
-      );
-    } finally {
-      setBusyAction(null);
-    }
+      setError(cause instanceof Error ? cause.message : "Could not save the reviewed sources.");
+    } finally { setBusyAction(null); }
   }
 
-  function togglePage(urlToToggle: string) {
-    setKnowledgeReviewed(false);
-    setNotice(
-      "Source selection changed. Save it before generating directions.",
-    );
-    setIncludedUrls((current) => {
-      const next = new Set(current);
-      if (next.has(urlToToggle)) next.delete(urlToToggle);
-      else next.add(urlToToggle);
-      return next;
-    });
-  }
-
-  async function generateIdentity() {
+  async function selectCompanion(slug: string) {
     if (!result) return;
-    begin("Generating identity directions…");
+    begin("Importing and validating the companion…");
     try {
-      const response = await fetch(
-        `${runtime}/api/installations/${result.installation.id}/identity`,
-        { method: "POST", headers: managementHeaders },
-      );
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/companion`, { method: "PUT", headers: { "content-type": "application/json", ...managementHeaders }, body: JSON.stringify({ provider: "petdex", slug }) });
       const payload = await response.json();
-      if (!response.ok)
-        throw new Error(
-          payload.error ?? "Cradle could not queue an identity revision.",
-        );
-      setRevision(payload.revision);
-      setNotice("Directions are being generated from the reviewed sources.");
+      if (!response.ok) throw new Error(payload.error ?? "Could not import this companion.");
+      setCompanion(payload.companion);
+      setSelectedSlug(slug);
+      setNotice("Companion imported and pinned to this installation.");
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not queue identity generation.",
-      );
-    } finally {
-      setBusyAction(null);
-    }
+      setError(cause instanceof Error ? cause.message : "Could not import this companion.");
+    } finally { setBusyAction(null); }
   }
 
-  async function rotateManagementKey() {
-    if (!result) return;
-    begin("Rotating the owner credential…");
+  async function copyInstallSnippet(value: string) {
     try {
-      const response = await fetch(
-        `${runtime}/api/installations/${result.installation.id}/management-key`,
-        { method: "PATCH", headers: managementHeaders },
-      );
-      const payload = await response.json();
-      if (!response.ok)
-        throw new Error(payload.error ?? "Could not rotate the owner key.");
-      setResult((current) =>
-        current
-          ? {
-              ...current,
-              installation: {
-                ...current.installation,
-                managementKey: payload.managementKey,
-              },
-            }
-          : current,
-      );
-      setNotice(
-        "New owner credential created. Copy it before leaving this page.",
-      );
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not rotate the owner key.",
-      );
-    } finally {
-      setBusyAction(null);
-    }
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setNotice("Install snippet copied to your clipboard.");
+    } catch { setError("Could not copy the install snippet. Select it manually instead."); }
   }
 
-  async function selectDirection(directionId: string) {
-    if (!result || !revision) return;
-    begin("Selecting direction and preparing assets…");
-    try {
-      const response = await fetch(
-        `${runtime}/api/installations/${result.installation.id}/identity`,
-        {
-          method: "PATCH",
-          headers: { "content-type": "application/json", ...managementHeaders },
-          body: JSON.stringify({
-            id: revision.id,
-            selectedDirectionId: directionId,
-          }),
-        },
-      );
-      const payload = await response.json();
-      if (!response.ok)
-        throw new Error(payload.error ?? "Could not select this direction.");
-      setRevision(payload.revision);
-      setAssets([]);
-      setPreviewUrls({});
-      setNotice("Direction selected. Cradle is preparing the state pack.");
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not select this direction.",
-      );
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  async function publishAssets() {
-    if (!result) return;
-    begin("Publishing the state pack…");
-    try {
-      const response = await fetch(
-        `${runtime}/api/installations/${result.installation.id}/assets`,
-        { method: "POST", headers: managementHeaders },
-      );
-      const payload = await response.json();
-      if (!response.ok)
-        throw new Error(
-          payload.error ?? "Cradle could not publish this asset pack.",
-        );
-      setAssets(payload.assets);
-      setNotice("State pack published. Your install snippet is ready.");
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not publish the asset pack.",
-      );
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  const draftStates = new Set(
-    assets
-      .filter((asset) => asset.status === "draft")
-      .map((asset) => asset.state),
-  );
-  const packReady = states.every((state) => draftStates.has(state));
-  const generatedRows = assets.filter(
-    (asset) =>
-      asset.status === "draft" && animationRows.includes(asset.state),
-  ).length;
-  const publishedStates = new Set(
-    assets
-      .filter((asset) => asset.status === "published")
-      .map((asset) => asset.state),
-  );
-  const published = states.every((state) => publishedStates.has(state));
-
-  return (
-    <main className="studio">
-      <header className="topbar">
-        <Link className="wordmark" href="/">
-          <span className="wordmark-mark" aria-hidden="true">
-            ◒
-          </span>
-          Cradle
-        </Link>
-        <span className="topbar-context">Cradle Studio</span>
-        <p className="step-count">
-          <span>0{published ? 4 : revision?.status === "selected" ? 3 : result ? 2 : 1}</span> / 04
-        </p>
-      </header>
-      <section className={`hero ${result ? "hero-compact" : ""}`}>
-        <div className="hero-copy">
-          <p className="kicker">Cradle Studio · identity + runtime</p>
-          <h1>
-            {result ? (
-              <>
-                Shape {result.installation.name}
-                <br />
-                <em>into a presence.</em>
-              </>
-            ) : (
-              <>
-                Build the living layer
-                <br />
-                <em>for your website.</em>
-              </>
-            )}
-          </h1>
-          <p className="intro">
-            {result
-              ? "Review what Cradle can learn, then turn the approved signal into a character your site can actually run."
-              : "Cradle turns your public site into a portable presence: review the source, shape the identity, publish its states, and install the runtime wherever your website lives."}
-          </p>
-        </div>
-        <aside className="hero-note">
-          <span className="note-index">01</span>
-          <p>Start with the source your company already owns.</p>
-          <span className="note-line" aria-hidden="true" />
-          <small>Infrastructure, not a prewritten chatbot</small>
-        </aside>
-      </section>
-      {!result ? (
-        <>
-          <form className="discovery" onSubmit={discover}>
-            <div className="form-heading">
-              <span className="form-index">01</span>
-              <label htmlFor="site">Create a Cradle installation</label>
-            </div>
-            <div>
-              <input
-                id="site"
-                type="url"
-                required
-                value={url}
-                onChange={(event) => setUrl(event.target.value)}
-                placeholder="https://yourcompany.com"
-              />
-              <button disabled={busy}>
-                <span>{busy ? busyAction : "Read this site"}</span>
-                <span aria-hidden="true">↗</span>
-              </button>
-            </div>
-            <small>
-              Public, same-domain crawl. Review and approve the source snapshot
-              before Cradle creates anything from it.
-            </small>
-          </form>
-          <form className="resume" onSubmit={resume}>
-            <div className="resume-heading">
-              <span className="form-index">↳</span>
-              <label htmlFor="installation">Continue a Cradle installation</label>
-            </div>
-            <input
-              id="installation"
-              required
-              value={resumeInstallationId}
-              onChange={(event) => setResumeInstallationId(event.target.value)}
-              placeholder="Installation ID"
-            />
-            <input
-              required
-              value={resumeManagementKey}
-              onChange={(event) => setResumeManagementKey(event.target.value)}
-              placeholder="Owner credential"
-            />
-            <button disabled={busy}>
-              {busy ? busyAction : "Continue"}
-            </button>
-          </form>
-        </>
-      ) : (
-        <div className="workspace-shell">
-          <aside className="workflow-rail" aria-label="Installation workflow">
-            <div className="workflow-context">
-              <span className="workflow-dot" aria-hidden="true" />
-              <span>{result.installation.name}</span>
-            </div>
-            <p>Build progress</p>
-            <nav>
-              <button type="button" className="workflow-stage" data-current={!revision ? "true" : undefined} onClick={() => jumpToStage("source")}>
-                <span>01</span> Source
-              </button>
-              <button type="button" className="workflow-stage" data-current={revision?.status === "ready" ? "true" : undefined} onClick={() => jumpToStage("identity")}>
-                <span>02</span> Identity
-              </button>
-              <button type="button" className="workflow-stage" data-current={revision?.status === "selected" ? "true" : undefined} onClick={() => jumpToStage("animation")}>
-                <span>03</span> Animation
-              </button>
-              <button type="button" className="workflow-stage" data-current={published ? "true" : undefined} onClick={() => jumpToStage("install")}>
-                <span>04</span> Install
-              </button>
-            </nav>
-            <div className="rail-status">
-              <strong>{busyAction ? "Working" : published ? "Live" : "Draft"}</strong>
-              <span>{busyAction ?? notice ?? "Changes save to this installation."}</span>
-            </div>
-          </aside>
-          <div className="workspace-main">
-          <section className="owner-key">
-            <p className="kicker">Owner credential</p>
-            <strong>Save this key before you continue.</strong>
-            <code>{result.installation.managementKey}</code>
-            <div>
-              <button
-                onClick={() =>
-                  void copyToClipboard(
-                    result.installation.managementKey,
-                    "Owner credential",
-                  )
-                }
-              >
-                {copiedLabel === "Owner credential" ? "Key copied" : "Copy key"}
-              </button>
-              <button onClick={rotateManagementKey} disabled={busy}>
-                {busyAction === "Rotating the owner credential…"
-                  ? busyAction
-                  : "Rotate key"}
-              </button>
-            </div>
-            <p>Cradle stores only its hash. The embed never receives it.</p>
-          </section>
-          <section className="section-head" id="source">
-            <p className="kicker">01 / Source snapshot</p>
-            <h2>Review the foundation.</h2>
-            <p>Choose the public pages Cradle is allowed to use. Nothing is generated until you approve this snapshot.</p>
-          </section>
-          <section className="knowledge">
-            <div className="knowledge-summary">
-              <strong>{includedUrls.size}</strong>
-              <span>pages included</span>
-              <p>{new URL(result.knowledge.sourceUrl).hostname}</p>
-              <button
-                onClick={saveKnowledgeReview}
-                disabled={busy || includedUrls.size === 0}
-              >
-                {busyAction === "Saving reviewed sources…"
-                  ? busyAction
-                  : "Save reviewed sources"}
-              </button>
-              {!knowledgeReviewed && (
-                <p className="selection-note">
-                  Approve this snapshot to continue.
-                </p>
-              )}
-            </div>
-            <div className="page-list">
-              {result.knowledge.pages.map((page) => (
-                <article key={page.url}>
-                  <label className="page-toggle">
-                    <input
-                      type="checkbox"
-                      checked={includedUrls.has(page.url)}
-                      onChange={() => togglePage(page.url)}
-                      disabled={busy}
-                    />
-                    <span>{new URL(page.url).pathname || "/"}</span>
-                  </label>
-                  <strong>{page.title || "Untitled page"}</strong>
-                  <p>{page.markdown.slice(0, 140)}…</p>
-                </article>
-              ))}
-            </div>
-          </section>
-          <section className="section-head" id="identity">
-            <p className="kicker">02 / Presence</p>
-            <h2>Choose how it should show up.</h2>
-            <p>
-              Cradle proposes three identity systems from the approved source:
-              role, voice, visual language, and the behavior your runtime can
-              express.
-            </p>
-          </section>
-          {!revision && (
-            <button
-              className="primary-action"
-              onClick={generateIdentity}
-              disabled={busy || includedUrls.size === 0 || !knowledgeReviewed}
-            >
-              {busyAction === "Generating identity directions…"
-                ? busyAction
-                : "Create identity directions"}
-            </button>
-          )}
-          {revision && pending.has(revision.status) && (
-            <p className="intro">
-              Cradle is reading the approved snapshot and preparing the
-              directions…
-            </p>
-          )}
-          {revision?.status === "failed" && (
-            <p className="error">
-              {revision.error ?? "Identity generation failed."}
-            </p>
-          )}
-          {revision?.identity && (
-            <>
-              <section className="section-head">
-                <p className="kicker">Identity brief</p>
-                <h2>{revision.identity.summary}</h2>
-                <p>
-                  For {revision.identity.audience}. Voice:{" "}
-                  {revision.identity.voice.join(", ")}.
-                </p>
-              </section>
-              <section className="directions">
-                {revision.identity.directions.map((direction, index) => (
-                  <article
-                    className={`direction ${revision.selectedDirectionId === direction.id ? "chosen" : ""}`}
-                    key={direction.id}
-                    style={
-                      {
-                        "--main": direction.palette[0],
-                        "--accent": direction.palette[1],
-                        "--wash": direction.palette[2],
-                      } as React.CSSProperties
-                    }
-                  >
-                    <div className="direction-top">
-                      <span>Direction 0{index + 1}</span>
-                      <div className="palette" aria-label="Direction palette">
-                        {direction.palette.map((color) => (
-                          <i key={color} style={{ backgroundColor: color }} />
-                        ))}
-                      </div>
-                    </div>
-                    <p className="archetype">{direction.archetype}</p>
-                    <h3>{direction.name}</h3>
-                    <p>{direction.role}</p>
-                    <ul>
-                      {direction.traits.map((trait) => (
-                        <li key={trait}>{trait}</li>
-                      ))}
-                    </ul>
-                    <details>
-                      <summary>Why this fits</summary>
-                      <p>{direction.rationale}</p>
-                      {direction.evidence.map((item) => (
-                        <p key={item.sourceUrl}>
-                          <a
-                            href={item.sourceUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Source
-                          </a>
-                          : {item.reason}
-                        </p>
-                      ))}
-                    </details>
-                    <button
-                      onClick={() => selectDirection(direction.id)}
-                      disabled={busy || revision.status !== "ready"}
-                      aria-pressed={
-                        revision.selectedDirectionId === direction.id
-                      }
-                    >
-                      {busyAction ===
-                      "Selecting direction and preparing assets…"
-                        ? busyAction
-                        : revision.selectedDirectionId === direction.id
-                          ? "Direction selected"
-                          : `Select ${direction.name}`}
-                    </button>
-                  </article>
-                ))}
-              </section>
-              {revision.status === "selected" && (
-                <section className="published" id="animation">
-                  <p className="kicker">03 / Character animation</p>
-                  <h2>
-                    {published
-                      ? "Published."
-                      : revision.error
-                        ? "Generation needs another try."
-                        : packReady
-                      ? "Your character atlas is ready."
-                          : generatedRows === 0
-                            ? "Creating the canonical character."
-                            : generatedRows < animationRows.length
-                              ? `Drawing motion rows (${generatedRows}/${animationRows.length}).`
-                              : "Composing the final animation atlas."}
-                  </h2>
-                  <p>
-                    {published
-                      ? "Your Cradle runtime can now fetch the published animation atlas."
-                      : revision.error
-                        ? revision.error
-                        : packReady
-                          ? "Review the canonical character and motion sheet, then publish the validated atlas."
-                          : "Cradle works from one canonical character, then derives and validates every motion row before it can publish."}
-                  </p>
-                  <div className="generation-track" aria-label="Character generation progress">
-                    <div data-state={assets.some((asset) => asset.state === "canonical") ? "complete" : "active"}>
-                      <span>01</span>
-                      <strong>Canonical</strong>
-                      <small>One approved base character</small>
-                    </div>
-                    <div data-state={generatedRows === animationRows.length ? "complete" : generatedRows > 0 ? "active" : "pending"}>
-                      <span>02</span>
-                      <strong>Motion rows</strong>
-                      <small>{generatedRows}/{animationRows.length} grounded poses</small>
-                    </div>
-                    <div data-state={packReady || published ? "complete" : generatedRows === animationRows.length ? "active" : "pending"}>
-                      <span>03</span>
-                      <strong>Atlas review</strong>
-                      <small>Validate and compose the runtime asset</small>
-                    </div>
-                  </div>
-                  <AssetPackPreview assets={assets} previewUrls={previewUrls} />
-                  {revision.error && (
-                    <button
-                      onClick={() =>
-                        selectDirection(revision.selectedDirectionId!)
-                      }
-                      disabled={busy}
-                    >
-                      {busyAction ===
-                      "Selecting direction and preparing assets…"
-                        ? busyAction
-                        : "Retry asset generation"}
-                    </button>
-                  )}
-                  {!published && !revision.error && (
-                    <button
-                      onClick={publishAssets}
-                      disabled={busy || !packReady}
-                    >
-                      {busyAction === "Publishing the state pack…"
-                        ? busyAction
-                        : "Publish character atlas"}
-                    </button>
-                  )}
-                  {published && <div id="install"><InstallSnippet installationId={result.installation.id} onCopy={copyToClipboard} copied={copiedLabel === "Install snippet"} /></div>}
-                </section>
-              )}
-            </>
-          )}
-          </div>
-        </div>
-      )}
-      {(notice || busyAction) && (
-        <p className="status" role="status" aria-live="polite">
-          {busyAction ?? notice}
-        </p>
-      )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-    </main>
-  );
+  const currentStep = companion ? 3 : knowledgeReviewed ? 2 : result ? 1 : 0;
+  return <main className="studio">
+    <header className="topbar">
+      <Link className="wordmark" href="/"><span className="wordmark-mark" aria-hidden="true">◒</span>Cradle</Link>
+      <span className="topbar-context">Site companion studio</span>
+      <p className="step-count"><span>0{currentStep + 1}</span> / 03</p>
+    </header>
+    <section className={`hero ${result ? "hero-compact" : ""}`}>
+      <div className="hero-copy">
+        <p className="kicker">Website context + companion package</p>
+        <h1>{result ? <>Bundle <i>{result.installation.name}</i> for the web.</> : <>Give your website<br />a <i>living surface.</i></>}</h1>
+        <p className="intro">Cradle turns reviewed public website knowledge and an animated companion into one installable runtime. No custom art pipeline required.</p>
+      </div>
+      <aside className="hero-note"><span className="note-index">The contract</span><p>One source snapshot. One pinned companion. One script tag.</p><span className="note-line" /><small>Characters are imported from Petdex’s curated collection and stored with the installation.</small></aside>
+    </section>
+    {!result ? <>
+      <form className="discovery" onSubmit={discover}>
+        <div className="form-heading"><span className="form-index">01</span><label htmlFor="website-url">Public website URL</label></div>
+        <div><input id="website-url" type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://yourcompany.com" /><button disabled={busy}>{busy ? busyAction : "Read website"}</button></div>
+        <small>Cradle performs a bounded, same-domain crawl. You approve every page before it becomes runtime context.</small>
+      </form>
+      <form className="resume" onSubmit={resume}>
+        <div className="resume-heading"><span className="form-index">Return</span><label>Resume an installation</label></div>
+        <input required value={resumeInstallationId} onChange={(event) => setResumeInstallationId(event.target.value)} placeholder="Installation ID" />
+        <input required value={resumeManagementKey} onChange={(event) => setResumeManagementKey(event.target.value)} placeholder="Owner credential" />
+        <button disabled={busy}>{busy ? busyAction : "Continue"}</button>
+      </form>
+    </> : <div className="workspace-shell">
+      <aside className="workflow-rail" aria-label="Installation workflow">
+        <div className="workflow-context"><span className="workflow-dot" aria-hidden="true" /><span>{result.installation.name}</span></div>
+        <p>Build progress</p><nav><a className="workflow-stage" href="#source"><span>01</span> Source</a><a className="workflow-stage" href="#companion"><span>02</span> Companion</a><a className="workflow-stage" href="#install"><span>03</span> Install</a></nav>
+        <div className="rail-status"><strong>{companion ? "Ready" : knowledgeReviewed ? "Selecting" : "Draft"}</strong><span>{busyAction ?? notice ?? "Changes save to this installation."}</span></div>
+      </aside>
+      <div className="workspace-main">
+        <section className="owner-key"><p className="kicker">Owner credential</p><strong>Save this key before you continue.</strong><code>{result.installation.managementKey}</code><p>Cradle stores only a hash. The embed never receives this credential.</p></section>
+        <section className="section-head" id="source"><p className="kicker">01 / Source snapshot</p><div><h2>Review what it can know.</h2><p>Choose the public pages this installation may use. This is the knowledge bundle paired with the companion.</p></div></section>
+        <section className="knowledge"><div className="knowledge-summary"><strong>{includedUrls.size}</strong><span>pages included</span><p>{new URL(result.knowledge.sourceUrl).hostname}</p><button onClick={saveKnowledgeReview} disabled={busy || includedUrls.size === 0}>{busyAction === "Saving reviewed sources…" ? busyAction : "Save source bundle"}</button>{!knowledgeReviewed && <p className="selection-note">Approve this selection to continue.</p>}</div><div className="page-list">{result.knowledge.pages.map((page) => <article key={page.url}><label className="page-toggle"><input type="checkbox" checked={includedUrls.has(page.url)} onChange={() => togglePage(page.url)} disabled={busy} /><span>{new URL(page.url).pathname || "/"}</span></label><strong>{page.title || "Untitled page"}</strong><p>{page.markdown.slice(0, 140)}…</p></article>)}</div></section>
+        <section className="section-head" id="companion"><p className="kicker">02 / Companion</p><div><h2>Choose a living surface.</h2><p>Every option is a verified 8 × 9 animation package from Petdex’s curated collection. Cradle imports and pins your selection.</p></div></section>
+        {!knowledgeReviewed ? <p className="intro">Save the source bundle to unlock the curated companion collection.</p> : <section className="companion-grid" aria-label="Curated Petdex companions">{catalog.map((pet) => <article className={`companion-card ${selectedSlug === pet.slug ? "selected" : ""}`} key={pet.slug}><div className="companion-preview"><img src={pet.spritesheetUrl} alt={`${pet.displayName} animation sheet`} /></div><div><span>{pet.kind}</span><h3>{pet.displayName}</h3><p>{pet.description}</p><small>Petdex curated · {pet.submittedBy}</small></div><button onClick={() => void selectCompanion(pet.slug)} disabled={busy} aria-pressed={selectedSlug === pet.slug}>{selectedSlug === pet.slug ? "Selected" : "Choose companion"}</button></article>)}</section>}
+        {knowledgeReviewed && catalog.length === 0 && <p className="intro">Loading the curated catalog…</p>}
+        {companion && <section className="bundle-ready"><p className="kicker">Bundle ready</p><h2>{companion.displayName} is pinned to this installation.</h2><p>Cradle stored an immutable copy of the sprite sheet with its Petdex source details. The widget can now render it alongside this website’s reviewed context.</p><dl><div><dt>Source</dt><dd>Petdex · {companion.slug}</dd></div><div><dt>Format</dt><dd>{companion.columns} × {companion.rows} frames</dd></div><div><dt>Checksum</dt><dd>{companion.checksum.slice(0, 12)}…</dd></div></dl></section>}
+        {companion && <InstallSnippet installationId={result.installation.id} copied={copied} onCopy={copyInstallSnippet} />}
+      </div>
+    </div>}
+    {(notice || busyAction) && <p className="status" role="status" aria-live="polite">{busyAction ?? notice}</p>}
+    {error && <p className="error" role="alert">{error}</p>}
+  </main>;
 }

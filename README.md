@@ -15,9 +15,9 @@ This is intentionally infrastructure, not another fixed "sales bot" or "support 
 - Submit a public URL through Studio and run a bounded, same-origin Firecrawl crawl.
 - Persist installations, knowledge snapshots, and conversation events to PostgreSQL when `DATABASE_URL` is configured.
 - Generate an installation ID and embed the Shadow-DOM `cradle-resident` widget with one script tag.
-- Generate an evidence-backed identity revision in the durable Postgres queue; Studio selects a direction rather than inventing a browser-side mascot.
-- Generate one canonical character, derive nine reference-grounded animation rows, validate them, and publish one transparent Codex-compatible `spritesheet.webp` plus an owner contact sheet.
-- Persist immutable generated assets with checksums, model/prompt provenance, and canonical-parent lineage on a shared self-hosted volume.
+- Choose a companion from Cradle's curated Petdex catalog after approving the website source bundle.
+- Download, validate, checksum, and pin one Codex-compatible `spritesheet.webp` to the installation rather than hotlinking an upstream asset.
+- Persist the companion's Petdex provenance alongside the immutable imported asset on a shared self-hosted volume.
 - Maintain anonymous visitor and conversation IDs in the visitor's first-party browser storage.
 - Reject chat requests whose browser origin does not match the installation's configured origin.
 - Stream grounded answers through AI SDK and OpenAI (`CRADLE_MODEL_ID` defaults to `gpt-5.6-sol`).
@@ -25,11 +25,9 @@ This is intentionally infrastructure, not another fixed "sales bot" or "support 
 ## Flow
 
 1. **Discover:** Studio runs a bounded public crawl; the owner saves a selected page subset as the immutable reviewed source version.
-2. **Identity:** Studio queues an evidence-backed identity revision and asks the owner to select one direction.
-3. **Character:** Worker generates a canonical image, then uses it and an invisible layout guide to create nine animation rows.
-4. **Atlas:** Cradle removes the construction background, rejects empty frames, composes an 8×9 atlas, and creates a contact sheet for review.
-5. **Review:** Studio streams draft review assets only to the authorized owner session and requires an explicit publish action.
-6. **Embed:** Runtime exposes only the published atlas; the widget maps visitor activity to its animation rows.
+2. **Choose:** Studio lists only Petdex-curated companions. The owner chooses one 8×9 spritesheet package.
+3. **Bundle:** Runtime downloads, validates, checksums, and pins the selected spritesheet with its Petdex source metadata.
+4. **Embed:** The website loads the imported package and maps visitor activity to its animation rows.
 
 Studio management routes require the installation key shown once at onboarding. Cradle stores only its SHA-256 hash; save the original in a password manager and never place it in the embed snippet or client site. Self-hosted operators can rotate a lost key directly in their database today; Cradle Cloud will bind installations to Qualra accounts rather than relying on this bootstrap credential.
 
@@ -44,7 +42,7 @@ pnpm --filter @cradle/db db:migrate
 pnpm dev
 ```
 
-Next.js natively loads `.env.local` from each app directory. Set the OpenAI and Firecrawl keys in `apps/runtime/.env.local`; set Studio's public runtime URL in `apps/studio/.env.local`. The Worker loads the Runtime environment with `dotenv`, so the local backend uses one configuration file. The commands above start the local PostgreSQL service, apply the committed Drizzle migrations, then launch Studio (`3000`), Runtime (`3002`), and Worker. Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
+Next.js natively loads `.env.local` from each app directory. Set the OpenAI and Firecrawl keys in `apps/runtime/.env.local`; set Studio's public runtime URL in `apps/studio/.env.local`. The Worker loads the Runtime environment with `dotenv`, so the local backend uses one configuration file. The commands above start the local PostgreSQL service, apply the committed Drizzle migrations, then launch Studio (`3000`), Runtime (`3002`), and Worker. Open Studio at `http://localhost:3000`, approve the returned page snapshot, choose a curated Petdex companion, then paste the install snippet into your site.
 
 Set `CRADLE_WIDGET_TOKEN_SECRET` to a random 32-byte secret in every production Runtime deployment. Runtime mints five-minute, origin-bound bearer tokens from the widget manifest endpoint; chat rejects requests without one.
 
@@ -60,11 +58,11 @@ To test a public crawl on a local website, set `CRADLE_DEVELOPMENT_EMBED_ORIGIN=
 
 The widget runs in a Shadow DOM, preserves a first-party anonymous visitor and conversation ID, and only the configured installation origin can use its chat endpoint. Its public character package is available at `/api/installations/:id/pet` and follows the portable `pet.json` + `spritesheet.webp` convention used by Codex-compatible pets.
 
-## Character assets
+## Companion packages
 
 Cradle uses the same practical asset shape as Codex pets: one transparent `1536×1872` WebP atlas with nine 192×208 rows. Cradle maps website events to the relevant rows (`idle`, `waving`, `review`, `running`, `jumping`, and `failed`) rather than treating the image as a static chatbot avatar.
 
-The generation worker always creates the canonical image first. Every row is generated with that canonical reference and a layout guide, then processed with `sharp`. It rejects the row when frame geometry is wrong or a required frame is empty; it does not silently publish a broken atlas. The raw source rows stay private, while the immutable published atlas is served with long-lived cache headers.
+Studio currently uses only Petdex assets hosted under its curated collection. Community-submitted assets are intentionally excluded because each creator retains its own asset rights. Runtime imports the selected WebP into Cradle storage, verifies its 8×9 geometry, and records the source URL, submitter, Petdex metadata URL, and checksum. It does not hotlink the live widget to Petdex.
 
 ## Deploy
 
@@ -74,7 +72,6 @@ Deploy `apps/runtime` with a managed PostgreSQL database and deploy `apps/studio
 OPENAI_API_KEY=...
 FIRECRAWL_API_KEY=...
 CRADLE_MODEL_ID=gpt-5.6-sol
-CRADLE_IMAGE_MODEL=gpt-image-2
 CRADLE_WIDGET_TOKEN_SECRET=replace_with_a_random_32_byte_secret
 CRADLE_STUDIO_ORIGIN=https://your-studio.vercel.app
 DATABASE_URL=postgres://...
@@ -86,9 +83,9 @@ The runtime falls back to memory only when `DATABASE_URL` is intentionally omitt
 
 ## Repository
 
-- `apps/studio` — URL onboarding, source review, identity direction, and asset publishing.
-- `apps/runtime` — crawl onboarding, installation management, streaming, published asset delivery, and widget delivery.
-- `apps/worker` — durable identity and Codex-compatible atlas generation jobs.
+- `apps/studio` — URL onboarding, source review, curated companion selection, and install handoff.
+- `apps/runtime` — crawl onboarding, companion import, installation management, streaming, companion delivery, and widget delivery.
+- `apps/worker` — legacy durable identity and custom-atlas generation jobs; Studio no longer invokes this path.
 - `packages/widget` — framework-free `cradle-resident` custom element, compiled and served by Runtime at `/widget.js`.
 - `packages/crawler` — bounded, same-origin Firecrawl ingestion.
 - `packages/core` — Zod contracts shared by every deployment.
@@ -101,11 +98,11 @@ The runtime falls back to memory only when `DATABASE_URL` is intentionally omitt
 
 For the complete Docker stack, configure `apps/runtime/.env` or `apps/runtime/.env.local`, then run `pnpm dev:docker`. Docker ignores host dependencies and build artifacts, prunes the monorepo to each service's dependency graph, then builds Studio, Runtime, Worker, and migrations independently. Compose loads the existing Runtime configuration directly into Runtime and Worker, applies the committed database migrations, then starts the services. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `pnpm dev:docker:down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
 
-The core review/publish pipeline is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until owner accounts/key recovery, encrypted secrets, rate limiting, automated asset QA, and operational monitoring are complete.
+The core review/import pipeline is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until owner accounts/key recovery, encrypted secrets, rate limiting, automated asset QA, and operational monitoring are complete.
 
 Self-hosted deployments use the shared local `cradle-assets` volume by default. Managed deployments can set `CRADLE_ASSET_STORAGE=s3` and provide S3-compatible credentials; this supports AWS S3, Cloudflare R2, or MinIO without changing the asset contract.
 
-The crawler is deliberately public, same-domain, bounded (20 pages by default), and leaves Firecrawl's robots behavior enabled. Content is returned as a snapshot for review before it can influence the identity or generated assets.
+The crawler is deliberately public, same-domain, bounded (20 pages by default), and leaves Firecrawl's robots behavior enabled. Content is returned as a snapshot for review before it becomes part of the installed runtime bundle.
 
 ## Development
 

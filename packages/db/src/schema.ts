@@ -1,4 +1,4 @@
-import type { BrandIdentity, ChatEvent, Familiar, KnowledgeSnapshot } from "@cradle/core";
+import type { BrandIdentity, ChatEvent, CompanionPackage, Familiar, KnowledgeSnapshot } from "@cradle/core";
 import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const installations = pgTable("installations", {
@@ -72,4 +72,28 @@ export const assetRevisions = pgTable("asset_revisions", {
   uniqueIndex("asset_revisions_object_key_idx").on(table.objectKey),
   index("asset_revisions_identity_state_idx").on(table.identityRevisionId, table.state),
   index("asset_revisions_installation_status_idx").on(table.installationId, table.status),
+]);
+
+export const companionPackages = pgTable("companion_packages", {
+  id: uuid("id").primaryKey(),
+  installationId: uuid("installation_id").notNull().references(() => installations.id, { onDelete: "cascade" }),
+  provider: text("provider", { enum: ["petdex"] }).notNull(),
+  slug: text("slug").notNull(),
+  displayName: text("display_name").notNull(),
+  description: text("description").notNull(),
+  kind: text("kind", { enum: ["character", "creature", "object"] }).notNull(),
+  submittedBy: text("submitted_by").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  petJsonUrl: text("pet_json_url").notNull(),
+  objectKey: text("object_key").notNull(),
+  checksum: text("checksum").notNull(),
+  contentType: text("content_type", { enum: ["image/webp"] }).notNull(),
+  columns: integer("columns").notNull(),
+  rows: integer("rows").notNull(),
+  cellWidth: integer("cell_width").notNull(),
+  cellHeight: integer("cell_height").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  uniqueIndex("companion_packages_installation_idx").on(table.installationId),
+  uniqueIndex("companion_packages_object_key_idx").on(table.objectKey),
 ]);

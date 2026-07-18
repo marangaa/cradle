@@ -22,7 +22,7 @@ importers:
     dependencies:
       '@ai-sdk/openai':
         specifier: ^4.0.16
-        version: 4.0.16(zod@4.4.3)
+        version: 4.0.16(zod@3.25.76)
       '@cradle/agent':
         specifier: workspace:*
         version: link:../../packages/agent
@@ -41,12 +41,15 @@ importers:
       '@cradle/media':
         specifier: workspace:*
         version: link:../../packages/media
+      '@cradle/pet':
+        specifier: workspace:*
+        version: link:../../packages/pet
       '@cradle/widget':
         specifier: workspace:*
         version: link:../../packages/widget
       ai:
         specifier: ^7.0.31
-        version: 7.0.31(zod@4.4.3)
+        version: 7.0.31(zod@3.25.76)
       next:
         specifier: 16.2.0
         version: 16.2.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -56,6 +59,9 @@ importers:
       react-dom:
         specifier: ^19.2.0
         version: 19.2.0(react@19.2.0)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*
@@ -2936,24 +2942,11 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 3.25.76
 
-  '@ai-sdk/gateway@4.0.23(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/provider': 4.0.3
-      '@ai-sdk/provider-utils': 5.0.11(zod@4.4.3)
-      '@vercel/oidc': 3.2.0
-      zod: 4.4.3
-
   '@ai-sdk/openai@4.0.16(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 4.0.3
       '@ai-sdk/provider-utils': 5.0.11(zod@3.25.76)
       zod: 3.25.76
-
-  '@ai-sdk/openai@4.0.16(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/provider': 4.0.3
-      '@ai-sdk/provider-utils': 5.0.11(zod@4.4.3)
-      zod: 4.4.3
 
   '@ai-sdk/provider-utils@5.0.11(zod@3.25.76)':
     dependencies:
@@ -2962,14 +2955,6 @@ snapshots:
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.0
       zod: 3.25.76
-
-  '@ai-sdk/provider-utils@5.0.11(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/provider': 4.0.3
-      '@standard-schema/spec': 1.1.0
-      '@workflow/serde': 4.1.0
-      eventsource-parser: 3.1.0
-      zod: 4.4.3
 
   '@ai-sdk/provider@4.0.3':
     dependencies:
@@ -3905,13 +3890,6 @@ snapshots:
       '@ai-sdk/provider': 4.0.3
       '@ai-sdk/provider-utils': 5.0.11(zod@3.25.76)
       zod: 3.25.76
-
-  ai@7.0.31(zod@4.4.3):
-    dependencies:
-      '@ai-sdk/gateway': 4.0.23(zod@4.4.3)
-      '@ai-sdk/provider': 4.0.3
-      '@ai-sdk/provider-utils': 5.0.11(zod@4.4.3)
-      zod: 4.4.3
 
   ajv@6.12.6:
     dependencies:
