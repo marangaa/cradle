@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter=studio --filter=runtime --filter=worker --filter=site",
+    "dev:docker": "docker compose up --build",
+    "dev:docker:down": "docker compose down",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "test": "turbo run test",

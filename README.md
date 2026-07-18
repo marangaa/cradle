@@ -4,8 +4,6 @@ Open infrastructure for adding a website representative to any public site. Crad
 
 Qualra Cloud runs the same contract as managed infrastructure and can forward verified conversations into Qualra's relationship intelligence. Cradle itself does not prescribe a sales, support, or research workflow.
 
-See [`docs/qualra-cloud-adapter.md`](docs/qualra-cloud-adapter.md) for the boundary between the open-source runtime and the optional Qualra Cloud adapter.
-
 ## Why Cradle
 
 Companies currently stitch together a static chat widget, a separate knowledge base, and an internal relationship system. Cradle provides the shared interaction layer: an embeddable element with a stable visitor and conversation identity, an explicit knowledge snapshot, and a runtime contract that works the same way when self-hosted or operated by Qualra.
@@ -42,11 +40,10 @@ cp apps/runtime/.env.example apps/runtime/.env.local
 cp apps/studio/.env.example apps/studio/.env.local
 docker compose up postgres -d
 pnpm --filter @cradle/db db:migrate
-pnpm --filter runtime dev
-pnpm --filter studio dev
+pnpm dev
 ```
 
-Next.js natively loads `.env.local` from each app directory. Set the OpenAI and Firecrawl keys in `apps/runtime/.env.local`; set Studio's public runtime URL in `apps/studio/.env.local`. The commands above start the local PostgreSQL service and apply the committed Drizzle migrations. Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
+Next.js natively loads `.env.local` from each app directory. Set the OpenAI and Firecrawl keys in `apps/runtime/.env.local`; set Studio's public runtime URL in `apps/studio/.env.local`. The Worker loads the Runtime environment with `dotenv`, so the local backend uses one configuration file. The commands above start the local PostgreSQL service, apply the committed Drizzle migrations, then launch Studio (`3000`), Runtime (`3002`), Worker, and the optional local integration site (`3003`). Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
 
 Set `CRADLE_WIDGET_TOKEN_SECRET` to a random 32-byte secret in every production Runtime deployment. Runtime mints five-minute, origin-bound bearer tokens from the widget manifest endpoint; chat rejects requests without one.
 
@@ -54,7 +51,10 @@ To test a public crawl on a local website, set `CRADLE_DEVELOPMENT_EMBED_ORIGIN=
 
 ```html
 <script src="https://runtime.example/widget.js"></script>
-<cradle-resident installation-id="YOUR_INSTALLATION" api-base="https://runtime.example"></cradle-resident>
+<cradle-resident
+  installation-id="YOUR_INSTALLATION"
+  api-base="https://runtime.example"
+></cradle-resident>
 ```
 
 The widget runs in a Shadow DOM, preserves a first-party anonymous visitor and conversation ID, and only the configured installation origin can use its chat endpoint.
@@ -92,7 +92,7 @@ The runtime falls back to memory only when `DATABASE_URL` is intentionally omitt
 
 ## Operations
 
-For the Docker path, copy `compose.env.example` to the root `.env` once, then run `docker compose up --build`. Compose loads that file directly into Runtime and Worker, applies the committed database migrations, then starts Studio, Runtime, and the durable identity worker. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `docker compose down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
+For the complete Docker stack, copy `compose.env.example` to the root `.env` once, then run `pnpm dev:docker`. Compose loads that file directly into Runtime and Worker, applies the committed database migrations, then starts Studio, Runtime, and the durable identity worker. These are separate containers: Studio serves the owner UI, Runtime serves the public API/widget, Worker runs durable generation jobs, and PostgreSQL persists data. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `pnpm dev:docker:down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
 
 The core review/publish pipeline is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until owner accounts/key recovery, encrypted secrets, rate limiting, automated asset QA, and operational monitoring are complete.
 
