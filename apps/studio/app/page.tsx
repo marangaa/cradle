@@ -228,6 +228,10 @@ export default function StudioHome() {
     setNotice(action);
   }
 
+  function jumpToStage(stage: string) {
+    document.getElementById(stage)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   async function copyToClipboard(value: string, label: string) {
     try {
       await navigator.clipboard.writeText(value);
@@ -516,7 +520,7 @@ export default function StudioHome() {
           <span>0{result ? 2 : 1}</span> / 04
         </p>
       </header>
-      <section className="hero">
+      <section className={`hero ${result ? "hero-compact" : ""}`}>
         <div className="hero-copy">
           <p className="kicker">Cradle Studio · identity + runtime</p>
           <h1>
@@ -587,7 +591,33 @@ export default function StudioHome() {
           </form>
         </>
       ) : (
-        <>
+        <div className="workspace-shell">
+          <aside className="workflow-rail" aria-label="Installation workflow">
+            <div className="workflow-context">
+              <span className="workflow-dot" aria-hidden="true" />
+              <span>{result.installation.name}</span>
+            </div>
+            <p>Build progress</p>
+            <nav>
+              <button type="button" className="workflow-stage" data-current={!revision ? "true" : undefined} onClick={() => jumpToStage("source")}>
+                <span>01</span> Source
+              </button>
+              <button type="button" className="workflow-stage" data-current={revision?.status === "ready" ? "true" : undefined} onClick={() => jumpToStage("identity")}>
+                <span>02</span> Identity
+              </button>
+              <button type="button" className="workflow-stage" data-current={revision?.status === "selected" ? "true" : undefined} onClick={() => jumpToStage("animation")}>
+                <span>03</span> Animation
+              </button>
+              <button type="button" className="workflow-stage" data-current={published ? "true" : undefined} onClick={() => jumpToStage("install")}>
+                <span>04</span> Install
+              </button>
+            </nav>
+            <div className="rail-status">
+              <strong>{busyAction ? "Working" : published ? "Live" : "Draft"}</strong>
+              <span>{busyAction ?? notice ?? "Changes save to this installation."}</span>
+            </div>
+          </aside>
+          <div className="workspace-main">
           <section className="owner-key">
             <p className="kicker">Owner credential</p>
             <strong>Save this key before you continue.</strong>
@@ -611,7 +641,7 @@ export default function StudioHome() {
             </div>
             <p>Cradle stores only its hash. The embed never receives it.</p>
           </section>
-          <section className="section-head">
+          <section className="section-head" id="source">
             <p className="kicker">01 / Source snapshot</p>
             <h2>Review the foundation.</h2>
             <p>Choose the public pages Cradle is allowed to use. Nothing is generated until you approve this snapshot.</p>
@@ -653,7 +683,7 @@ export default function StudioHome() {
               ))}
             </div>
           </section>
-          <section className="section-head">
+          <section className="section-head" id="identity">
             <p className="kicker">02 / Presence</p>
             <h2>Choose how it should show up.</h2>
             <p>
@@ -753,7 +783,7 @@ export default function StudioHome() {
                 ))}
               </section>
               {revision.status === "selected" && (
-                <section className="published">
+                <section className="published" id="animation">
                   <p className="kicker">03 / Character animation</p>
                   <h2>
                     {published
@@ -797,18 +827,13 @@ export default function StudioHome() {
                         : "Publish character atlas"}
                     </button>
                   )}
-                  {published && (
-                    <InstallSnippet
-                      installationId={result.installation.id}
-                      onCopy={copyToClipboard}
-                      copied={copiedLabel === "Install snippet"}
-                    />
-                  )}
+                  {published && <div id="install"><InstallSnippet installationId={result.installation.id} onCopy={copyToClipboard} copied={copiedLabel === "Install snippet"} /></div>}
                 </section>
               )}
             </>
           )}
-        </>
+          </div>
+        </div>
       )}
       {(notice || busyAction) && (
         <p className="status" role="status" aria-live="polite">

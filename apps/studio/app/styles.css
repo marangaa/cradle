@@ -814,6 +814,179 @@ summary:focus-visible {
   color: var(--danger);
 }
 
+.topbar {
+  position: sticky;
+  z-index: 20;
+  top: 16px;
+  backdrop-filter: blur(14px);
+}
+
+.hero-compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  padding: 42px 12px 30px;
+}
+
+.hero-compact h1 {
+  max-width: 760px;
+  font-size: clamp(2.4rem, 4.5vw, 4.5rem);
+}
+
+.hero-compact .hero-note {
+  width: 230px;
+}
+
+.workspace-shell {
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 42px;
+  align-items: start;
+  margin-top: 18px;
+}
+
+.workflow-rail {
+  position: sticky;
+  top: 98px;
+  padding: 16px 0;
+}
+
+.workflow-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  padding: 0 12px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 0 4px var(--blue-soft);
+}
+
+.workflow-rail > p {
+  margin: 23px 12px 8px;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.workflow-rail nav {
+  display: grid;
+  gap: 3px;
+}
+
+.workflow-stage {
+  display: flex;
+  min-height: 39px !important;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  font-size: 0.74rem !important;
+  font-weight: 700 !important;
+  letter-spacing: normal !important;
+  text-align: left;
+  text-transform: none !important;
+}
+
+.workflow-stage:hover:not(:disabled) {
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+  transform: none !important;
+}
+
+.workflow-stage span {
+  width: 24px;
+  color: #96a1a9;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.65rem;
+}
+
+.workflow-stage[data-current="true"] {
+  background: var(--blue-soft) !important;
+  color: var(--blue) !important;
+}
+
+.workflow-stage[data-current="true"] span {
+  color: var(--blue);
+}
+
+.rail-status {
+  display: grid;
+  gap: 5px;
+  margin: 28px 12px 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.rail-status strong {
+  color: var(--ink);
+  font-size: 0.7rem;
+}
+
+.rail-status span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.workspace-main {
+  min-width: 0;
+  padding-bottom: 84px;
+}
+
+.workspace-main .owner-key,
+.workspace-main .published {
+  max-width: none;
+}
+
+.workspace-main .section-head {
+  margin-top: 54px;
+  scroll-margin-top: 110px;
+}
+
+.workspace-main .section-head h2 {
+  max-width: 560px;
+}
+
+.workspace-main .knowledge {
+  min-height: min(620px, calc(100vh - 180px));
+}
+
+.workspace-main .page-list {
+  align-content: start;
+  max-height: calc(100vh - 218px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.workspace-main .directions {
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.workspace-main .direction {
+  min-height: 440px;
+}
+
 @media (max-width: 760px) {
   .studio {
     padding: 12px 12px 70px;
@@ -856,6 +1029,58 @@ summary:focus-visible {
   .page-list,
   .directions {
     grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    top: 8px;
+  }
+
+  .hero-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-compact .hero-note {
+    width: auto;
+  }
+
+  .workspace-shell {
+    display: block;
+  }
+
+  .workflow-rail {
+    position: static;
+    margin: 0 -2px 20px;
+    padding: 0;
+  }
+
+  .workflow-context,
+  .workflow-rail > p,
+  .rail-status {
+    display: none;
+  }
+
+  .workflow-rail nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .workflow-stage {
+    justify-content: center;
+    padding: 9px 4px !important;
+    font-size: 0.66rem !important;
+  }
+
+  .workflow-stage span {
+    display: none;
+  }
+
+  .workspace-main .knowledge {
+    min-height: 0;
+  }
+
+  .workspace-main .page-list {
+    max-height: none;
+    overflow: visible;
   }
 
   .resume button {
