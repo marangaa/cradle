@@ -24,6 +24,8 @@ function InstallSnippet({ installationId }: { installationId: string }) {
 
 export default function StudioHome() {
   const [url, setUrl] = useState("");
+  const [resumeInstallationId, setResumeInstallationId] = useState("");
+  const [resumeManagementKey, setResumeManagementKey] = useState("");
   const [result, setResult] = useState<Onboarding | null>(null);
   const [revision, setRevision] = useState<Revision | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -86,6 +88,26 @@ export default function StudioHome() {
       if (!response.ok) throw new Error(payload.error ?? "Cradle could not prepare this site.");
       setResult(payload); setRevision(null); setAssets([]); setPreviewUrls({}); setIncludedUrls(new Set(payload.knowledge.pages.map((page: Page) => page.url))); setKnowledgeReviewed(false);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Cradle Studio could not reach the runtime."); }
+    finally { setBusy(false); }
+  }
+
+  async function resume(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      const headers = { "x-cradle-installation-key": resumeManagementKey };
+      const [knowledgeResponse, identityResponse] = await Promise.all([
+        fetch(`${runtime}/api/installations/${resumeInstallationId}/knowledge`, { headers }),
+        fetch(`${runtime}/api/installations/${resumeInstallationId}/identity`, { headers }),
+      ]);
+      const knowledgePayload = await knowledgeResponse.json();
+      const identityPayload = await identityResponse.json();
+      if (!knowledgeResponse.ok) throw new Error(knowledgePayload.error ?? "Could not restore this installation.");
+      if (!identityResponse.ok) throw new Error(identityPayload.error ?? "Could not restore this installation.");
+      setResult({ installation: { ...knowledgePayload.installation, managementKey: resumeManagementKey }, knowledge: knowledgePayload.knowledge });
+      setRevision(identityPayload.revision); setAssets([]); setPreviewUrls({});
+      setIncludedUrls(new Set(knowledgePayload.knowledge.pages.map((page: Page) => page.url)));
+      setKnowledgeReviewed(knowledgePayload.knowledge.version > 1);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not restore this installation."); }
     finally { setBusy(false); }
   }
 
@@ -161,7 +183,7 @@ export default function StudioHome() {
   return <main className="studio">
     <header><Link className="wordmark" href="/">CRADLE</Link><span>IDENTITY STUDIO</span><p>0{result ? 2 : 1} / 04</p></header>
     <section className="hero"><p className="kicker">A company deserves more than a chat bubble.</p><h1>Give your website<br /><i>a presence.</i></h1><p className="intro">Cradle turns reviewed public knowledge into a grounded identity. Character assets come only after you approve its direction.</p></section>
-    {!result ? <form className="discovery" onSubmit={discover}><label htmlFor="site">Start with a public website</label><div><input id="site" type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://yourcompany.com" /><button disabled={busy}>{busy ? "Reading the site…" : "Discover the shape"}</button></div><small>Public, same-domain crawl. You review the source material before generation.</small></form> : <>
+    {!result ? <><form className="discovery" onSubmit={discover}><label htmlFor="site">Start with a public website</label><div><input id="site" type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://yourcompany.com" /><button disabled={busy}>{busy ? "Reading the site…" : "Discover the shape"}</button></div><small>Public, same-domain crawl. You review the source material before generation.</small></form><form className="resume" onSubmit={resume}><label htmlFor="installation">Already started?</label><input id="installation" required value={resumeInstallationId} onChange={(event) => setResumeInstallationId(event.target.value)} placeholder="Installation ID" /><input required value={resumeManagementKey} onChange={(event) => setResumeManagementKey(event.target.value)} placeholder="Owner credential" /><button disabled={busy}>Resume installation</button></form></> : <>
       <section className="owner-key"><p className="kicker">Owner credential</p><strong>Save this key before you continue.</strong><code>{result.installation.managementKey}</code><div><button onClick={() => void navigator.clipboard.writeText(result.installation.managementKey)}>Copy key</button><button onClick={rotateManagementKey} disabled={busy}>Rotate key</button></div><p>Cradle stores only its hash. The embed never receives it.</p></section>
       <section className="section-head"><p className="kicker">01 / Knowledge</p><h2>Here is what Cradle found.</h2><p>These are the reviewed pages the identity is allowed to use.</p></section>
       <section className="knowledge"><div className="knowledge-summary"><strong>{includedUrls.size}</strong><span>pages included</span><p>{new URL(result.knowledge.sourceUrl).hostname}</p><button onClick={saveKnowledgeReview} disabled={busy || includedUrls.size === 0}>Save reviewed sources</button></div><div className="page-list">{result.knowledge.pages.map((page) => <article key={page.url}><label className="page-toggle"><input type="checkbox" checked={includedUrls.has(page.url)} onChange={() => togglePage(page.url)} disabled={busy} /><span>{new URL(page.url).pathname || "/"}</span></label><strong>{page.title || "Untitled page"}</strong><p>{page.markdown.slice(0, 140)}…</p></article>)}</div></section>

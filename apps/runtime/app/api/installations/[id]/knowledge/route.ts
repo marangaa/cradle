@@ -5,12 +5,23 @@ import { store } from "../../../../lib/store";
 function studioCorsHeaders(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin || origin !== process.env.CRADLE_STUDIO_ORIGIN) return null;
-  return { "access-control-allow-origin": origin, "access-control-allow-methods": "PATCH, OPTIONS", "access-control-allow-headers": "content-type, x-cradle-installation-key", "cache-control": "no-store", vary: "Origin" };
+  return { "access-control-allow-origin": origin, "access-control-allow-methods": "GET, PATCH, OPTIONS", "access-control-allow-headers": "content-type, x-cradle-installation-key", "cache-control": "no-store", vary: "Origin" };
 }
 
 export function OPTIONS(request: Request) {
   const headers = studioCorsHeaders(request);
   return headers ? new Response(null, { status: 204, headers }) : new Response(null, { status: 403 });
+}
+
+/** Restores the latest reviewed source snapshot to an authorized Studio session. */
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  const headers = studioCorsHeaders(request);
+  if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
+  const { id } = await context.params;
+  if (!await isInstallationManager(request, id)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
+  const [installation, knowledge] = await Promise.all([store.getInstallation(id), store.getKnowledge(id)]);
+  if (!installation || !knowledge) return Response.json({ error: "Unknown or unready installation." }, { status: 404, headers });
+  return Response.json({ installation: { id: installation.id, name: installation.name }, knowledge }, { headers });
 }
 
 /** Saves an immutable owner-reviewed subset of the latest bounded crawl. */
