@@ -1,5 +1,5 @@
 import { identityRevisionSchema } from "@cradle/core";
-import { IDENTITY_GENERATION_QUEUE, identityGenerationJobSchema } from "@cradle/jobs";
+import { CANONICAL_ASSET_QUEUE, IDENTITY_GENERATION_QUEUE, canonicalAssetJobSchema, identityGenerationJobSchema } from "@cradle/jobs";
 import { getCradleQueue } from "../../../../lib/queue";
 import { store } from "../../../../lib/store";
 
@@ -74,5 +74,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
   const selected = identityRevisionSchema.parse({ ...revision, status: "selected", selectedDirectionId: selection.selectedDirectionId, updatedAt: new Date().toISOString() });
   await store.saveIdentityRevision(selected);
+  const queue = await getCradleQueue();
+  await queue.send(CANONICAL_ASSET_QUEUE, canonicalAssetJobSchema.parse({ installationId, identityRevisionId: selected.id, directionId: selection.selectedDirectionId }), {
+    retryLimit: 2,
+    retryBackoff: true,
+    expireInSeconds: 300,
+  });
   return Response.json({ revision: selected }, { headers });
 }

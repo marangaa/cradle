@@ -1,10 +1,10 @@
-import type { ChatEvent, IdentityRevision, Installation, KnowledgeSnapshot } from "@cradle/core";
+import type { AssetRevision, ChatEvent, IdentityRevision, Installation, KnowledgeSnapshot } from "@cradle/core";
 import { asc, desc, eq } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { conversationEvents, identityRevisions, installations, knowledgeSnapshots } from "./schema.js";
+import { assetRevisions, conversationEvents, identityRevisions, installations, knowledgeSnapshots } from "./schema.js";
 
-const schema = { installations, knowledgeSnapshots, conversationEvents, identityRevisions };
+const schema = { installations, knowledgeSnapshots, conversationEvents, identityRevisions, assetRevisions };
 type CradleDatabase = NodePgDatabase<typeof schema>;
 
 /** Storage contract shared by self-hosted and managed Cradle runtimes. */
@@ -17,6 +17,8 @@ export interface CradleStore {
   listMessages(conversationId: string): Promise<Array<{ role: "user" | "assistant"; content: string }>>;
   getLatestIdentityRevision(installationId: string): Promise<IdentityRevision | null>;
   saveIdentityRevision(revision: IdentityRevision): Promise<void>;
+  listAssetRevisions(identityRevisionId: string): Promise<AssetRevision[]>;
+  saveAssetRevision(asset: AssetRevision): Promise<void>;
 }
 
 /** Lightweight development store used only when a database is deliberately not configured. */
@@ -25,6 +27,7 @@ export class MemoryStore implements CradleStore {
   private readonly knowledge = new Map<string, KnowledgeSnapshot>();
   private readonly events: ChatEvent[] = [];
   private readonly identities = new Map<string, IdentityRevision>();
+  private readonly assets = new Map<string, AssetRevision[]>();
 
   async getInstallation(id: string) { return this.installations.get(id) ?? null; }
   async saveInstallation(installation: Installation) { this.installations.set(installation.id, installation); }
@@ -41,6 +44,13 @@ export class MemoryStore implements CradleStore {
   }
   async getLatestIdentityRevision(installationId: string) { return this.identities.get(installationId) ?? null; }
   async saveIdentityRevision(revision: IdentityRevision) { this.identities.set(revision.installationId, revision); }
+  async listAssetRevisions(identityRevisionId: string) { return this.assets.get(identityRevisionId) ?? []; }
+  async saveAssetRevision(asset: AssetRevision) {
+    const assets = this.assets.get(asset.identityRevisionId) ?? [];
+    const index = assets.findIndex((item) => item.id === asset.id);
+    if (index >= 0) assets[index] = asset; else assets.push(asset);
+    this.assets.set(asset.identityRevisionId, assets);
+  }
 }
 
 /** Drizzle-backed store for local Docker, self-hosted, and Cradle Cloud deployments. */
@@ -178,6 +188,40 @@ export class PostgresStore implements CradleStore {
         error: revision.error ?? null,
         updatedAt: new Date(revision.updatedAt),
       },
+    });
+  }
+
+  async listAssetRevisions(identityRevisionId: string): Promise<AssetRevision[]> {
+    const rows = await this.database.query.assetRevisions.findMany({
+      where: eq(assetRevisions.identityRevisionId, identityRevisionId),
+      orderBy: [asc(assetRevisions.createdAt)],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      installationId: row.installationId,
+      identityRevisionId: row.identityRevisionId,
+      directionId: row.directionId,
+      state: row.state,
+      status: row.status,
+      objectKey: row.objectKey,
+      contentType: row.contentType,
+      checksum: row.checksum,
+      ...(row.parentAssetId ? { parentAssetId: row.parentAssetId } : {}),
+      provider: row.provider,
+      model: row.model,
+      promptVersion: row.promptVersion,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  async saveAssetRevision(asset: AssetRevision): Promise<void> {
+    await this.database.insert(assetRevisions).values({
+      ...asset,
+      parentAssetId: asset.parentAssetId ?? null,
+      createdAt: new Date(asset.createdAt),
+    }).onConflictDoUpdate({
+      target: assetRevisions.id,
+      set: { status: asset.status },
     });
   }
 }

@@ -15,6 +15,7 @@
     "@cradle/db": "workspace:*",
     "@cradle/identity": "workspace:*",
     "@cradle/jobs": "workspace:*",
+    "@cradle/media": "workspace:*",
     "ai": "^7.0.31"
   },
   "devDependencies": {

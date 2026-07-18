@@ -4,11 +4,19 @@ import { z } from "zod";
 export type CradleBoss = PgBoss;
 
 export const IDENTITY_GENERATION_QUEUE = "cradle.identity.generate";
+export const CANONICAL_ASSET_QUEUE = "cradle.asset.generate-canonical";
 export const identityGenerationJobSchema = z.object({
   installationId: z.string().uuid(),
   revisionId: z.string().uuid(),
 });
 export type IdentityGenerationJob = z.infer<typeof identityGenerationJobSchema>;
+
+export const canonicalAssetJobSchema = z.object({
+  installationId: z.string().uuid(),
+  identityRevisionId: z.string().uuid(),
+  directionId: z.string().uuid(),
+});
+export type CanonicalAssetJob = z.infer<typeof canonicalAssetJobSchema>;
 
 /** Creates the Postgres-backed queue used by the Runtime producer and worker consumers. */
 export function createCradleBoss(databaseUrl: string) {

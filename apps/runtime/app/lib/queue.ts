@@ -1,4 +1,4 @@
-import { createCradleBoss, IDENTITY_GENERATION_QUEUE, type CradleBoss } from "@cradle/jobs";
+import { CANONICAL_ASSET_QUEUE, createCradleBoss, IDENTITY_GENERATION_QUEUE, type CradleBoss } from "@cradle/jobs";
 
 let queuePromise: Promise<CradleBoss> | undefined;
 
@@ -9,6 +9,7 @@ async function startQueue(): Promise<CradleBoss> {
   queue.on("error", (error) => console.error("Cradle job queue error", error));
   await queue.start();
   await queue.createQueue(IDENTITY_GENERATION_QUEUE);
+  await queue.createQueue(CANONICAL_ASSET_QUEUE);
   return queue;
 }
 
