@@ -116,6 +116,17 @@ export default function StudioHome() {
     finally { setBusy(false); }
   }
 
+  async function rotateManagementKey() {
+    if (!result) return; setBusy(true); setError("");
+    try {
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/management-key`, { method: "PATCH", headers: managementHeaders });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Could not rotate the owner key.");
+      setResult((current) => current ? { ...current, installation: { ...current.installation, managementKey: payload.managementKey } } : current);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not rotate the owner key."); }
+    finally { setBusy(false); }
+  }
+
   async function selectDirection(directionId: string) {
     if (!result || !revision) return; setBusy(true); setError("");
     try {
@@ -146,6 +157,7 @@ export default function StudioHome() {
     <header><Link className="wordmark" href="/">CRADLE</Link><span>IDENTITY STUDIO</span><p>0{result ? 2 : 1} / 04</p></header>
     <section className="hero"><p className="kicker">A company deserves more than a chat bubble.</p><h1>Give your website<br /><i>a presence.</i></h1><p className="intro">Cradle turns reviewed public knowledge into a grounded identity. Character assets come only after you approve its direction.</p></section>
     {!result ? <form className="discovery" onSubmit={discover}><label htmlFor="site">Start with a public website</label><div><input id="site" type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://yourcompany.com" /><button disabled={busy}>{busy ? "Reading the site…" : "Discover the shape"}</button></div><small>Public, same-domain crawl. You review the source material before generation.</small></form> : <>
+      <section className="owner-key"><p className="kicker">Owner credential</p><strong>Save this key before you continue.</strong><code>{result.installation.managementKey}</code><div><button onClick={() => void navigator.clipboard.writeText(result.installation.managementKey)}>Copy key</button><button onClick={rotateManagementKey} disabled={busy}>Rotate key</button></div><p>Cradle stores only its hash. The embed never receives it.</p></section>
       <section className="section-head"><p className="kicker">01 / Knowledge</p><h2>Here is what Cradle found.</h2><p>These are the reviewed pages the identity is allowed to use.</p></section>
       <section className="knowledge"><div className="knowledge-summary"><strong>{includedUrls.size}</strong><span>pages included</span><p>{new URL(result.knowledge.sourceUrl).hostname}</p><button onClick={saveKnowledgeReview} disabled={busy || includedUrls.size === 0}>Save reviewed sources</button></div><div className="page-list">{result.knowledge.pages.map((page) => <article key={page.url}><label className="page-toggle"><input type="checkbox" checked={includedUrls.has(page.url)} onChange={() => togglePage(page.url)} disabled={busy} /><span>{new URL(page.url).pathname || "/"}</span></label><strong>{page.title || "Untitled page"}</strong><p>{page.markdown.slice(0, 140)}…</p></article>)}</div></section>
       <section className="section-head"><p className="kicker">02 / Identity</p><h2>Derive its direction from evidence.</h2><p>Cradle creates three distinct directions from the reviewed snapshot. It does not publish a widget or generate visual assets yet.</p></section>
