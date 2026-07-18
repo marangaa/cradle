@@ -503,29 +503,45 @@ export default function StudioHome() {
 
   return (
     <main className="studio">
-      <header>
+      <header className="topbar">
         <Link className="wordmark" href="/">
-          CRADLE
+          <span className="wordmark-mark" aria-hidden="true">
+            ◒
+          </span>
+          Cradle
         </Link>
-        <span>IDENTITY STUDIO</span>
-        <p>0{result ? 2 : 1} / 04</p>
+        <span className="topbar-context">Identity studio</span>
+        <p className="step-count">
+          <span>0{result ? 2 : 1}</span> / 04
+        </p>
       </header>
       <section className="hero">
-        <p className="kicker">A company deserves more than a chat bubble.</p>
-        <h1>
-          Give your website
-          <br />
-          <i>a presence.</i>
-        </h1>
-        <p className="intro">
-          Cradle turns reviewed public knowledge into a grounded identity.
-          Character assets come only after you approve its direction.
-        </p>
+        <div className="hero-copy">
+          <p className="kicker">The identity workspace</p>
+          <h1>
+            Give your site
+            <br />
+            <em>a point of view.</em>
+          </h1>
+          <p className="intro">
+            Cradle turns the public surface of your company into a grounded,
+            living presence—one source at a time.
+          </p>
+        </div>
+        <aside className="hero-note">
+          <span className="note-index">01</span>
+          <p>Start with the website your visitors already know.</p>
+          <span className="note-line" aria-hidden="true" />
+          <small>Reviewable by design · no black-box publishing</small>
+        </aside>
       </section>
       {!result ? (
         <>
           <form className="discovery" onSubmit={discover}>
-            <label htmlFor="site">Start with a public website</label>
+            <div className="form-heading">
+              <span className="form-index">01</span>
+              <label htmlFor="site">Create an installation</label>
+            </div>
             <div>
               <input
                 id="site"
@@ -536,16 +552,20 @@ export default function StudioHome() {
                 placeholder="https://yourcompany.com"
               />
               <button disabled={busy}>
-                {busy ? busyAction : "Discover the shape"}
+                <span>{busy ? busyAction : "Read this site"}</span>
+                <span aria-hidden="true">↗</span>
               </button>
             </div>
             <small>
-              Public, same-domain crawl. You review the source material before
+              Public, same-domain crawl. You review every source before
               generation.
             </small>
           </form>
           <form className="resume" onSubmit={resume}>
-            <label htmlFor="installation">Already started?</label>
+            <div className="resume-heading">
+              <span className="form-index">↳</span>
+              <label htmlFor="installation">Continue an installation</label>
+            </div>
             <input
               id="installation"
               required
@@ -560,7 +580,7 @@ export default function StudioHome() {
               placeholder="Owner credential"
             />
             <button disabled={busy}>
-              {busy ? busyAction : "Resume installation"}
+              {busy ? busyAction : "Continue"}
             </button>
           </form>
         </>
