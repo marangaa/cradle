@@ -60,6 +60,7 @@ await queue.work<CanonicalAssetJob>(CANONICAL_ASSET_QUEUE, { localConcurrency: 1
     if (existing.some((asset) => asset.directionId === direction.id && asset.state === "canonical" && asset.status === "draft")) continue;
 
     const imageModel = process.env.CRADLE_IMAGE_MODEL ?? "gpt-image-2";
+    try {
     const generated = await generateImage({
       model: openai.image(imageModel),
       prompt: direction.imagePrompt,
@@ -85,6 +86,10 @@ await queue.work<CanonicalAssetJob>(CANONICAL_ASSET_QUEUE, { localConcurrency: 1
       createdAt: new Date().toISOString(),
     });
     await queue.send(STATE_PACK_QUEUE, statePackJobSchema.parse({ ...payload, canonicalAssetId: assetId }), { retryLimit: 2, retryBackoff: true, expireInSeconds: 600 });
+    } catch (error) {
+      await store.saveIdentityRevision(identityRevisionSchema.parse({ ...revision, error: error instanceof Error ? error.message.slice(0, 1_000) : "Canonical asset generation failed.", updatedAt: new Date().toISOString() }));
+      throw error;
+    }
   }
 });
 
@@ -100,6 +105,9 @@ const statePrompts = {
 await queue.work<StatePackJob>(STATE_PACK_QUEUE, { localConcurrency: 1 }, async (jobs) => {
   for (const job of jobs) {
     const payload = statePackJobSchema.parse(job.data);
+    const revision = await store.getLatestIdentityRevision(payload.installationId);
+    if (!revision || revision.id !== payload.identityRevisionId) continue;
+    try {
     const assets = await store.listAssetRevisions(payload.identityRevisionId);
     const canonical = assets.find((asset) => asset.id === payload.canonicalAssetId && asset.status === "draft" && asset.state === "canonical");
     if (!canonical) throw new Error("Canonical asset is unavailable for state generation.");
@@ -113,6 +121,11 @@ await queue.work<StatePackJob>(STATE_PACK_QUEUE, { localConcurrency: 1 }, async 
       const objectKey = `installations/${payload.installationId}/identity/${payload.identityRevisionId}/${payload.directionId}/${state}/${assetId}.png`;
       const stored = await assetStore.put({ key: objectKey, body: generated.image.uint8Array, contentType: "image/png", visibility: "private" });
       await store.saveAssetRevision({ id: assetId, installationId: payload.installationId, identityRevisionId: payload.identityRevisionId, directionId: payload.directionId, state: state as keyof typeof statePrompts, status: "draft", objectKey, contentType: "image/png", checksum: stored.checksum, parentAssetId: canonical.id, provider: "openai", model: imageModel, promptVersion: "state-pack-v1", createdAt: new Date().toISOString() });
+    }
+    await store.saveIdentityRevision(identityRevisionSchema.parse({ ...revision, error: undefined, updatedAt: new Date().toISOString() }));
+    } catch (error) {
+      await store.saveIdentityRevision(identityRevisionSchema.parse({ ...revision, error: error instanceof Error ? error.message.slice(0, 1_000) : "State pack generation failed.", updatedAt: new Date().toISOString() }));
+      throw error;
     }
   }
 });

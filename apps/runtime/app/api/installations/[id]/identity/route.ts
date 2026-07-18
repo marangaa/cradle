@@ -1,5 +1,5 @@
 import { identityRevisionSchema } from "@cradle/core";
-import { CANONICAL_ASSET_QUEUE, IDENTITY_GENERATION_QUEUE, canonicalAssetJobSchema, identityGenerationJobSchema } from "@cradle/jobs";
+import { CANONICAL_ASSET_QUEUE, IDENTITY_GENERATION_QUEUE, STATE_PACK_QUEUE, canonicalAssetJobSchema, identityGenerationJobSchema, statePackJobSchema } from "@cradle/jobs";
 import { getCradleQueue } from "../../../../lib/queue";
 import { isInstallationManager } from "../../../../lib/management";
 import { store } from "../../../../lib/store";
@@ -71,19 +71,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (!await isInstallationManager(request, installationId)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
   const selection = selectionSchema.parse(await request.json());
   const revision = await store.getLatestIdentityRevision(installationId);
-  if (!revision || revision.id !== selection.id || revision.status !== "ready" || !revision.identity) {
+  const retryingAssets = revision?.status === "selected" && revision.selectedDirectionId === selection.selectedDirectionId && Boolean(revision.error);
+  if (!revision || revision.id !== selection.id || (!retryingAssets && revision.status !== "ready") || !revision.identity) {
     return Response.json({ error: "This identity revision cannot be selected." }, { status: 409, headers });
   }
   if (!revision.identity.directions.some((direction) => direction.id === selection.selectedDirectionId)) {
     return Response.json({ error: "The selected direction does not belong to this revision." }, { status: 422, headers });
   }
-  const selected = identityRevisionSchema.parse({ ...revision, status: "selected", selectedDirectionId: selection.selectedDirectionId, updatedAt: new Date().toISOString() });
+  const selected = identityRevisionSchema.parse({ ...revision, status: "selected", selectedDirectionId: selection.selectedDirectionId, error: undefined, updatedAt: new Date().toISOString() });
   await store.saveIdentityRevision(selected);
   const queue = await getCradleQueue();
-  await queue.send(CANONICAL_ASSET_QUEUE, canonicalAssetJobSchema.parse({ installationId, identityRevisionId: selected.id, directionId: selection.selectedDirectionId }), {
-    retryLimit: 2,
-    retryBackoff: true,
-    expireInSeconds: 300,
-  });
+  const assets = await store.listAssetRevisions(selected.id);
+  const canonical = assets.find((asset) => asset.directionId === selection.selectedDirectionId && asset.state === "canonical" && asset.status === "draft");
+  if (canonical) {
+    await queue.send(STATE_PACK_QUEUE, statePackJobSchema.parse({ installationId, identityRevisionId: selected.id, directionId: selection.selectedDirectionId, canonicalAssetId: canonical.id }), { retryLimit: 2, retryBackoff: true, expireInSeconds: 600 });
+  } else {
+    await queue.send(CANONICAL_ASSET_QUEUE, canonicalAssetJobSchema.parse({ installationId, identityRevisionId: selected.id, directionId: selection.selectedDirectionId }), { retryLimit: 2, retryBackoff: true, expireInSeconds: 300 });
+  }
   return Response.json({ revision: selected }, { headers });
 }
