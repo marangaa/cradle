@@ -45,12 +45,8 @@ const runtime =
 const pending = new Set<Revision["status"]>(["queued", "generating"]);
 const states = [
   "canonical",
-  "idle",
-  "welcome",
-  "listening",
-  "thinking",
-  "resolved",
-  "away",
+  "atlas",
+  "contact-sheet",
 ];
 
 function AssetPackPreview({
@@ -63,6 +59,7 @@ function AssetPackPreview({
   return (
     <div className="asset-pack" aria-label="Generated state pack">
       {assets
+        .filter((asset) => ["canonical", "atlas", "contact-sheet"].includes(asset.state))
         .filter((asset) => asset.status !== "failed")
         .map((asset) => (
           <figure key={asset.id}>
@@ -498,8 +495,12 @@ export default function StudioHome() {
       .map((asset) => asset.state),
   );
   const packReady = states.every((state) => draftStates.has(state));
-  const published =
-    assets.length > 0 && assets.every((asset) => asset.status === "published");
+  const publishedStates = new Set(
+    assets
+      .filter((asset) => asset.status === "published")
+      .map((asset) => asset.state),
+  );
+  const published = states.every((state) => publishedStates.has(state));
 
   return (
     <main className="studio">
@@ -753,24 +754,24 @@ export default function StudioHome() {
               </section>
               {revision.status === "selected" && (
                 <section className="published">
-                  <p className="kicker">03 / Runtime states</p>
+                  <p className="kicker">03 / Character animation</p>
                   <h2>
                     {published
                       ? "Published."
                       : revision.error
                         ? "Generation needs another try."
                         : packReady
-                      ? "Your runtime states are ready."
-                          : `Preparing assets (${draftStates.size}/7).`}
+                      ? "Your character atlas is ready."
+                          : `Preparing animation assets (${draftStates.size}/3).`}
                   </h2>
                   <p>
                     {published
-                      ? "Your Cradle runtime can now fetch the published state pack."
+                      ? "Your Cradle runtime can now fetch the published animation atlas."
                       : revision.error
                         ? revision.error
                         : packReady
-                          ? "Review every generated state, then publish the complete pack."
-                          : "Cradle is deriving each runtime state from one canonical base."}
+                          ? "Review the canonical character and motion sheet, then publish the validated atlas."
+                          : "Cradle is deriving Codex-compatible animation rows from one canonical character."}
                   </p>
                   <AssetPackPreview assets={assets} previewUrls={previewUrls} />
                   {revision.error && (
@@ -793,7 +794,7 @@ export default function StudioHome() {
                     >
                       {busyAction === "Publishing the state pack…"
                         ? busyAction
-                        : "Publish asset pack"}
+                        : "Publish character atlas"}
                     </button>
                   )}
                   {published && (

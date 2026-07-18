@@ -58,7 +58,7 @@ export const assetRevisions = pgTable("asset_revisions", {
   installationId: uuid("installation_id").notNull().references(() => installations.id, { onDelete: "cascade" }),
   identityRevisionId: uuid("identity_revision_id").notNull().references(() => identityRevisions.id, { onDelete: "cascade" }),
   directionId: uuid("direction_id").notNull(),
-  state: text("state", { enum: ["canonical", "idle", "welcome", "listening", "thinking", "resolved", "away"] }).notNull(),
+  state: text("state", { enum: ["canonical", "idle", "running-right", "running-left", "waving", "jumping", "failed", "waiting", "running", "review", "atlas", "contact-sheet"] }).notNull(),
   status: text("status", { enum: ["draft", "published", "failed"] }).notNull(),
   objectKey: text("object_key").notNull(),
   contentType: text("content_type", { enum: ["image/png", "image/webp"] }).notNull(),

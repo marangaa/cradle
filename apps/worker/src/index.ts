@@ -20,6 +20,16 @@ import {
   type StatePackJob,
 } from "@cradle/jobs";
 import { createAssetStoreFromEnv } from "@cradle/media";
+import {
+  codexPetStateMetadata,
+  codexPetStates,
+  composePetAtlas,
+  createPetContactSheet,
+  createRowLayoutGuide,
+  extractPetRow,
+  removePetChroma,
+  type CodexPetState,
+} from "@cradle/pet";
 import { generateImage, generateText, Output } from "ai";
 
 config({
@@ -157,11 +167,10 @@ await queue.work<CanonicalAssetJob>(
       try {
         const generated = await generateImage({
           model: openai.image(imageModel),
-          prompt: direction.imagePrompt,
+          prompt: `${direction.imagePrompt}\n\nCreate one centered full-body character on a perfectly flat #ff00ff chroma-key background. Keep clean edges and generous padding. Do not use #ff00ff in the character. No scenery, floor, shadow, glow, text, logo, or watermark.`,
           size: "1024x1024",
           providerOptions: {
             openai: {
-              background: "transparent",
               outputFormat: "png",
               quality: "high",
             },
@@ -171,7 +180,7 @@ await queue.work<CanonicalAssetJob>(
         const objectKey = `installations/${payload.installationId}/identity/${revision.id}/${direction.id}/canonical/${assetId}.png`;
         const stored = await assetStore.put({
           key: objectKey,
-          body: generated.image.uint8Array,
+          body: await removePetChroma(generated.image.uint8Array),
           contentType: "image/png",
           visibility: "private",
         });
@@ -212,15 +221,74 @@ await queue.work<CanonicalAssetJob>(
   },
 );
 
-const statePrompts = {
-  idle: "same character, quiet resting pose, gentle neutral expression",
-  welcome: "same character, welcoming gesture and warm attentive expression",
-  listening:
-    "same character, subtly leaning in with focused listening expression",
-  thinking: "same character, reflective thinking pose with a small soft glow",
-  resolved: "same character, calm satisfied expression after helping",
-  away: "same character, peaceful low-energy resting pose",
-} as const;
+const statePrompts: Record<CodexPetState, string> = {
+  idle: "quiet micro-animation: a small blink, soft breathing, or gentle body bob",
+  "running-right": "a readable right-facing movement cycle with alternating strides",
+  "running-left": "a readable left-facing movement cycle with alternating strides",
+  waving: "a warm, readable greeting wave using only the character's body or existing prop",
+  jumping: "a vertical celebratory hop shown through body position only",
+  failed: "a contained, readable setback reaction without detached symbols or text",
+  waiting: "an expectant, attentive pose that clearly asks for a visitor's next input",
+  running: "focused processing or work activity, not literal running",
+  review: "a close, thoughtful review or listening pose using only face and body language",
+};
+
+async function generatePetRow(input: {
+  canonical: Uint8Array;
+  state: CodexPetState;
+  imageModel: string;
+}) {
+  const guide = await createRowLayoutGuide(input.state);
+  const generated = await generateImage({
+    model: openai.image(input.imageModel),
+    prompt: {
+      images: [input.canonical, guide],
+      text: `Create one animation-row source image for the supplied canonical character. The second image is an invisible construction guide only. Return exactly a ${1536}x${1024} image. Use the central horizontal guide band to place eight separate, complete frame cells with the same character identity, scale, baseline, palette, materials, and prop placement. The ${input.state} state is: ${statePrompts[input.state]}. The first ${codexPetStateMetadata[input.state].frames} cells must contain distinct sequential poses; unused cells must contain only a perfectly flat #ff00ff background. The entire canvas background must be perfectly flat #ff00ff. Do not render guide boxes, grid lines, text, logos, scenery, floor, shadow, blur, aura, detached effects, or #ff00ff anywhere in the character.`,
+    },
+    size: "1536x1024",
+    providerOptions: {
+      openai: {
+        outputFormat: "png",
+        quality: "high",
+        inputFidelity: "high",
+      },
+    },
+  });
+  return extractPetRow(generated.image.uint8Array);
+}
+
+async function saveGeneratedAsset(input: {
+  installationId: string;
+  identityRevisionId: string;
+  directionId: string;
+  state: CodexPetState | "atlas" | "contact-sheet";
+  body: Uint8Array;
+  contentType: "image/png" | "image/webp";
+  parentAssetId: string;
+  model: string;
+  promptVersion: string;
+}) {
+  const assetId = crypto.randomUUID();
+  const extension = input.contentType === "image/webp" ? "webp" : "png";
+  const objectKey = `installations/${input.installationId}/identity/${input.identityRevisionId}/${input.directionId}/${input.state}/${assetId}.${extension}`;
+  const stored = await assetStore.put({ key: objectKey, body: input.body, contentType: input.contentType, visibility: "private" });
+  await store.saveAssetRevision({
+    id: assetId,
+    installationId: input.installationId,
+    identityRevisionId: input.identityRevisionId,
+    directionId: input.directionId,
+    state: input.state,
+    status: "draft",
+    objectKey,
+    contentType: input.contentType,
+    checksum: stored.checksum,
+    parentAssetId: input.parentAssetId,
+    provider: "openai",
+    model: input.model,
+    promptVersion: input.promptVersion,
+    createdAt: new Date().toISOString(),
+  });
+}
 
 await queue.work<StatePackJob>(
   STATE_PACK_QUEUE,
@@ -246,55 +314,37 @@ await queue.work<StatePackJob>(
           throw new Error(
             "Canonical asset is unavailable for state generation.",
           );
-        const existingStates = new Set(
-          assets
-            .filter((asset) => asset.parentAssetId === canonical.id)
-            .map((asset) => asset.state),
-        );
+        const existingStates = new Set(assets.filter((asset) => asset.parentAssetId === canonical.id).map((asset) => asset.state));
         const imageModel = process.env.CRADLE_IMAGE_MODEL ?? "gpt-image-2";
         const canonicalBytes = await assetStore.get(canonical.objectKey);
-        for (const [state, instruction] of Object.entries(statePrompts)) {
-          if (existingStates.has(state as keyof typeof statePrompts)) continue;
-          const generated = await generateImage({
-            model: openai.image(imageModel),
-            prompt: {
-              images: [canonicalBytes],
-              text: `${instruction}. Preserve the exact same character design, silhouette, palette, and transparent background. No text or logos.`,
-            },
-            size: "1024x1024",
-            providerOptions: {
-              openai: {
-                background: "transparent",
-                outputFormat: "png",
-                quality: "high",
-                inputFidelity: "high",
-              },
-            },
-          });
-          const assetId = crypto.randomUUID();
-          const objectKey = `installations/${payload.installationId}/identity/${payload.identityRevisionId}/${payload.directionId}/${state}/${assetId}.png`;
-          const stored = await assetStore.put({
-            key: objectKey,
-            body: generated.image.uint8Array,
-            contentType: "image/png",
-            visibility: "private",
-          });
-          await store.saveAssetRevision({
-            id: assetId,
-            installationId: payload.installationId,
-            identityRevisionId: payload.identityRevisionId,
-            directionId: payload.directionId,
-            state: state as keyof typeof statePrompts,
-            status: "draft",
-            objectKey,
-            contentType: "image/png",
-            checksum: stored.checksum,
-            parentAssetId: canonical.id,
-            provider: "openai",
-            model: imageModel,
-            promptVersion: "state-pack-v1",
-            createdAt: new Date().toISOString(),
-          });
+        for (let index = 0; index < codexPetStates.length; index += 2) {
+          const batch = codexPetStates.slice(index, index + 2).filter((state) => !existingStates.has(state));
+          await Promise.all(batch.map(async (state) => {
+            const row = await generatePetRow({ canonical: canonicalBytes, state, imageModel });
+            await saveGeneratedAsset({
+              installationId: payload.installationId,
+              identityRevisionId: payload.identityRevisionId,
+              directionId: payload.directionId,
+              state,
+              body: row,
+              contentType: "image/png",
+              parentAssetId: canonical.id,
+              model: imageModel,
+              promptVersion: "hatch-pet-row-v1",
+            });
+          }));
+        }
+        const completedAssets = await store.listAssetRevisions(payload.identityRevisionId);
+        if (!existingStates.has("atlas") || !existingStates.has("contact-sheet")) {
+          const rows = Object.fromEntries(await Promise.all(codexPetStates.map(async (state) => {
+            const row = completedAssets.find((asset) => asset.parentAssetId === canonical.id && asset.state === state && asset.status === "draft");
+            if (!row) throw new Error(`The ${state} animation row is unavailable for atlas composition.`);
+            return [state, await assetStore.get(row.objectKey)] as const;
+          }))) as Record<CodexPetState, Uint8Array>;
+          const atlas = await composePetAtlas(rows);
+          const contactSheet = await createPetContactSheet(atlas);
+          if (!existingStates.has("atlas")) await saveGeneratedAsset({ installationId: payload.installationId, identityRevisionId: payload.identityRevisionId, directionId: payload.directionId, state: "atlas", body: atlas, contentType: "image/webp", parentAssetId: canonical.id, model: imageModel, promptVersion: "hatch-pet-atlas-v1" });
+          if (!existingStates.has("contact-sheet")) await saveGeneratedAsset({ installationId: payload.installationId, identityRevisionId: payload.identityRevisionId, directionId: payload.directionId, state: "contact-sheet", body: contactSheet, contentType: "image/webp", parentAssetId: canonical.id, model: imageModel, promptVersion: "hatch-pet-contact-sheet-v1" });
         }
         await store.saveIdentityRevision(
           identityRevisionSchema.parse({

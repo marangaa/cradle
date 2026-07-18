@@ -5,7 +5,7 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { BrandIdentity } from "@cradle/core";
 
-export type AssetState = "canonical" | "idle" | "welcome" | "listening" | "thinking" | "resolved" | "away";
+export type AssetState = "canonical" | "idle" | "running-right" | "running-left" | "waving" | "jumping" | "failed" | "waiting" | "running" | "review" | "atlas" | "contact-sheet";
 export type AssetVisibility = "private" | "published";
 
 /** Immutable metadata for an approved generated or uploaded character asset. */

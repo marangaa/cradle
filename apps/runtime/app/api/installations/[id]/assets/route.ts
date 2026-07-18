@@ -2,7 +2,7 @@ import { assetRevisionSchema } from "@cradle/core";
 import { isInstallationManager } from "../../../../lib/management";
 import { store } from "../../../../lib/store";
 
-const requiredStates = ["canonical", "idle", "welcome", "listening", "thinking", "resolved", "away"] as const;
+const requiredStates = ["canonical", "atlas", "contact-sheet"] as const;
 
 function studioCorsHeaders(request: Request) {
   const origin = request.headers.get("origin");
@@ -26,7 +26,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   return Response.json({ assets: await store.listAssetRevisions(revision.id) }, { headers });
 }
 
-/** Publishes a complete reviewed state pack; incomplete or failed packs remain private drafts. */
+/** Publishes a reviewed canonical character and its validated animation atlas together. */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const headers = studioCorsHeaders(request);
   if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
@@ -36,8 +36,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!revision || revision.status !== "selected") return Response.json({ error: "Select an identity direction before publishing assets." }, { status: 409, headers });
   const assets = await store.listAssetRevisions(revision.id);
   const byState = new Map(assets.filter((asset) => asset.directionId === revision.selectedDirectionId && asset.status === "draft").map((asset) => [asset.state, asset]));
-  if (!requiredStates.every((state) => byState.has(state))) return Response.json({ error: "The canonical asset and every interaction state must finish before publishing." }, { status: 409, headers });
-  const published = await Promise.all([...byState.values()].map(async (asset) => {
+  if (!requiredStates.every((state) => byState.has(state))) return Response.json({ error: "The canonical character, sprite atlas, and contact sheet must finish before publishing." }, { status: 409, headers });
+  const published = await Promise.all(requiredStates.map(async (state) => {
+    const asset = byState.get(state);
+    if (!asset) throw new Error(`Missing required ${state} asset after validation.`);
     const next = assetRevisionSchema.parse({ ...asset, status: "published" });
     await store.saveAssetRevision(next);
     return next;
@@ -59,5 +61,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       version: revision.version,
     } });
   }
-  return Response.json({ assets: published }, { headers });
+  return Response.json({ assets: await store.listAssetRevisions(revision.id), published }, { headers });
 }

@@ -16,7 +16,7 @@ This is intentionally infrastructure, not another fixed "sales bot" or "support 
 - Persist installations, knowledge snapshots, and conversation events to PostgreSQL when `DATABASE_URL` is configured.
 - Generate an installation ID and embed the Shadow-DOM `cradle-resident` widget with one script tag.
 - Generate an evidence-backed identity revision in the durable Postgres queue; Studio selects a direction rather than inventing a browser-side mascot.
-- Generate one canonical transparent image and derive its interaction states from that canonical image, then publish only a complete reviewed state pack.
+- Generate one canonical character, derive nine reference-grounded animation rows, validate them, and publish one transparent Codex-compatible `spritesheet.webp` plus an owner contact sheet.
 - Persist immutable generated assets with checksums, model/prompt provenance, and canonical-parent lineage on a shared self-hosted volume.
 - Maintain anonymous visitor and conversation IDs in the visitor's first-party browser storage.
 - Reject chat requests whose browser origin does not match the installation's configured origin.
@@ -26,9 +26,10 @@ This is intentionally infrastructure, not another fixed "sales bot" or "support 
 
 1. **Discover:** Studio runs a bounded public crawl; the owner saves a selected page subset as the immutable reviewed source version.
 2. **Identity:** Studio queues an evidence-backed identity revision and asks the owner to select one direction.
-3. **Assets:** Worker generates a canonical image, then uses that image as the edit input for every interaction state.
-4. **Review:** Studio streams draft assets only to the authorized owner session, shows every state, and requires an explicit publish action.
-5. **Embed:** Runtime exposes only published assets; the widget hydrates the resulting state manifest and changes appearance as visitors interact.
+3. **Character:** Worker generates a canonical image, then uses it and an invisible layout guide to create nine animation rows.
+4. **Atlas:** Cradle removes the construction background, rejects empty frames, composes an 8×9 atlas, and creates a contact sheet for review.
+5. **Review:** Studio streams draft review assets only to the authorized owner session and requires an explicit publish action.
+6. **Embed:** Runtime exposes only the published atlas; the widget maps visitor activity to its animation rows.
 
 Studio management routes require the installation key shown once at onboarding. Cradle stores only its SHA-256 hash; save the original in a password manager and never place it in the embed snippet or client site. Self-hosted operators can rotate a lost key directly in their database today; Cradle Cloud will bind installations to Qualra accounts rather than relying on this bootstrap credential.
 
@@ -57,7 +58,13 @@ To test a public crawl on a local website, set `CRADLE_DEVELOPMENT_EMBED_ORIGIN=
 ></cradle-resident>
 ```
 
-The widget runs in a Shadow DOM, preserves a first-party anonymous visitor and conversation ID, and only the configured installation origin can use its chat endpoint.
+The widget runs in a Shadow DOM, preserves a first-party anonymous visitor and conversation ID, and only the configured installation origin can use its chat endpoint. Its public character package is available at `/api/installations/:id/pet` and follows the portable `pet.json` + `spritesheet.webp` convention used by Codex-compatible pets.
+
+## Character assets
+
+Cradle uses the same practical asset shape as Codex pets: one transparent `1536×1872` WebP atlas with nine 192×208 rows. Cradle maps website events to the relevant rows (`idle`, `waving`, `review`, `running`, `jumping`, and `failed`) rather than treating the image as a static chatbot avatar.
+
+The generation worker always creates the canonical image first. Every row is generated with that canonical reference and a layout guide, then processed with `sharp`. It rejects the row when frame geometry is wrong or a required frame is empty; it does not silently publish a broken atlas. The raw source rows stay private, while the immutable published atlas is served with long-lived cache headers.
 
 ## Deploy
 
@@ -81,14 +88,14 @@ The runtime falls back to memory only when `DATABASE_URL` is intentionally omitt
 
 - `apps/studio` — URL onboarding, source review, identity direction, and asset publishing.
 - `apps/runtime` — crawl onboarding, installation management, streaming, published asset delivery, and widget delivery.
-- `apps/worker` — durable identity and canonical/state-pack generation jobs.
-- `apps/site` — integration target for local verification.
+- `apps/worker` — durable identity and Codex-compatible atlas generation jobs.
 - `packages/widget` — framework-free `cradle-resident` custom element, compiled and served by Runtime at `/widget.js`.
 - `packages/crawler` — bounded, same-origin Firecrawl ingestion.
 - `packages/core` — Zod contracts shared by every deployment.
 - `packages/db` — Drizzle schema, versioned migrations, and durable store adapter.
 - `packages/jobs` — Postgres-backed job contracts shared by Runtime and Worker.
 - `packages/media` — immutable filesystem and S3-compatible asset stores, plus storage safety tests.
+- `packages/pet` — atlas geometry, chroma cleanup, frame validation, composition, and state metadata.
 
 ## Operations
 

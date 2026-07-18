@@ -54,7 +54,20 @@ export const identityRevisionSchema = z.object({
 
 export type IdentityRevision = z.infer<typeof identityRevisionSchema>;
 
-export const assetStateSchema = z.enum(["canonical", "idle", "welcome", "listening", "thinking", "resolved", "away"]);
+export const assetStateSchema = z.enum([
+  "canonical",
+  "idle",
+  "running-right",
+  "running-left",
+  "waving",
+  "jumping",
+  "failed",
+  "waiting",
+  "running",
+  "review",
+  "atlas",
+  "contact-sheet",
+]);
 export const assetRevisionSchema = z.object({
   id: z.string().uuid(),
   installationId: z.string().uuid(),

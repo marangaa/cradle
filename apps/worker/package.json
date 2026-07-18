@@ -17,6 +17,7 @@
     "@cradle/identity": "workspace:*",
     "@cradle/jobs": "workspace:*",
     "@cradle/media": "workspace:*",
+    "@cradle/pet": "workspace:*",
     "ai": "^7.0.31",
     "dotenv": "^17.4.2",
     "zod": "^3.25.76"
