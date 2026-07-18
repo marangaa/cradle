@@ -2,7 +2,7 @@ import { openai } from "@ai-sdk/openai";
 import { brandIdentitySchema, identityRevisionSchema, type BrandIdentity } from "@cradle/core";
 import { createCradleStore } from "@cradle/db";
 import { buildIdentitySource } from "@cradle/identity";
-import { CANONICAL_ASSET_QUEUE, canonicalAssetJobSchema, createCradleBoss, IDENTITY_GENERATION_QUEUE, identityGenerationJobSchema, type CanonicalAssetJob, type IdentityGenerationJob } from "@cradle/jobs";
+import { CANONICAL_ASSET_QUEUE, canonicalAssetJobSchema, createCradleBoss, IDENTITY_GENERATION_QUEUE, identityGenerationJobSchema, STATE_PACK_QUEUE, statePackJobSchema, type CanonicalAssetJob, type IdentityGenerationJob, type StatePackJob } from "@cradle/jobs";
 import { FilesystemAssetStore } from "@cradle/media";
 import { generateImage, generateText, Output } from "ai";
 
@@ -28,6 +28,7 @@ queue.on("error", (error) => console.error("Cradle worker queue error", error));
 await queue.start();
 await queue.createQueue(IDENTITY_GENERATION_QUEUE);
 await queue.createQueue(CANONICAL_ASSET_QUEUE);
+await queue.createQueue(STATE_PACK_QUEUE);
 await queue.work<IdentityGenerationJob>(IDENTITY_GENERATION_QUEUE, { localConcurrency: 1 }, async (jobs) => {
   for (const job of jobs) {
     const payload = identityGenerationJobSchema.parse(job.data);
@@ -83,6 +84,36 @@ await queue.work<CanonicalAssetJob>(CANONICAL_ASSET_QUEUE, { localConcurrency: 1
       promptVersion: "canonical-v1",
       createdAt: new Date().toISOString(),
     });
+    await queue.send(STATE_PACK_QUEUE, statePackJobSchema.parse({ ...payload, canonicalAssetId: assetId }), { retryLimit: 2, retryBackoff: true, expireInSeconds: 600 });
+  }
+});
+
+const statePrompts = {
+  idle: "same character, quiet resting pose, gentle neutral expression",
+  welcome: "same character, welcoming gesture and warm attentive expression",
+  listening: "same character, subtly leaning in with focused listening expression",
+  thinking: "same character, reflective thinking pose with a small soft glow",
+  resolved: "same character, calm satisfied expression after helping",
+  away: "same character, peaceful low-energy resting pose",
+} as const;
+
+await queue.work<StatePackJob>(STATE_PACK_QUEUE, { localConcurrency: 1 }, async (jobs) => {
+  for (const job of jobs) {
+    const payload = statePackJobSchema.parse(job.data);
+    const assets = await store.listAssetRevisions(payload.identityRevisionId);
+    const canonical = assets.find((asset) => asset.id === payload.canonicalAssetId && asset.status === "draft" && asset.state === "canonical");
+    if (!canonical) throw new Error("Canonical asset is unavailable for state generation.");
+    const existingStates = new Set(assets.filter((asset) => asset.parentAssetId === canonical.id).map((asset) => asset.state));
+    const imageModel = process.env.CRADLE_IMAGE_MODEL ?? "gpt-image-2";
+    const canonicalBytes = await assetStore.get(canonical.objectKey);
+    for (const [state, instruction] of Object.entries(statePrompts)) {
+      if (existingStates.has(state as keyof typeof statePrompts)) continue;
+      const generated = await generateImage({ model: openai.image(imageModel), prompt: { images: [canonicalBytes], text: `${instruction}. Preserve the exact same character design, silhouette, palette, and transparent background. No text or logos.` }, size: "1024x1024", providerOptions: { openai: { background: "transparent", outputFormat: "png", quality: "high", inputFidelity: "high" } } });
+      const assetId = crypto.randomUUID();
+      const objectKey = `installations/${payload.installationId}/identity/${payload.identityRevisionId}/${payload.directionId}/${state}/${assetId}.png`;
+      const stored = await assetStore.put({ key: objectKey, body: generated.image.uint8Array, contentType: "image/png", visibility: "private" });
+      await store.saveAssetRevision({ id: assetId, installationId: payload.installationId, identityRevisionId: payload.identityRevisionId, directionId: payload.directionId, state: state as keyof typeof statePrompts, status: "draft", objectKey, contentType: "image/png", checksum: stored.checksum, parentAssetId: canonical.id, provider: "openai", model: imageModel, promptVersion: "state-pack-v1", createdAt: new Date().toISOString() });
+    }
   }
 });
 

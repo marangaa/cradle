@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import type { BrandIdentity } from "@cradle/core";
 
-export type AssetState = "idle" | "welcome" | "listening" | "thinking" | "resolved" | "away";
+export type AssetState = "canonical" | "idle" | "welcome" | "listening" | "thinking" | "resolved" | "away";
 export type AssetVisibility = "private" | "published";
 
 /** Immutable metadata for an approved generated or uploaded character asset. */
@@ -27,6 +27,7 @@ export interface CharacterAsset {
 
 export interface AssetStore {
   put(input: { key: string; body: Uint8Array; contentType: CharacterAsset["contentType"]; visibility: AssetVisibility }): Promise<{ key: string; checksum: string }>;
+  get(key: string): Promise<Uint8Array>;
   getPublicUrl(key: string): string;
   getReviewUrl(key: string, expiresInSeconds: number): Promise<string>;
 }
@@ -48,6 +49,12 @@ export class FilesystemAssetStore implements AssetStore {
   }
 
   getPublicUrl(key: string) { return `${this.publicBaseUrl.replace(/\/$/, "")}/${key}`; }
+  async get(key: string) {
+    const destination = resolve(this.rootDirectory, key);
+    const relativePath = relative(resolve(this.rootDirectory), destination);
+    if (relativePath.startsWith("..") || isAbsolute(relativePath)) throw new Error("Asset key escapes the configured storage directory.");
+    return new Uint8Array(await readFile(destination));
+  }
   async getReviewUrl(key: string) { return this.getPublicUrl(key); }
 }
 

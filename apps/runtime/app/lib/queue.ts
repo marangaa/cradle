@@ -1,4 +1,4 @@
-import { CANONICAL_ASSET_QUEUE, createCradleBoss, IDENTITY_GENERATION_QUEUE, type CradleBoss } from "@cradle/jobs";
+import { CANONICAL_ASSET_QUEUE, createCradleBoss, IDENTITY_GENERATION_QUEUE, STATE_PACK_QUEUE, type CradleBoss } from "@cradle/jobs";
 
 let queuePromise: Promise<CradleBoss> | undefined;
 
@@ -10,6 +10,7 @@ async function startQueue(): Promise<CradleBoss> {
   await queue.start();
   await queue.createQueue(IDENTITY_GENERATION_QUEUE);
   await queue.createQueue(CANONICAL_ASSET_QUEUE);
+  await queue.createQueue(STATE_PACK_QUEUE);
   return queue;
 }
 
