@@ -15,7 +15,7 @@ type Direction = {
   greeting: string;
   rationale: string;
   evidence: Array<{ sourceUrl: string; reason: string }>;
-  palette: [string, string, string];
+  palette: string[];
 };
 type Revision = {
   id: string;

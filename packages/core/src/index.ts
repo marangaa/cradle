@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const paletteSchema = z.array(z.string()).length(3);
+
 export const familiarSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(48),
@@ -10,7 +12,7 @@ export const familiarSchema = z.object({
   greeting: z.string().min(1).max(320),
   rationale: z.string().min(1).max(640),
   evidence: z.array(z.string().url()).min(1).max(5),
-  palette: z.tuple([z.string(), z.string(), z.string()]),
+  palette: paletteSchema,
   version: z.number().int().positive(),
 });
 
@@ -26,7 +28,7 @@ export const identityDirectionSchema = z.object({
   greeting: z.string().min(1).max(320),
   rationale: z.string().min(1).max(640),
   evidence: z.array(z.object({ sourceUrl: z.string().url(), reason: z.string().min(1).max(280) })).min(1).max(5),
-  palette: z.tuple([z.string(), z.string(), z.string()]),
+  palette: paletteSchema,
   imagePrompt: z.string().min(1).max(2_000),
 });
 
