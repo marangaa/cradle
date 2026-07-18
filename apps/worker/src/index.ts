@@ -250,7 +250,7 @@ async function generatePetRow(input: {
       openai: {
         outputFormat: "png",
         quality: "high",
-        inputFidelity: "high",
+        ...(input.imageModel === "gpt-image-1.5" ? { inputFidelity: "high" as const } : {}),
       },
     },
   });

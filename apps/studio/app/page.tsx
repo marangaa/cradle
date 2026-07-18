@@ -48,6 +48,27 @@ const states = [
   "atlas",
   "contact-sheet",
 ];
+const animationRows = [
+  "idle",
+  "running-right",
+  "running-left",
+  "waving",
+  "jumping",
+  "failed",
+  "waiting",
+  "running",
+  "review",
+];
+
+function hasCompleteAssetPack(assets: Asset[]) {
+  return states.every((state) =>
+    assets.some(
+      (asset) =>
+        asset.state === state &&
+        (asset.status === "draft" || asset.status === "published"),
+    ),
+  );
+}
 
 function AssetPackPreview({
   assets,
@@ -147,7 +168,13 @@ export default function StudioHome() {
   }, [managementHeaders, result, revision]);
 
   useEffect(() => {
-    if (!result || revision?.status !== "selected") return;
+    if (
+      !result ||
+      revision?.status !== "selected" ||
+      revision.error ||
+      hasCompleteAssetPack(assets)
+    )
+      return;
     const refresh = async () => {
       const response = await fetch(
         `${runtime}/api/installations/${result.installation.id}/assets`,
@@ -162,9 +189,9 @@ export default function StudioHome() {
         );
     };
     void refresh();
-    const interval = window.setInterval(refresh, 2_000);
+    const interval = window.setInterval(refresh, 5_000);
     return () => window.clearInterval(interval);
-  }, [managementHeaders, result, revision?.status]);
+  }, [assets, managementHeaders, result, revision?.error, revision?.status]);
 
   useEffect(() => {
     if (!result || assets.length === 0) return;
@@ -499,6 +526,10 @@ export default function StudioHome() {
       .map((asset) => asset.state),
   );
   const packReady = states.every((state) => draftStates.has(state));
+  const generatedRows = assets.filter(
+    (asset) =>
+      asset.status === "draft" && animationRows.includes(asset.state),
+  ).length;
   const publishedStates = new Set(
     assets
       .filter((asset) => asset.status === "published")
@@ -517,21 +548,31 @@ export default function StudioHome() {
         </Link>
         <span className="topbar-context">Cradle Studio</span>
         <p className="step-count">
-          <span>0{result ? 2 : 1}</span> / 04
+          <span>0{published ? 4 : revision?.status === "selected" ? 3 : result ? 2 : 1}</span> / 04
         </p>
       </header>
       <section className={`hero ${result ? "hero-compact" : ""}`}>
         <div className="hero-copy">
           <p className="kicker">Cradle Studio · identity + runtime</p>
           <h1>
-            Build the living layer
-            <br />
-            <em>for your website.</em>
+            {result ? (
+              <>
+                Shape {result.installation.name}
+                <br />
+                <em>into a presence.</em>
+              </>
+            ) : (
+              <>
+                Build the living layer
+                <br />
+                <em>for your website.</em>
+              </>
+            )}
           </h1>
           <p className="intro">
-            Cradle turns your public site into a portable presence: review the
-            source, shape the identity, publish its states, and install the
-            runtime wherever your website lives.
+            {result
+              ? "Review what Cradle can learn, then turn the approved signal into a character your site can actually run."
+              : "Cradle turns your public site into a portable presence: review the source, shape the identity, publish its states, and install the runtime wherever your website lives."}
           </p>
         </div>
         <aside className="hero-note">
@@ -725,7 +766,7 @@ export default function StudioHome() {
                 </p>
               </section>
               <section className="directions">
-                {revision.identity.directions.map((direction) => (
+                {revision.identity.directions.map((direction, index) => (
                   <article
                     className={`direction ${revision.selectedDirectionId === direction.id ? "chosen" : ""}`}
                     key={direction.id}
@@ -737,9 +778,13 @@ export default function StudioHome() {
                       } as React.CSSProperties
                     }
                   >
-                    <div className="being">
-                      <span></span>
-                      <i></i>
+                    <div className="direction-top">
+                      <span>Direction 0{index + 1}</span>
+                      <div className="palette" aria-label="Direction palette">
+                        {direction.palette.map((color) => (
+                          <i key={color} style={{ backgroundColor: color }} />
+                        ))}
+                      </div>
                     </div>
                     <p className="archetype">{direction.archetype}</p>
                     <h3>{direction.name}</h3>
@@ -792,7 +837,11 @@ export default function StudioHome() {
                         ? "Generation needs another try."
                         : packReady
                       ? "Your character atlas is ready."
-                          : `Preparing animation assets (${draftStates.size}/3).`}
+                          : generatedRows === 0
+                            ? "Creating the canonical character."
+                            : generatedRows < animationRows.length
+                              ? `Drawing motion rows (${generatedRows}/${animationRows.length}).`
+                              : "Composing the final animation atlas."}
                   </h2>
                   <p>
                     {published
@@ -801,8 +850,25 @@ export default function StudioHome() {
                         ? revision.error
                         : packReady
                           ? "Review the canonical character and motion sheet, then publish the validated atlas."
-                          : "Cradle is deriving Codex-compatible animation rows from one canonical character."}
+                          : "Cradle works from one canonical character, then derives and validates every motion row before it can publish."}
                   </p>
+                  <div className="generation-track" aria-label="Character generation progress">
+                    <div data-state={assets.some((asset) => asset.state === "canonical") ? "complete" : "active"}>
+                      <span>01</span>
+                      <strong>Canonical</strong>
+                      <small>One approved base character</small>
+                    </div>
+                    <div data-state={generatedRows === animationRows.length ? "complete" : generatedRows > 0 ? "active" : "pending"}>
+                      <span>02</span>
+                      <strong>Motion rows</strong>
+                      <small>{generatedRows}/{animationRows.length} grounded poses</small>
+                    </div>
+                    <div data-state={packReady || published ? "complete" : generatedRows === animationRows.length ? "active" : "pending"}>
+                      <span>03</span>
+                      <strong>Atlas review</strong>
+                      <small>Validate and compose the runtime asset</small>
+                    </div>
+                  </div>
                   <AssetPackPreview assets={assets} previewUrls={previewUrls} />
                   {revision.error && (
                     <button
