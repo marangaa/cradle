@@ -6,7 +6,6 @@
   "scripts": {
     "predev": "pnpm --filter @cradle/widget build",
     "dev": "next dev --port 3002",
-    "prebuild": "pnpm --filter @cradle/widget build",
     "build": "next build",
     "start": "next start -p 3002",
     "lint": "eslint --max-warnings 0",

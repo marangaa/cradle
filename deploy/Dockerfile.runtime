@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1.7
+FROM node:22-alpine AS base
+
+RUN apk add --no-cache libc6-compat && corepack enable
+WORKDIR /app
+
+FROM base AS pruner
+
+COPY . .
+RUN pnpm dlx turbo@2.10.5 prune runtime --docker
+
+FROM base AS builder
+
+COPY --from=pruner /app/out/json/ .
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm config set store-dir /pnpm/store && \
+    pnpm install --frozen-lockfile
+
+COPY --from=pruner /app/out/full/ .
+RUN pnpm turbo run build --filter=runtime
+
+CMD ["pnpm", "--filter", "runtime", "start"]

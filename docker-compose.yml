@@ -2,12 +2,10 @@ services:
   studio:
     build:
       context: .
-      dockerfile: deploy/Dockerfile
-      args:
-        APP: studio
+      dockerfile: deploy/Dockerfile.studio
     ports: ["3000:3000"]
   runtime:
-    build: { context: ., dockerfile: deploy/Dockerfile, args: { APP: runtime } }
+    build: { context: ., dockerfile: deploy/Dockerfile.runtime }
     env_file:
       - path: ./apps/runtime/.env
         required: false
@@ -23,7 +21,7 @@ services:
     ports: ["3002:3002"]
     volumes: ["cradle-assets:/app/data/assets"]
   worker:
-    build: { context: ., dockerfile: deploy/Dockerfile, args: { APP: worker } }
+    build: { context: ., dockerfile: deploy/Dockerfile.worker }
     env_file:
       - path: ./apps/runtime/.env
         required: false
@@ -37,7 +35,7 @@ services:
         condition: service_completed_successfully
     volumes: ["cradle-assets:/app/data/assets"]
   migrate:
-    build: { context: ., dockerfile: deploy/Dockerfile, args: { APP: runtime } }
+    build: { context: ., dockerfile: deploy/Dockerfile.runtime }
     command: pnpm --filter @cradle/db db:migrate
     environment:
       DATABASE_URL: postgres://cradle:cradle@postgres:5432/cradle
