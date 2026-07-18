@@ -15,6 +15,13 @@
       "when": 1784331206211,
       "tag": "0001_windy_vector",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784334273988,
+      "tag": "0002_careless_gravity",
+      "breakpoints": true
     }
   ]
 }

@@ -54,6 +54,26 @@ export const identityRevisionSchema = z.object({
 
 export type IdentityRevision = z.infer<typeof identityRevisionSchema>;
 
+export const assetStateSchema = z.enum(["canonical", "idle", "welcome", "listening", "thinking", "resolved", "away"]);
+export const assetRevisionSchema = z.object({
+  id: z.string().uuid(),
+  installationId: z.string().uuid(),
+  identityRevisionId: z.string().uuid(),
+  directionId: z.string().uuid(),
+  state: assetStateSchema,
+  status: z.enum(["draft", "published", "failed"]),
+  objectKey: z.string().min(1).max(500),
+  contentType: z.enum(["image/png", "image/webp"]),
+  checksum: z.string().regex(/^[a-f0-9]{64}$/),
+  parentAssetId: z.string().uuid().optional(),
+  provider: z.string().min(1).max(80),
+  model: z.string().min(1).max(120),
+  promptVersion: z.string().min(1).max(64),
+  createdAt: z.string().datetime(),
+});
+
+export type AssetRevision = z.infer<typeof assetRevisionSchema>;
+
 export const installationSchema = z.object({
   id: z.string().uuid(),
   publicKey: z.string().min(12),

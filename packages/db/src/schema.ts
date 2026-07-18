@@ -52,3 +52,24 @@ export const identityRevisions = pgTable("identity_revisions", {
   uniqueIndex("identity_revisions_installation_version_idx").on(table.installationId, table.version),
   index("identity_revisions_installation_updated_idx").on(table.installationId, table.updatedAt),
 ]);
+
+export const assetRevisions = pgTable("asset_revisions", {
+  id: uuid("id").primaryKey(),
+  installationId: uuid("installation_id").notNull().references(() => installations.id, { onDelete: "cascade" }),
+  identityRevisionId: uuid("identity_revision_id").notNull().references(() => identityRevisions.id, { onDelete: "cascade" }),
+  directionId: uuid("direction_id").notNull(),
+  state: text("state", { enum: ["canonical", "idle", "welcome", "listening", "thinking", "resolved", "away"] }).notNull(),
+  status: text("status", { enum: ["draft", "published", "failed"] }).notNull(),
+  objectKey: text("object_key").notNull(),
+  contentType: text("content_type", { enum: ["image/png", "image/webp"] }).notNull(),
+  checksum: text("checksum").notNull(),
+  parentAssetId: uuid("parent_asset_id"),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  uniqueIndex("asset_revisions_object_key_idx").on(table.objectKey),
+  index("asset_revisions_identity_state_idx").on(table.identityRevisionId, table.state),
+  index("asset_revisions_installation_status_idx").on(table.installationId, table.status),
+]);
