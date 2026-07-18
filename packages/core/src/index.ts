@@ -115,6 +115,11 @@ export const crawlRequestSchema = z.object({
 
 export type CrawlRequest = z.infer<typeof crawlRequestSchema>;
 
+/** Owner-approved subset of a bounded crawl that may inform identity generation. */
+export const knowledgeReviewSchema = z.object({
+  includedUrls: z.array(z.string().url()).min(1).max(50),
+});
+
 /** A versioned knowledge source generated from a bounded public crawl. */
 export interface KnowledgeSnapshot {
   id: string;

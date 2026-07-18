@@ -41,6 +41,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const installation = await store.getInstallation(installationId);
   const knowledge = await store.getKnowledge(installationId);
   if (!installation || !knowledge) return Response.json({ error: "Unknown or unready installation." }, { status: 404, headers });
+  if (knowledge.version === 1) return Response.json({ error: "Save the reviewed source selection before generating an identity." }, { status: 409, headers });
 
   const previous = await store.getLatestIdentityRevision(installationId);
   const timestamp = new Date().toISOString();

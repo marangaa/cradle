@@ -23,6 +23,8 @@ export default function StudioHome() {
   const [revision, setRevision] = useState<Revision | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const [includedUrls, setIncludedUrls] = useState<Set<string>>(new Set());
+  const [knowledgeReviewed, setKnowledgeReviewed] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const managementHeaders = useMemo<Record<string, string>>(() => {
@@ -77,9 +79,30 @@ export default function StudioHome() {
       const response = await fetch(`${runtime}/api/onboarding`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Cradle could not prepare this site.");
-      setResult(payload); setRevision(null); setAssets([]); setPreviewUrls({});
+      setResult(payload); setRevision(null); setAssets([]); setPreviewUrls({}); setIncludedUrls(new Set(payload.knowledge.pages.map((page: Page) => page.url))); setKnowledgeReviewed(false);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Cradle Studio could not reach the runtime."); }
     finally { setBusy(false); }
+  }
+
+  async function saveKnowledgeReview() {
+    if (!result) return; setBusy(true); setError("");
+    try {
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/knowledge`, { method: "PATCH", headers: { "content-type": "application/json", ...managementHeaders }, body: JSON.stringify({ includedUrls: [...includedUrls] }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Could not save the reviewed sources.");
+      setResult((current) => current ? { ...current, knowledge: payload.knowledge } : current);
+      setKnowledgeReviewed(true);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save the reviewed sources."); }
+    finally { setBusy(false); }
+  }
+
+  function togglePage(urlToToggle: string) {
+    setKnowledgeReviewed(false);
+    setIncludedUrls((current) => {
+      const next = new Set(current);
+      if (next.has(urlToToggle)) next.delete(urlToToggle); else next.add(urlToToggle);
+      return next;
+    });
   }
 
   async function generateIdentity() {
@@ -124,9 +147,9 @@ export default function StudioHome() {
     <section className="hero"><p className="kicker">A company deserves more than a chat bubble.</p><h1>Give your website<br /><i>a presence.</i></h1><p className="intro">Cradle turns reviewed public knowledge into a grounded identity. Character assets come only after you approve its direction.</p></section>
     {!result ? <form className="discovery" onSubmit={discover}><label htmlFor="site">Start with a public website</label><div><input id="site" type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://yourcompany.com" /><button disabled={busy}>{busy ? "Reading the site…" : "Discover the shape"}</button></div><small>Public, same-domain crawl. You review the source material before generation.</small></form> : <>
       <section className="section-head"><p className="kicker">01 / Knowledge</p><h2>Here is what Cradle found.</h2><p>These are the reviewed pages the identity is allowed to use.</p></section>
-      <section className="knowledge"><div className="knowledge-summary"><strong>{result.knowledge.pages.length}</strong><span>pages collected</span><p>{new URL(result.knowledge.sourceUrl).hostname}</p></div><div className="page-list">{result.knowledge.pages.map((page) => <article key={page.url}><span>{new URL(page.url).pathname || "/"}</span><strong>{page.title || "Untitled page"}</strong><p>{page.markdown.slice(0, 140)}…</p></article>)}</div></section>
+      <section className="knowledge"><div className="knowledge-summary"><strong>{includedUrls.size}</strong><span>pages included</span><p>{new URL(result.knowledge.sourceUrl).hostname}</p><button onClick={saveKnowledgeReview} disabled={busy || includedUrls.size === 0}>Save reviewed sources</button></div><div className="page-list">{result.knowledge.pages.map((page) => <article key={page.url}><label className="page-toggle"><input type="checkbox" checked={includedUrls.has(page.url)} onChange={() => togglePage(page.url)} disabled={busy} /><span>{new URL(page.url).pathname || "/"}</span></label><strong>{page.title || "Untitled page"}</strong><p>{page.markdown.slice(0, 140)}…</p></article>)}</div></section>
       <section className="section-head"><p className="kicker">02 / Identity</p><h2>Derive its direction from evidence.</h2><p>Cradle creates three distinct directions from the reviewed snapshot. It does not publish a widget or generate visual assets yet.</p></section>
-      {!revision && <button className="primary-action" onClick={generateIdentity} disabled={busy}>Generate three directions</button>}
+      {!revision && <button className="primary-action" onClick={generateIdentity} disabled={busy || includedUrls.size === 0 || !knowledgeReviewed}>Generate three directions</button>}
       {revision && pending.has(revision.status) && <p className="intro">Cradle is reading the approved snapshot and preparing the directions…</p>}
       {revision?.status === "failed" && <p className="error">{revision.error ?? "Identity generation failed."}</p>}
       {revision?.identity && <>

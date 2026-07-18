@@ -24,7 +24,7 @@ This is intentionally infrastructure, not another fixed "sales bot" or "support 
 
 ## Flow
 
-1. **Discover:** Studio runs a bounded public crawl and shows the source pages.
+1. **Discover:** Studio runs a bounded public crawl; the owner saves a selected page subset as the immutable reviewed source version.
 2. **Identity:** Studio queues an evidence-backed identity revision and asks the owner to select one direction.
 3. **Assets:** Worker generates a canonical image, then uses that image as the edit input for every interaction state.
 4. **Review:** Studio streams draft assets only to the authorized owner session, shows every state, and requires an explicit publish action.
