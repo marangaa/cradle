@@ -17,16 +17,17 @@ class CradleResident extends HTMLElement {
     const form = this.shadow.querySelector("form") as HTMLFormElement;
     const input = this.shadow.querySelector("input") as HTMLInputElement;
     const messages = this.shadow.querySelector(".messages") as HTMLElement;
-    void this.loadFamiliar(apiBase, installationId, messages);
-    pet.addEventListener("click", () => { this.open = !this.open; panel.hidden = !this.open; });
+    void this.loadFamiliar(apiBase, installationId, messages, pet);
+    pet.addEventListener("click", () => { this.open = !this.open; panel.hidden = !this.open; this.setState(pet, this.open ? "welcome" : "idle"); });
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const message = input.value.trim(); if (!message) return;
-      input.value = ""; messages.textContent += `\n\nYou: ${message}\nRepresentative: `;
+      input.value = ""; this.setState(pet, "thinking"); messages.textContent += `\n\nYou: ${message}\nRepresentative: `;
       const response = await fetch(`${apiBase}/api/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ installationId, visitorId, conversationId, message }) });
-      if (!response.ok || !response.body) { messages.textContent += "I could not respond just now."; return; }
+      if (!response.ok || !response.body) { this.setState(pet, "away"); messages.textContent += "I could not respond just now."; return; }
       const reader = response.body.getReader(); const decoder = new TextDecoder();
       while (true) { const { done, value } = await reader.read(); if (done) break; messages.textContent += decoder.decode(value, { stream: true }); messages.scrollTop = messages.scrollHeight; }
+      this.setState(pet, "resolved");
     });
   }
 
@@ -42,24 +43,23 @@ class CradleResident extends HTMLElement {
   }
 
   /** Hydrates the visual and opening voice from the published Familiar manifest. */
-  private async loadFamiliar(apiBase: string, installationId: string, messages: HTMLElement) {
+  private setState(pet: HTMLButtonElement, state: string) {
+    const states = JSON.parse(pet.dataset.cradleStates ?? "{}") as Record<string, string>;
+    const image = states[state] ?? states.idle ?? states.canonical;
+    if (image) pet.style.backgroundImage = `url(${image})`;
+  }
+
+  private async loadFamiliar(apiBase: string, installationId: string, messages: HTMLElement, pet: HTMLButtonElement) {
     const response = await fetch(`${apiBase}/api/installations/${installationId}`);
     if (!response.ok) return;
-    const payload = await response.json() as { familiar: { name: string; greeting: string; palette: [string, string, string] } | null; assets: { canonical: { url: string } } | null };
+    const payload = await response.json() as { familiar: { name: string; greeting: string; palette: [string, string, string] } | null; assets: { states: Record<string, { url: string }> } | null };
     if (!payload.familiar) return;
     const [main, accent, wash] = payload.familiar.palette;
     this.style.setProperty("--familiar-main", main); this.style.setProperty("--familiar-accent", accent); this.style.setProperty("--familiar-wash", wash);
     const title = this.shadow.querySelector(".title");
     if (title) title.textContent = payload.familiar.name;
     messages.textContent = payload.familiar.greeting;
-    if (payload.assets?.canonical) {
-      const pet = this.shadow.querySelector(".pet") as HTMLButtonElement | null;
-      if (pet) {
-        pet.style.backgroundImage = `url(${apiBase}${payload.assets.canonical.url})`;
-        pet.style.backgroundSize = "cover";
-        pet.style.backgroundPosition = "center";
-      }
-    }
+    if (payload.assets?.states) { pet.dataset.cradleStates = JSON.stringify(Object.fromEntries(Object.entries(payload.assets.states).map(([state, asset]) => [state, `${apiBase}${asset.url}`]))); pet.style.backgroundSize = "cover"; pet.style.backgroundPosition = "center"; this.setState(pet, "idle"); }
   }
 }
 

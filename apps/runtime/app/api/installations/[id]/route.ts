@@ -27,11 +27,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const revision = await store.getLatestIdentityRevision(id);
   const assets = revision ? await store.listAssetRevisions(revision.id) : [];
   const published = assets.filter((asset) => asset.status === "published");
-  const canonical = published.find((asset) => asset.state === "canonical");
+  const states = Object.fromEntries(published.map((asset) => [asset.state, { id: asset.id, url: `/api/assets/${asset.id}` }]));
   return Response.json({
     name: installation.name,
     familiar: installation.familiar ?? null,
-    assets: canonical ? { canonical: { id: canonical.id, url: `/api/assets/${canonical.id}` } } : null,
+    assets: Object.keys(states).length > 0 ? { states } : null,
   }, { headers });
 }
 
