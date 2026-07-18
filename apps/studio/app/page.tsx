@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 type Page = { url: string; title: string; markdown: string };
 type Direction = { id: string; name: string; archetype: "wayfinder" | "witness" | "keeper"; role: string; traits: string[]; motif: string; greeting: string; rationale: string; evidence: Array<{ sourceUrl: string; reason: string }>; palette: [string, string, string] };
 type Revision = { id: string; status: "queued" | "generating" | "ready" | "selected" | "failed"; identity?: { summary: string; audience: string; voice: string[]; visualLanguage: string; directions: Direction[] }; selectedDirectionId?: string; error?: string };
-type Onboarding = { installation: { id: string; name: string; publicKey: string }; knowledge: { pages: Page[]; sourceUrl: string } };
+type Onboarding = { installation: { id: string; name: string; managementKey: string }; knowledge: { pages: Page[]; sourceUrl: string } };
 type Asset = { id: string; state: string; status: "draft" | "published" | "failed" };
 
 const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ?? "http://localhost:3002";
@@ -28,9 +28,9 @@ export default function StudioHome() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const managementHeaders = useMemo<Record<string, string>>(() => {
-    const key = result?.installation.publicKey;
+    const key = result?.installation.managementKey;
     return key ? { "x-cradle-installation-key": key } : {} as Record<string, string>;
-  }, [result?.installation.publicKey]);
+  }, [result?.installation.managementKey]);
 
   useEffect(() => {
     if (!result || !revision || !pending.has(revision.status)) return;

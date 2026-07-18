@@ -1,6 +1,7 @@
 import { crawlPublicSite } from "@cradle/crawler";
 import { crawlRequestSchema, installationSchema } from "@cradle/core";
 import { store } from "../../lib/store";
+import { hashManagementKey } from "../../lib/management";
 
 const onboardingSchema = crawlRequestSchema.extend({
   name: installationSchema.shape.name.optional(),
@@ -38,8 +39,9 @@ export async function POST(request: Request) {
   if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
   const input = onboardingSchema.parse(await request.json());
   const origin = resolveInstallationOrigin(input.url);
+  const managementKey = crypto.randomUUID().replaceAll("-", "");
   const installation = installationSchema.parse({
-    id: crypto.randomUUID(), publicKey: crypto.randomUUID().replaceAll("-", ""), origin,
+    id: crypto.randomUUID(), managementKeyHash: hashManagementKey(managementKey), origin,
     name: input.name ?? new URL(input.url).hostname,
     instructions: input.instructions ?? "Be helpful, accurate, and concise.",
     knowledgeVersion: 1, runtime: input.runtime,
@@ -47,5 +49,5 @@ export async function POST(request: Request) {
   const knowledge = await crawlPublicSite(input, installation.id);
   if (knowledge.pages.length === 0) return Response.json({ error: "No usable public pages were found." }, { status: 422, headers });
   await Promise.all([store.saveInstallation(installation), store.saveKnowledge(knowledge)]);
-  return Response.json({ installation, knowledge }, { status: 201, headers });
+  return Response.json({ installation: { id: installation.id, name: installation.name, managementKey }, knowledge }, { status: 201, headers });
 }

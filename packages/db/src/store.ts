@@ -65,7 +65,7 @@ export class PostgresStore implements CradleStore {
 
     return {
       id: row.id,
-      publicKey: row.publicKey,
+      managementKeyHash: row.managementKeyHash,
       origin: row.origin,
       name: row.name,
       instructions: row.instructions,
@@ -82,7 +82,7 @@ export class PostgresStore implements CradleStore {
     }).onConflictDoUpdate({
       target: installations.id,
       set: {
-        publicKey: installation.publicKey,
+        managementKeyHash: installation.managementKeyHash,
         origin: installation.origin,
         name: installation.name,
         instructions: installation.instructions,

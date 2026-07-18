@@ -76,7 +76,7 @@ export type AssetRevision = z.infer<typeof assetRevisionSchema>;
 
 export const installationSchema = z.object({
   id: z.string().uuid(),
-  publicKey: z.string().min(12),
+  managementKeyHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
   origin: z.string().url(),
   name: z.string().min(1).max(120),
   instructions: z.string().max(12_000),

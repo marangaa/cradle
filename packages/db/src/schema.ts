@@ -3,7 +3,7 @@ import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } fr
 
 export const installations = pgTable("installations", {
   id: uuid("id").primaryKey(),
-  publicKey: text("public_key").notNull(),
+  managementKeyHash: text("management_key_hash").notNull(),
   origin: text("origin").notNull(),
   name: text("name").notNull(),
   instructions: text("instructions").notNull(),

@@ -30,7 +30,7 @@ This is intentionally infrastructure, not another fixed "sales bot" or "support 
 4. **Review:** Studio streams draft assets only to the authorized owner session, shows every state, and requires an explicit publish action.
 5. **Embed:** Runtime exposes only published assets; the widget hydrates the resulting state manifest and changes appearance as visitors interact.
 
-Studio management routes require the installation key returned at onboarding. Treat that key as an owner credential; do not place it in the embed snippet or client site.
+Studio management routes require the installation key shown once at onboarding. Cradle stores only its SHA-256 hash; save the original in a password manager and never place it in the embed snippet or client site. Self-hosted operators can rotate a lost key directly in their database today; Cradle Cloud will bind installations to Qualra accounts rather than relying on this bootstrap credential.
 
 ## Quick start
 
