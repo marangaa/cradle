@@ -271,6 +271,9 @@ importers:
       '@cradle/core':
         specifier: workspace:*
         version: link:../core
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@types/pg@8.20.0)(pg@8.22.0)(postgres@3.4.9)

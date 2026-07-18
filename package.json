@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
+    "db:migrate": "pnpm --filter @cradle/db db:migrate",
     "dev": "turbo run dev --filter=studio --filter=runtime --filter=worker --filter=@cradle/widget",
     "dev:docker": "docker compose up --build",
     "dev:docker:down": "docker compose down",
