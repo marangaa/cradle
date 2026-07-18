@@ -53,7 +53,7 @@ class CradleResident extends HTMLElement {
   private async loadFamiliar(apiBase: string, installationId: string, messages: HTMLElement, pet: HTMLButtonElement) {
     const response = await fetch(`${apiBase}/api/installations/${installationId}`);
     if (!response.ok) return;
-    const payload = await response.json() as { token: string; familiar: { name: string; greeting: string; palette: string[] } | null; assets: { states: Record<string, { url: string }> } | null };
+    const payload = await response.json() as { token: string; familiar: { name: string; greeting: string; palette: [string, string, string] } | null; assets: { states: Record<string, { url: string }> } | null };
     this.token = payload.token;
     if (!payload.familiar) return;
     const [main, accent, wash] = payload.familiar.palette;

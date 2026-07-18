@@ -3,9 +3,9 @@ import { openai } from "@ai-sdk/openai";
 import {
   brandIdentitySchema,
   identityRevisionSchema,
-  type BrandIdentity,
 } from "@cradle/core";
 import { createCradleStore } from "@cradle/db";
+import { identityDraftSchema, toBrandIdentity } from "./identity.js";
 import { buildIdentitySource } from "@cradle/identity";
 import {
   CANONICAL_ASSET_QUEUE,
@@ -47,18 +47,18 @@ async function generateIdentity(
         process.env.CRADLE_MODEL_ID ??
         "gpt-5.6-sol",
     ),
-    output: Output.object<BrandIdentity>({
-      schema: brandIdentitySchema as never,
+    output: Output.object({
+      schema: identityDraftSchema,
       name: "cradle_identity",
     }),
     system:
-      "You create a grounded identity for a company's website. Use only supplied public website evidence. Do not invent facts, customers, outcomes, or visual brand attributes. Return three materially distinct directions. Each direction must cite the URLs that support its rationale. Image prompts must describe a single original, non-infringing character on a plain transparent-friendly background; never include text, logos, UI, or a named copyrighted character.",
+      "You create a grounded identity for a company's website. Use only supplied public website evidence. Do not invent facts, customers, outcomes, or visual brand attributes. Return exactly three materially distinct directions. Every direction needs two to four traits, one to five evidence entries, three CSS colour values in palette, and sourceUrl values copied exactly from the supplied sources. Image prompts must describe a single original, non-infringing character on a plain transparent-friendly background; never include text, logos, UI, or a named copyrighted character.",
     prompt: JSON.stringify({
       installationName,
       sources: buildIdentitySource(knowledge),
     }),
   });
-  return brandIdentitySchema.parse(result.output);
+  return toBrandIdentity(result.output);
 }
 
 queue.on("error", (error) => console.error("Cradle worker queue error", error));
