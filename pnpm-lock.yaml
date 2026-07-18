@@ -38,6 +38,9 @@ importers:
       '@cradle/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@cradle/media':
+        specifier: workspace:*
+        version: link:../../packages/media
       '@cradle/widget':
         specifier: workspace:*
         version: link:../../packages/widget

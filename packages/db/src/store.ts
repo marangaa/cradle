@@ -18,6 +18,7 @@ export interface CradleStore {
   getLatestIdentityRevision(installationId: string): Promise<IdentityRevision | null>;
   saveIdentityRevision(revision: IdentityRevision): Promise<void>;
   listAssetRevisions(identityRevisionId: string): Promise<AssetRevision[]>;
+  getAssetRevision(id: string): Promise<AssetRevision | null>;
   saveAssetRevision(asset: AssetRevision): Promise<void>;
 }
 
@@ -45,6 +46,7 @@ export class MemoryStore implements CradleStore {
   async getLatestIdentityRevision(installationId: string) { return this.identities.get(installationId) ?? null; }
   async saveIdentityRevision(revision: IdentityRevision) { this.identities.set(revision.installationId, revision); }
   async listAssetRevisions(identityRevisionId: string) { return this.assets.get(identityRevisionId) ?? []; }
+  async getAssetRevision(id: string) { return [...this.assets.values()].flat().find((asset) => asset.id === id) ?? null; }
   async saveAssetRevision(asset: AssetRevision) {
     const assets = this.assets.get(asset.identityRevisionId) ?? [];
     const index = assets.findIndex((item) => item.id === asset.id);
@@ -212,6 +214,27 @@ export class PostgresStore implements CradleStore {
       promptVersion: row.promptVersion,
       createdAt: row.createdAt.toISOString(),
     }));
+  }
+
+  async getAssetRevision(id: string): Promise<AssetRevision | null> {
+    const row = await this.database.query.assetRevisions.findFirst({ where: eq(assetRevisions.id, id) });
+    if (!row) return null;
+    return {
+      id: row.id,
+      installationId: row.installationId,
+      identityRevisionId: row.identityRevisionId,
+      directionId: row.directionId,
+      state: row.state,
+      status: row.status,
+      objectKey: row.objectKey,
+      contentType: row.contentType,
+      checksum: row.checksum,
+      ...(row.parentAssetId ? { parentAssetId: row.parentAssetId } : {}),
+      provider: row.provider,
+      model: row.model,
+      promptVersion: row.promptVersion,
+      createdAt: row.createdAt.toISOString(),
+    };
   }
 
   async saveAssetRevision(asset: AssetRevision): Promise<void> {
