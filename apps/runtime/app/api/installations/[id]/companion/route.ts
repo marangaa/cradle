@@ -50,7 +50,12 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   if (contentLength > maxSpriteBytes) return Response.json({ error: "The selected Petdex spritesheet is too large to import." }, { status: 422, headers });
   const sprite = new Uint8Array(await spriteResponse.arrayBuffer());
   if (sprite.byteLength === 0 || sprite.byteLength > maxSpriteBytes) return Response.json({ error: "The selected Petdex spritesheet is invalid or too large." }, { status: 422, headers });
-  await validatePetAtlas(sprite);
+  let atlas: Awaited<ReturnType<typeof validatePetAtlas>>;
+  try {
+    atlas = await validatePetAtlas(sprite);
+  } catch (cause) {
+    return Response.json({ error: cause instanceof Error ? cause.message : "The selected Petdex spritesheet is not compatible with Cradle." }, { status: 422, headers });
+  }
   const stored = await assetStore.put({ key: `installations/${installationId}/companions/petdex/${upstream.slug}/${crypto.randomUUID()}.webp`, body: sprite, contentType: "image/webp", visibility: "published" });
   const companion = companionPackageSchema.parse({
     id: crypto.randomUUID(),
@@ -66,10 +71,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     objectKey: stored.key,
     checksum: stored.checksum,
     contentType: "image/webp",
-    columns: 8,
-    rows: 9,
-    cellWidth: 192,
-    cellHeight: 208,
+    ...atlas,
     createdAt: new Date().toISOString(),
   });
   await store.saveCompanionPackage(companion);

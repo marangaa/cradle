@@ -60,7 +60,7 @@ The widget runs in a Shadow DOM, preserves a first-party anonymous visitor and c
 
 ## Companion packages
 
-Cradle uses the same practical asset shape as Codex pets: one transparent `1536×1872` WebP atlas with nine 192×208 rows. Cradle maps website events to the relevant rows (`idle`, `waving`, `review`, `running`, `jumping`, and `failed`) rather than treating the image as a static chatbot avatar.
+Cradle uses the same practical asset shape as Codex pets: a transparent `1536`-pixel-wide WebP atlas with 192×208 cells and at least nine base rows. Cradle maps website events to the relevant rows (`idle`, `waving`, `review`, `running`, `jumping`, and `failed`) rather than treating the image as a static chatbot avatar. Extended Petdex sheets are preserved and their extra rows remain available for future mappings.
 
 Studio currently uses only Petdex assets hosted under its curated collection. Community-submitted assets are intentionally excluded because each creator retains its own asset rights. Runtime imports the selected WebP into Cradle storage, verifies its 8×9 geometry, and records the source URL, submitter, Petdex metadata URL, and checksum. It does not hotlink the live widget to Petdex.
 

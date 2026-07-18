@@ -271,7 +271,7 @@ export class PostgresStore implements CradleStore {
       checksum: row.checksum,
       contentType: row.contentType,
       columns: row.columns as 8,
-      rows: row.rows as 9,
+      rows: row.rows,
       cellWidth: row.cellWidth as 192,
       cellHeight: row.cellHeight as 208,
       createdAt: row.createdAt.toISOString(),

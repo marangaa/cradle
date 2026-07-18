@@ -25,12 +25,19 @@ export const codexPetStates = [
 
 export type CodexPetState = (typeof codexPetStates)[number];
 
-/** Rejects an upstream spritesheet that cannot be rendered by Cradle's runtime contract. */
-export async function validatePetAtlas(source: Uint8Array): Promise<void> {
+/** Validates a Petdex-compatible atlas while preserving extension rows beyond Cradle's base states. */
+export async function validatePetAtlas(source: Uint8Array): Promise<{
+  columns: typeof CODEX_PET_COLUMNS;
+  rows: number;
+  cellWidth: typeof CODEX_PET_CELL_WIDTH;
+  cellHeight: typeof CODEX_PET_CELL_HEIGHT;
+}> {
   const metadata = await sharp(source).metadata();
-  if (metadata.width !== CODEX_PET_SHEET_WIDTH || metadata.height !== CODEX_PET_SHEET_HEIGHT) {
-    throw new Error(`Pet spritesheet must be ${CODEX_PET_SHEET_WIDTH}x${CODEX_PET_SHEET_HEIGHT}; received ${metadata.width ?? "unknown"}x${metadata.height ?? "unknown"}.`);
+  const rows = metadata.height ? metadata.height / CODEX_PET_CELL_HEIGHT : 0;
+  if (metadata.width !== CODEX_PET_SHEET_WIDTH || !Number.isInteger(rows) || rows < CODEX_PET_ROWS) {
+    throw new Error(`Pet spritesheet must be ${CODEX_PET_SHEET_WIDTH}px wide with at least ${CODEX_PET_ROWS} rows of ${CODEX_PET_CELL_HEIGHT}px; received ${metadata.width ?? "unknown"}x${metadata.height ?? "unknown"}.`);
   }
+  return { columns: CODEX_PET_COLUMNS, rows, cellWidth: CODEX_PET_CELL_WIDTH, cellHeight: CODEX_PET_CELL_HEIGHT };
 }
 
 export const codexPetStateMetadata: Record<

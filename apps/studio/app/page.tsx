@@ -26,7 +26,7 @@ type ImportedCompanion = CatalogCompanion & {
   checksum: string;
   contentType: "image/webp";
   columns: 8;
-  rows: 9;
+  rows: number;
   cellWidth: 192;
   cellHeight: 208;
   createdAt: string;

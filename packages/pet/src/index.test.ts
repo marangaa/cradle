@@ -8,6 +8,7 @@ import {
   CODEX_PET_SHEET_WIDTH,
   codexPetStates,
   composePetAtlas,
+  validatePetAtlas,
   validatePetRow,
 } from "./index.js";
 
@@ -31,4 +32,17 @@ test("composes a transparent Codex-compatible atlas", async () => {
 test("rejects an empty animation frame", async () => {
   const empty = new Uint8Array(await sharp({ create: { width: CODEX_PET_SHEET_WIDTH, height: CODEX_PET_CELL_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer());
   await assert.rejects(validatePetRow("idle", empty));
+});
+
+test("accepts extended Petdex atlases with additional animation rows", async () => {
+  const extendedAtlas = new Uint8Array(await sharp({
+    create: {
+      width: CODEX_PET_SHEET_WIDTH,
+      height: CODEX_PET_CELL_HEIGHT * 11,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  }).webp().toBuffer());
+  const metadata = await validatePetAtlas(extendedAtlas);
+  assert.deepEqual(metadata, { columns: 8, rows: 11, cellWidth: 192, cellHeight: 208 });
 });

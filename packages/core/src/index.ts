@@ -31,7 +31,7 @@ export const companionPackageSchema = z.object({
   checksum: z.string().regex(/^[a-f0-9]{64}$/),
   contentType: z.literal("image/webp"),
   columns: z.literal(8),
-  rows: z.literal(9),
+  rows: z.number().int().min(9).max(32),
   cellWidth: z.literal(192),
   cellHeight: z.literal(208),
   createdAt: z.string().datetime(),
