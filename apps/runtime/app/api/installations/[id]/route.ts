@@ -1,5 +1,6 @@
 import { familiarSchema } from "@cradle/core";
 import { store } from "../../../lib/store";
+import { issueWidgetToken } from "../../../lib/widget-token";
 
 function corsHeaders(request: Request, origin: string) {
   if (request.headers.get("origin") !== origin) return null;
@@ -30,6 +31,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const states = Object.fromEntries(published.map((asset) => [asset.state, { id: asset.id, url: `/api/assets/${asset.id}` }]));
   return Response.json({
     name: installation.name,
+    token: issueWidgetToken(id, installation.origin),
     familiar: installation.familiar ?? null,
     assets: Object.keys(states).length > 0 ? { states } : null,
   }, { headers });

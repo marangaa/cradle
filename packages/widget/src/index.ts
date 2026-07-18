@@ -4,6 +4,7 @@ const VISITOR_KEY_PREFIX = "cradle:visitor:";
 class CradleResident extends HTMLElement {
   private readonly shadow = this.attachShadow({ mode: "open" });
   private open = false;
+  private token = "";
 
   connectedCallback() {
     const installationId = this.getAttribute("installation-id");
@@ -23,7 +24,7 @@ class CradleResident extends HTMLElement {
       event.preventDefault();
       const message = input.value.trim(); if (!message) return;
       input.value = ""; this.setState(pet, "thinking"); messages.textContent += `\n\nYou: ${message}\nRepresentative: `;
-      const response = await fetch(`${apiBase}/api/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ installationId, visitorId, conversationId, message }) });
+      const response = await fetch(`${apiBase}/api/chat`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${this.token}` }, body: JSON.stringify({ installationId, visitorId, conversationId, message }) });
       if (!response.ok || !response.body) { this.setState(pet, "away"); messages.textContent += "I could not respond just now."; return; }
       const reader = response.body.getReader(); const decoder = new TextDecoder();
       while (true) { const { done, value } = await reader.read(); if (done) break; messages.textContent += decoder.decode(value, { stream: true }); messages.scrollTop = messages.scrollHeight; }
@@ -52,7 +53,8 @@ class CradleResident extends HTMLElement {
   private async loadFamiliar(apiBase: string, installationId: string, messages: HTMLElement, pet: HTMLButtonElement) {
     const response = await fetch(`${apiBase}/api/installations/${installationId}`);
     if (!response.ok) return;
-    const payload = await response.json() as { familiar: { name: string; greeting: string; palette: [string, string, string] } | null; assets: { states: Record<string, { url: string }> } | null };
+    const payload = await response.json() as { token: string; familiar: { name: string; greeting: string; palette: [string, string, string] } | null; assets: { states: Record<string, { url: string }> } | null };
+    this.token = payload.token;
     if (!payload.familiar) return;
     const [main, accent, wash] = payload.familiar.palette;
     this.style.setProperty("--familiar-main", main); this.style.setProperty("--familiar-accent", accent); this.style.setProperty("--familiar-wash", wash);

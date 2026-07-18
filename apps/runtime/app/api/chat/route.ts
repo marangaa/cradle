@@ -2,6 +2,7 @@ import { openai } from "@ai-sdk/openai";
 import { streamText } from "ai";
 import { chatEventSchema, chatRequestSchema } from "@cradle/core";
 import { store } from "../../lib/store";
+import { verifyWidgetToken } from "../../lib/widget-token";
 
 export const runtime = "nodejs";
 
@@ -10,7 +11,7 @@ function corsHeaders(request: Request, origin: string) {
   return {
     "access-control-allow-origin": origin,
     "access-control-allow-methods": "POST, OPTIONS",
-    "access-control-allow-headers": "content-type",
+    "access-control-allow-headers": "content-type, authorization",
     "cache-control": "no-store",
     vary: "Origin",
   };
@@ -22,7 +23,7 @@ export async function OPTIONS(request: Request) {
   return new Response(null, { status: 204, headers: {
     "access-control-allow-origin": origin,
     "access-control-allow-methods": "POST, OPTIONS",
-    "access-control-allow-headers": "content-type",
+    "access-control-allow-headers": "content-type, authorization",
     vary: "Origin",
   } });
 }
@@ -35,6 +36,8 @@ export async function POST(request: Request) {
   if (!installation || !knowledge) return Response.json({ error: "Unknown or unready installation." }, { status: 404 });
   const headers = corsHeaders(request, installation.origin);
   if (!headers) return Response.json({ error: "Origin is not authorized for this installation." }, { status: 403 });
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/, "");
+  if (!token || !verifyWidgetToken(token, input.installationId, installation.origin)) return Response.json({ error: "Widget token is invalid or expired." }, { status: 401, headers });
   const priorMessages = await store.listMessages(input.conversationId);
   await store.appendEvent(chatEventSchema.parse({ id: crypto.randomUUID(), installationId: input.installationId, visitorId: input.visitorId, conversationId: input.conversationId, type: "message.created", occurredAt: new Date().toISOString(), payload: { role: "user", content: input.message } }));
   const knowledgeContext = knowledge.pages.map((page) => `# ${page.title}\n${page.markdown}`).join("\n\n").slice(0, 40_000);
