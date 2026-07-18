@@ -1,10 +1,10 @@
-import type { ChatEvent, Installation, KnowledgeSnapshot } from "@cradle/core";
+import type { ChatEvent, IdentityRevision, Installation, KnowledgeSnapshot } from "@cradle/core";
 import { asc, desc, eq } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { conversationEvents, installations, knowledgeSnapshots } from "./schema.js";
+import { conversationEvents, identityRevisions, installations, knowledgeSnapshots } from "./schema.js";
 
-const schema = { installations, knowledgeSnapshots, conversationEvents };
+const schema = { installations, knowledgeSnapshots, conversationEvents, identityRevisions };
 type CradleDatabase = NodePgDatabase<typeof schema>;
 
 /** Storage contract shared by self-hosted and managed Cradle runtimes. */
@@ -15,6 +15,8 @@ export interface CradleStore {
   saveKnowledge(snapshot: KnowledgeSnapshot): Promise<void>;
   appendEvent(event: ChatEvent): Promise<void>;
   listMessages(conversationId: string): Promise<Array<{ role: "user" | "assistant"; content: string }>>;
+  getLatestIdentityRevision(installationId: string): Promise<IdentityRevision | null>;
+  saveIdentityRevision(revision: IdentityRevision): Promise<void>;
 }
 
 /** Lightweight development store used only when a database is deliberately not configured. */
@@ -22,6 +24,7 @@ export class MemoryStore implements CradleStore {
   private readonly installations = new Map<string, Installation>();
   private readonly knowledge = new Map<string, KnowledgeSnapshot>();
   private readonly events: ChatEvent[] = [];
+  private readonly identities = new Map<string, IdentityRevision>();
 
   async getInstallation(id: string) { return this.installations.get(id) ?? null; }
   async saveInstallation(installation: Installation) { this.installations.set(installation.id, installation); }
@@ -36,6 +39,8 @@ export class MemoryStore implements CradleStore {
         content: String(event.payload.content ?? ""),
       }));
   }
+  async getLatestIdentityRevision(installationId: string) { return this.identities.get(installationId) ?? null; }
+  async saveIdentityRevision(revision: IdentityRevision) { this.identities.set(revision.installationId, revision); }
 }
 
 /** Drizzle-backed store for local Docker, self-hosted, and Cradle Cloud deployments. */
@@ -132,6 +137,48 @@ export class PostgresStore implements CradleStore {
         role: payload.role === "assistant" ? "assistant" as const : "user" as const,
         content: String(payload.content ?? ""),
       }));
+  }
+
+  async getLatestIdentityRevision(installationId: string): Promise<IdentityRevision | null> {
+    const row = await this.database.query.identityRevisions.findFirst({
+      where: eq(identityRevisions.installationId, installationId),
+      orderBy: [desc(identityRevisions.version)],
+    });
+    if (!row) return null;
+    return {
+      id: row.id,
+      installationId: row.installationId,
+      version: row.version,
+      status: row.status,
+      ...(row.identity ? { identity: row.identity } : {}),
+      ...(row.selectedDirectionId ? { selectedDirectionId: row.selectedDirectionId } : {}),
+      ...(row.error ? { error: row.error } : {}),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  async saveIdentityRevision(revision: IdentityRevision): Promise<void> {
+    await this.database.insert(identityRevisions).values({
+      id: revision.id,
+      installationId: revision.installationId,
+      version: revision.version,
+      status: revision.status,
+      identity: revision.identity ?? null,
+      selectedDirectionId: revision.selectedDirectionId ?? null,
+      error: revision.error ?? null,
+      createdAt: new Date(revision.createdAt),
+      updatedAt: new Date(revision.updatedAt),
+    }).onConflictDoUpdate({
+      target: identityRevisions.id,
+      set: {
+        status: revision.status,
+        identity: revision.identity ?? null,
+        selectedDirectionId: revision.selectedDirectionId ?? null,
+        error: revision.error ?? null,
+        updatedAt: new Date(revision.updatedAt),
+      },
+    });
   }
 }
 

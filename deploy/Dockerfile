@@ -4,6 +4,8 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
 ARG APP
+ENV APP=${APP}
+ARG NEXT_PUBLIC_CRADLE_RUNTIME_URL
+ENV NEXT_PUBLIC_CRADLE_RUNTIME_URL=${NEXT_PUBLIC_CRADLE_RUNTIME_URL}
 RUN pnpm --filter @cradle/widget build && pnpm --filter ${APP} build
-WORKDIR /app/apps/${APP}
-CMD ["sh", "-c", "pnpm exec next start -p ${PORT:-3000}"]
+CMD ["sh", "-c", "pnpm --filter ${APP} start"]

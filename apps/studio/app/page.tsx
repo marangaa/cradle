@@ -1,28 +1,65 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 type Page = { url: string; title: string; markdown: string };
-type Familiar = { id: string; name: string; archetype: "wayfinder" | "witness" | "keeper"; role: string; traits: string[]; motif: string; greeting: string; rationale: string; evidence: string[]; palette: [string, string, string]; version: number };
+type Direction = { id: string; name: string; archetype: "wayfinder" | "witness" | "keeper"; role: string; traits: string[]; motif: string; greeting: string; rationale: string; evidence: Array<{ sourceUrl: string; reason: string }>; palette: [string, string, string] };
+type Revision = { id: string; status: "queued" | "generating" | "ready" | "selected" | "failed"; identity?: { summary: string; audience: string; voice: string[]; visualLanguage: string; directions: Direction[] }; selectedDirectionId?: string; error?: string };
 type Onboarding = { installation: { id: string; name: string }; knowledge: { pages: Page[]; sourceUrl: string } };
 
 const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ?? "http://localhost:3002";
-
-function makeDirections(result: Onboarding): Familiar[] {
-  const company = result.installation.name.replace(/^www\./, "").split(".")[0];
-  const evidence = result.knowledge.pages.slice(0, 3).map((page) => page.url);
-  const firstTitle = result.knowledge.pages.find((page) => page.title)?.title || company;
-  return [
-    { id: crypto.randomUUID(), name: "Aster", archetype: "wayfinder", role: `A clear guide through the choices in ${company}.`, traits: ["lucid", "warm", "direct"], motif: "A small field-marker with a steady inner light.", greeting: `I’m Aster. I can help you find your way through ${firstTitle}.`, rationale: "Derived from the site’s explanatory pages and product navigation. It is designed to orient visitors without interrupting them.", evidence, palette: ["#b85c38", "#f4d9a6", "#faefe0"], version: 1 },
-    { id: crypto.randomUUID(), name: "Morrow", archetype: "witness", role: `A thoughtful witness to what ${company} helps people understand.`, traits: ["attentive", "measured", "curious"], motif: "A soft-eyed archivist carrying one thread of the story forward.", greeting: "I’m Morrow. Tell me what brought you here, and I’ll start from there.", rationale: "Derived from the site’s narrative and trust signals. It is designed for considered conversation and returning visitors.", evidence, palette: ["#526b5b", "#dce7c7", "#f3f0e5"], version: 1 },
-    { id: crypto.randomUUID(), name: "Nell", archetype: "keeper", role: `A calm keeper of ${company}’s useful details.`, traits: ["grounded", "precise", "quiet"], motif: "A compact cabinet of curiosities that opens only when needed.", greeting: "I’m Nell. I keep the useful parts close. What would help?", rationale: "Derived from the site’s reference material and frequently repeated facts. It is designed to answer directly, then get out of the way.", evidence, palette: ["#43547a", "#d7d9f2", "#eef0fa"], version: 1 },
-  ];
-}
+const pending = new Set<Revision["status"]>(["queued", "generating"]);
 
 export default function StudioHome() {
-  const [url, setUrl] = useState(""); const [result, setResult] = useState<Onboarding | null>(null); const [selected, setSelected] = useState<Familiar | null>(null); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const directions = useMemo(() => result ? makeDirections(result) : [], [result]);
-  async function discover(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); setError(""); try { const response = await fetch(`${runtime}/api/onboarding`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? "Cradle could not prepare this site."); setResult(payload); } catch (cause) { setError(cause instanceof Error ? cause.message : "Cradle Studio could not reach the runtime."); } finally { setBusy(false); } }
-  async function publish(familiar: Familiar) { if (!result) return; setBusy(true); setError(""); try { const response = await fetch(`${runtime}/api/installations/${result.installation.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(familiar) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? "Could not publish this Familiar."); setSelected(payload.familiar); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not publish this Familiar."); } finally { setBusy(false); } }
-  return <main className="studio"><header><Link className="wordmark" href="/">CRADLE</Link><span>FAMILIAR STUDIO</span><p>0{result ? 2 : 1} / 04</p></header><section className="hero"><p className="kicker">A company deserves more than a chat bubble.</p><h1>Give your website<br /><i>a familiar.</i></h1><p className="intro">Cradle turns public knowledge into a grounded presence—one that can welcome, explain, and eventually remember.</p></section>{!result ? <form className="discovery" onSubmit={discover}><label htmlFor="site">Start with a public website</label><div><input id="site" type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://yourcompany.com" /><button disabled={busy}>{busy ? "Reading the site…" : "Discover the shape"}</button></div><small>Public, same-domain crawl. You will review what it learns before publishing.</small></form> : <><section className="section-head"><p className="kicker">01 / Knowledge</p><h2>Here is what Cradle found.</h2><p>Nothing is hidden behind a prompt. These are the pages your Familiar can be grounded in.</p></section><section className="knowledge"><div className="knowledge-summary"><strong>{result.knowledge.pages.length}</strong><span>pages collected</span><p>{new URL(result.knowledge.sourceUrl).hostname}</p></div><div className="page-list">{result.knowledge.pages.map((page) => <article key={page.url}><span>{new URL(page.url).pathname || "/"}</span><strong>{page.title || "Untitled page"}</strong><p>{page.markdown.slice(0, 140)}…</p></article>)}</div></section><section className="section-head"><p className="kicker">02 / Identity</p><h2>Three ways it could show up.</h2><p>These are evidence-labeled directions, not a random mascot generator. Choose a starting identity; assets are the next publish step.</p></section><section className="directions">{directions.map((familiar) => <article className={`direction ${selected?.id === familiar.id ? "chosen" : ""}`} key={familiar.id} style={{ "--main": familiar.palette[0], "--accent": familiar.palette[1], "--wash": familiar.palette[2] } as React.CSSProperties}><div className="being"><span></span><i></i></div><p className="archetype">{familiar.archetype}</p><h3>{familiar.name}</h3><p>{familiar.role}</p><ul>{familiar.traits.map((trait) => <li key={trait}>{trait}</li>)}</ul><details><summary>Why this fits</summary><p>{familiar.rationale}</p></details><button onClick={() => publish(familiar)} disabled={busy}>{selected?.id === familiar.id ? "Published" : `Choose ${familiar.name}`}</button></article>)}</section>{selected && <section className="published"><p className="kicker">03 / Published</p><h2>{selected.name} is ready to meet visitors.</h2><p>Its identity is now part of this installation. The widget will use its name, palette, and opening voice.</p><code>{`<script async src="${runtime}/widget.js"></script>\n<cradle-resident installation-id="${result.installation.id}" api-base="${runtime}"></cradle-resident>`}</code></section>}</>}{error && <p className="error" role="alert">{error}</p>}</main>;
+  const [url, setUrl] = useState("");
+  const [result, setResult] = useState<Onboarding | null>(null);
+  const [revision, setRevision] = useState<Revision | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!result || !revision || !pending.has(revision.status)) return;
+    const interval = window.setInterval(async () => {
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/identity`);
+      const payload = await response.json();
+      if (response.ok) setRevision(payload.revision);
+    }, 2_000);
+    return () => window.clearInterval(interval);
+  }, [result, revision]);
+
+  async function discover(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      const response = await fetch(`${runtime}/api/onboarding`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Cradle could not prepare this site.");
+      setResult(payload); setRevision(null);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Cradle Studio could not reach the runtime."); }
+    finally { setBusy(false); }
+  }
+
+  async function generateIdentity() {
+    if (!result) return; setBusy(true); setError("");
+    try {
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/identity`, { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Cradle could not queue an identity revision.");
+      setRevision(payload.revision);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not queue identity generation."); }
+    finally { setBusy(false); }
+  }
+
+  async function selectDirection(directionId: string) {
+    if (!result || !revision) return; setBusy(true); setError("");
+    try {
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/identity`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: revision.id, selectedDirectionId: directionId }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Could not select this direction.");
+      setRevision(payload.revision);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not select this direction."); }
+    finally { setBusy(false); }
+  }
+
+  return <main className="studio"><header><Link className="wordmark" href="/">CRADLE</Link><span>IDENTITY STUDIO</span><p>0{result ? 2 : 1} / 04</p></header><section className="hero"><p className="kicker">A company deserves more than a chat bubble.</p><h1>Give your website<br /><i>a presence.</i></h1><p className="intro">Cradle turns reviewed public knowledge into a grounded identity. Character assets come only after you approve its direction.</p></section>{!result ? <form className="discovery" onSubmit={discover}><label htmlFor="site">Start with a public website</label><div><input id="site" type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://yourcompany.com" /><button disabled={busy}>{busy ? "Reading the site…" : "Discover the shape"}</button></div><small>Public, same-domain crawl. You review the source material before generation.</small></form> : <><section className="section-head"><p className="kicker">01 / Knowledge</p><h2>Here is what Cradle found.</h2><p>These are the reviewed pages the identity is allowed to use.</p></section><section className="knowledge"><div className="knowledge-summary"><strong>{result.knowledge.pages.length}</strong><span>pages collected</span><p>{new URL(result.knowledge.sourceUrl).hostname}</p></div><div className="page-list">{result.knowledge.pages.map((page) => <article key={page.url}><span>{new URL(page.url).pathname || "/"}</span><strong>{page.title || "Untitled page"}</strong><p>{page.markdown.slice(0, 140)}…</p></article>)}</div></section><section className="section-head"><p className="kicker">02 / Identity</p><h2>Derive its direction from evidence.</h2><p>Cradle creates three distinct directions from the reviewed snapshot. It does not publish a widget or generate visual assets yet.</p></section>{!revision && <button className="primary-action" onClick={generateIdentity} disabled={busy}>Generate three directions</button>}{revision && pending.has(revision.status) && <p className="intro">Cradle is reading the approved snapshot and preparing the directions…</p>}{revision?.status === "failed" && <p className="error">{revision.error ?? "Identity generation failed."}</p>}{revision?.identity && <><section className="section-head"><p className="kicker">Brand brief</p><h2>{revision.identity.summary}</h2><p>For {revision.identity.audience}. Voice: {revision.identity.voice.join(", ")}.</p></section><section className="directions">{revision.identity.directions.map((direction) => <article className={`direction ${revision.selectedDirectionId === direction.id ? "chosen" : ""}`} key={direction.id} style={{ "--main": direction.palette[0], "--accent": direction.palette[1], "--wash": direction.palette[2] } as React.CSSProperties}><div className="being"><span></span><i></i></div><p className="archetype">{direction.archetype}</p><h3>{direction.name}</h3><p>{direction.role}</p><ul>{direction.traits.map((trait) => <li key={trait}>{trait}</li>)}</ul><details><summary>Why this fits</summary><p>{direction.rationale}</p>{direction.evidence.map((item) => <p key={item.sourceUrl}><a href={item.sourceUrl} target="_blank">Source</a>: {item.reason}</p>)}</details><button onClick={() => selectDirection(direction.id)} disabled={busy || revision.status !== "ready"}>{revision.selectedDirectionId === direction.id ? "Direction selected" : `Select ${direction.name}`}</button></article>)}</section>{revision.status === "selected" && <section className="published"><p className="kicker">03 / Direction selected</p><h2>Next: create the canonical asset.</h2><p>Cradle has saved the identity direction. The image worker and reviewed state pack are the next publish stage—not a fake “ready to install” claim.</p></section>}</>}</>}{error && <p className="error" role="alert">{error}</p>}</main>;
 }

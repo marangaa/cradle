@@ -18,6 +18,7 @@
     "@cradle/core": "workspace:*",
     "@cradle/db": "workspace:*",
     "@cradle/crawler": "workspace:*",
+    "@cradle/jobs": "workspace:*",
     "@cradle/widget": "workspace:*",
     "ai": "^7.0.31",
     "next": "16.2.0",

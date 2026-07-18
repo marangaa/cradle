@@ -16,6 +16,44 @@ export const familiarSchema = z.object({
 
 export type Familiar = z.infer<typeof familiarSchema>;
 
+export const identityDirectionSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(48),
+  archetype: z.enum(["wayfinder", "witness", "keeper"]),
+  role: z.string().min(1).max(160),
+  traits: z.array(z.string().min(1).max(32)).min(2).max(4),
+  motif: z.string().min(1).max(220),
+  greeting: z.string().min(1).max(320),
+  rationale: z.string().min(1).max(640),
+  evidence: z.array(z.object({ sourceUrl: z.string().url(), reason: z.string().min(1).max(280) })).min(1).max(5),
+  palette: z.tuple([z.string(), z.string(), z.string()]),
+  imagePrompt: z.string().min(1).max(2_000),
+});
+
+export const brandIdentitySchema = z.object({
+  summary: z.string().min(1).max(900),
+  audience: z.string().min(1).max(360),
+  voice: z.array(z.string().min(1).max(48)).min(3).max(5),
+  visualLanguage: z.string().min(1).max(900),
+  directions: z.array(identityDirectionSchema).length(3),
+});
+
+export type BrandIdentity = z.infer<typeof brandIdentitySchema>;
+
+export const identityRevisionSchema = z.object({
+  id: z.string().uuid(),
+  installationId: z.string().uuid(),
+  version: z.number().int().positive(),
+  status: z.enum(["queued", "generating", "ready", "selected", "failed"]),
+  identity: brandIdentitySchema.optional(),
+  selectedDirectionId: z.string().uuid().optional(),
+  error: z.string().max(1_000).optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+export type IdentityRevision = z.infer<typeof identityRevisionSchema>;
+
 export const installationSchema = z.object({
   id: z.string().uuid(),
   publicKey: z.string().min(12),

@@ -1,4 +1,4 @@
-import type { ChatEvent, Familiar, KnowledgeSnapshot } from "@cradle/core";
+import type { BrandIdentity, ChatEvent, Familiar, KnowledgeSnapshot } from "@cradle/core";
 import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const installations = pgTable("installations", {
@@ -36,4 +36,19 @@ export const conversationEvents = pgTable("conversation_events", {
 }, (table) => [
   index("conversation_events_conversation_occurred_idx").on(table.conversationId, table.occurredAt),
   index("conversation_events_installation_occurred_idx").on(table.installationId, table.occurredAt),
+]);
+
+export const identityRevisions = pgTable("identity_revisions", {
+  id: uuid("id").primaryKey(),
+  installationId: uuid("installation_id").notNull().references(() => installations.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  status: text("status", { enum: ["queued", "generating", "ready", "selected", "failed"] }).notNull(),
+  identity: jsonb("identity").$type<BrandIdentity | null>(),
+  selectedDirectionId: uuid("selected_direction_id"),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  uniqueIndex("identity_revisions_installation_version_idx").on(table.installationId, table.version),
+  index("identity_revisions_installation_updated_idx").on(table.installationId, table.updatedAt),
 ]);
