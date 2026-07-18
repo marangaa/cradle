@@ -15,9 +15,22 @@ This is intentionally infrastructure, not another fixed "sales bot" or "support 
 - Submit a public URL through Studio and run a bounded, same-origin Firecrawl crawl.
 - Persist installations, knowledge snapshots, and conversation events to PostgreSQL when `DATABASE_URL` is configured.
 - Generate an installation ID and embed the Shadow-DOM `cradle-resident` widget with one script tag.
+- Generate an evidence-backed identity revision in the durable Postgres queue; Studio selects a direction rather than inventing a browser-side mascot.
+- Generate one canonical transparent image and derive its interaction states from that canonical image, then publish only a complete reviewed state pack.
+- Persist immutable generated assets with checksums, model/prompt provenance, and canonical-parent lineage on a shared self-hosted volume.
 - Maintain anonymous visitor and conversation IDs in the visitor's first-party browser storage.
 - Reject chat requests whose browser origin does not match the installation's configured origin.
 - Stream grounded answers through AI SDK and OpenAI (`CRADLE_MODEL_ID` defaults to `gpt-5.6-sol`).
+
+## Flow
+
+1. **Discover:** Studio runs a bounded public crawl and shows the source pages.
+2. **Identity:** Studio queues an evidence-backed identity revision and asks the owner to select one direction.
+3. **Assets:** Worker generates a canonical image, then uses that image as the edit input for every interaction state.
+4. **Review:** Studio waits for the complete draft pack and requires an explicit publish action.
+5. **Embed:** Runtime exposes only published assets; the widget hydrates the resulting state manifest and changes appearance as visitors interact.
+
+Studio management routes require the installation key returned at onboarding. Treat that key as an owner credential; do not place it in the embed snippet or client site.
 
 ## Quick start
 
@@ -50,6 +63,7 @@ Deploy `apps/runtime` with a managed PostgreSQL database and deploy `apps/studio
 OPENAI_API_KEY=...
 FIRECRAWL_API_KEY=...
 CRADLE_MODEL_ID=gpt-5.6-sol
+CRADLE_IMAGE_MODEL=gpt-image-2
 CRADLE_STUDIO_ORIGIN=https://your-studio.vercel.app
 DATABASE_URL=postgres://...
 ```
@@ -60,21 +74,24 @@ The runtime falls back to memory only when `DATABASE_URL` is intentionally omitt
 
 ## Repository
 
-- `apps/studio` — URL onboarding and installation snippet.
-- `apps/runtime` — crawl onboarding, installation, streaming, and widget delivery.
+- `apps/studio` — URL onboarding, source review, identity direction, and asset publishing.
+- `apps/runtime` — crawl onboarding, installation management, streaming, published asset delivery, and widget delivery.
+- `apps/worker` — durable identity and canonical/state-pack generation jobs.
 - `apps/site` — integration target for local verification.
 - `packages/widget` — framework-free `cradle-resident` custom element, compiled and served by Runtime at `/widget.js`.
 - `packages/crawler` — bounded, same-origin Firecrawl ingestion.
 - `packages/core` — Zod contracts shared by every deployment.
 - `packages/db` — Drizzle schema, versioned migrations, and durable store adapter.
+- `packages/jobs` — Postgres-backed job contracts shared by Runtime and Worker.
+- `packages/media` — immutable local asset store and its self-host safety test.
 
 ## Operations
 
 For the Docker path, copy `compose.env.example` to the root `.env` once, then run `docker compose up --build`. Compose loads that file directly into Runtime and Worker, applies the committed database migrations, then starts Studio, Runtime, and the durable identity worker. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `docker compose down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
 
-PostgreSQL persistence is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until encrypted configuration, per-installation credentials, rate limiting, the asset review/publish workflow, and operational monitoring are complete.
+The core review/publish pipeline is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until owner accounts/key recovery, encrypted secrets, signed private review URLs, rate limiting, an external object-store adapter, automated asset QA, and operational monitoring are complete.
 
-The crawler is deliberately public, same-domain, bounded (20 pages by default), and leaves Firecrawl's robots behavior enabled. Content is returned as a snapshot for review; the remaining review/publish screen is the next product slice.
+The crawler is deliberately public, same-domain, bounded (20 pages by default), and leaves Firecrawl's robots behavior enabled. Content is returned as a snapshot for review before it can influence the identity or generated assets.
 
 ## Development
 
