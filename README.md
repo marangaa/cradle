@@ -4,6 +4,8 @@ Open infrastructure for adding a website representative to any public site. Crad
 
 Qualra Cloud runs the same contract as managed infrastructure and can forward verified conversations into Qualra's relationship intelligence. Cradle itself does not prescribe a sales, support, or research workflow.
 
+See [`docs/qualra-cloud-adapter.md`](docs/qualra-cloud-adapter.md) for the boundary between the open-source runtime and the optional Qualra Cloud adapter.
+
 ## Why Cradle
 
 Companies currently stitch together a static chat widget, a separate knowledge base, and an internal relationship system. Cradle provides the shared interaction layer: an embeddable element with a stable visitor and conversation identity, an explicit knowledge snapshot, and a runtime contract that works the same way when self-hosted or operated by Qualra.
