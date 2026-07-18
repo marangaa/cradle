@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { BrandIdentity } from "@cradle/core";
 
 export type AssetState = "canonical" | "idle" | "welcome" | "listening" | "thinking" | "resolved" | "away";
@@ -30,6 +32,53 @@ export interface AssetStore {
   get(key: string): Promise<Uint8Array>;
   getPublicUrl(key: string): string;
   getReviewUrl(key: string, expiresInSeconds: number): Promise<string>;
+}
+
+export interface S3AssetStoreConfig {
+  bucket: string;
+  region: string;
+  endpoint?: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  publicBaseUrl?: string;
+}
+
+/** S3-protocol asset store for managed deployments, MinIO, and Cloudflare R2. */
+export class S3AssetStore implements AssetStore {
+  private readonly client: S3Client;
+  constructor(private readonly config: S3AssetStoreConfig) {
+    this.client = new S3Client({ region: config.region, endpoint: config.endpoint, forcePathStyle: Boolean(config.endpoint), credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } });
+  }
+  async put(input: { key: string; body: Uint8Array; contentType: CharacterAsset["contentType"]; visibility: AssetVisibility }) {
+    const checksum = createHash("sha256").update(input.body).digest("hex");
+    await this.client.send(new PutObjectCommand({ Bucket: this.config.bucket, Key: input.key, Body: input.body, ContentType: input.contentType, CacheControl: input.visibility === "published" ? "public, max-age=31536000, immutable" : "private, no-store", Metadata: { checksum } }));
+    return { key: input.key, checksum };
+  }
+  async get(key: string) {
+    const response = await this.client.send(new GetObjectCommand({ Bucket: this.config.bucket, Key: key }));
+    if (!response.Body) throw new Error("Asset object has no body.");
+    return new Uint8Array(await response.Body.transformToByteArray());
+  }
+  getPublicUrl(key: string) {
+    if (!this.config.publicBaseUrl) throw new Error("S3 publicBaseUrl is required for public asset URLs.");
+    return `${this.config.publicBaseUrl.replace(/\/$/, "")}/${key}`;
+  }
+  getReviewUrl(key: string, expiresInSeconds: number) { return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.config.bucket, Key: key }), { expiresIn: expiresInSeconds }); }
+}
+
+/** Resolves the configured self-hosted filesystem or managed S3-compatible asset store. */
+export function createAssetStoreFromEnv(environment: NodeJS.ProcessEnv = process.env): AssetStore {
+  if (environment.CRADLE_ASSET_STORAGE !== "s3") {
+    return new FilesystemAssetStore(environment.CRADLE_ASSET_DIRECTORY ?? "/app/data/assets", environment.CRADLE_ASSET_PUBLIC_BASE_URL ?? "/api/assets");
+  }
+  const bucket = environment.CRADLE_ASSET_BUCKET;
+  const region = environment.CRADLE_ASSET_REGION;
+  const accessKeyId = environment.CRADLE_ASSET_ACCESS_KEY_ID;
+  const secretAccessKey = environment.CRADLE_ASSET_SECRET_ACCESS_KEY;
+  if (!bucket || !region || !accessKeyId || !secretAccessKey) {
+    throw new Error("S3 asset storage requires CRADLE_ASSET_BUCKET, CRADLE_ASSET_REGION, CRADLE_ASSET_ACCESS_KEY_ID, and CRADLE_ASSET_SECRET_ACCESS_KEY.");
+  }
+  return new S3AssetStore({ bucket, region, endpoint: environment.CRADLE_ASSET_ENDPOINT, accessKeyId, secretAccessKey, publicBaseUrl: environment.CRADLE_ASSET_PUBLIC_BASE_URL });
 }
 
 /** Immutable local-volume store for Docker and self-hosted Cradle deployments. */

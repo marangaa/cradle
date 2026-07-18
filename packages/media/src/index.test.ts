@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { FilesystemAssetStore } from "./index.js";
+import { createAssetStoreFromEnv, FilesystemAssetStore } from "./index.js";
 
 test("FilesystemAssetStore persists bytes and blocks traversal", async () => {
   const root = await mkdtemp(join(tmpdir(), "cradle-assets-"));
@@ -17,4 +17,11 @@ test("FilesystemAssetStore persists bytes and blocks traversal", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("S3 storage configuration requires complete credentials", () => {
+  assert.throws(
+    () => createAssetStoreFromEnv({ CRADLE_ASSET_STORAGE: "s3" } as NodeJS.ProcessEnv),
+    /CRADLE_ASSET_BUCKET, CRADLE_ASSET_REGION, CRADLE_ASSET_ACCESS_KEY_ID, and CRADLE_ASSET_SECRET_ACCESS_KEY/,
+  );
 });

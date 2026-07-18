@@ -91,6 +91,8 @@ For the Docker path, copy `compose.env.example` to the root `.env` once, then ru
 
 The core review/publish pipeline is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until owner accounts/key recovery, encrypted secrets, signed private review URLs, rate limiting, an external object-store adapter, automated asset QA, and operational monitoring are complete.
 
+Self-hosted deployments use the shared local `cradle-assets` volume by default. Managed deployments can set `CRADLE_ASSET_STORAGE=s3` and provide S3-compatible credentials; this supports AWS S3, Cloudflare R2, or MinIO without changing the asset contract.
+
 The crawler is deliberately public, same-domain, bounded (20 pages by default), and leaves Firecrawl's robots behavior enabled. Content is returned as a snapshot for review before it can influence the identity or generated assets.
 
 ## Development

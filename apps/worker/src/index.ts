@@ -3,7 +3,7 @@ import { brandIdentitySchema, identityRevisionSchema, type BrandIdentity } from 
 import { createCradleStore } from "@cradle/db";
 import { buildIdentitySource } from "@cradle/identity";
 import { CANONICAL_ASSET_QUEUE, canonicalAssetJobSchema, createCradleBoss, IDENTITY_GENERATION_QUEUE, identityGenerationJobSchema, STATE_PACK_QUEUE, statePackJobSchema, type CanonicalAssetJob, type IdentityGenerationJob, type StatePackJob } from "@cradle/jobs";
-import { FilesystemAssetStore } from "@cradle/media";
+import { createAssetStoreFromEnv } from "@cradle/media";
 import { generateImage, generateText, Output } from "ai";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -11,7 +11,7 @@ if (!databaseUrl) throw new Error("DATABASE_URL is required to start the Cradle 
 
 const store = createCradleStore(databaseUrl);
 const queue = createCradleBoss(databaseUrl);
-const assetStore = new FilesystemAssetStore(process.env.CRADLE_ASSET_DIRECTORY ?? "/app/data/assets", process.env.CRADLE_ASSET_PUBLIC_BASE_URL ?? "/api/assets");
+const assetStore = createAssetStoreFromEnv();
 
 async function generateIdentity(installationName: string, knowledge: Awaited<ReturnType<typeof store.getKnowledge>>) {
   if (!knowledge) throw new Error("Knowledge snapshot is unavailable.");
