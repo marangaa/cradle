@@ -1,6 +1,7 @@
 import { identityRevisionSchema } from "@cradle/core";
 import { CANONICAL_ASSET_QUEUE, IDENTITY_GENERATION_QUEUE, canonicalAssetJobSchema, identityGenerationJobSchema } from "@cradle/jobs";
 import { getCradleQueue } from "../../../../lib/queue";
+import { isInstallationManager } from "../../../../lib/management";
 import { store } from "../../../../lib/store";
 
 const selectionSchema = identityRevisionSchema.pick({ id: true, selectedDirectionId: true });
@@ -27,6 +28,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const headers = studioCorsHeaders(request);
   if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
   const { id } = await context.params;
+  if (!await isInstallationManager(request, id)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
   return Response.json({ revision: await store.getLatestIdentityRevision(id) }, { headers });
 }
 
@@ -35,6 +37,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const headers = studioCorsHeaders(request);
   if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
   const { id: installationId } = await context.params;
+  if (!await isInstallationManager(request, installationId)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
   const installation = await store.getInstallation(installationId);
   const knowledge = await store.getKnowledge(installationId);
   if (!installation || !knowledge) return Response.json({ error: "Unknown or unready installation." }, { status: 404, headers });
@@ -64,6 +67,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const headers = studioCorsHeaders(request);
   if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
   const { id: installationId } = await context.params;
+  if (!await isInstallationManager(request, installationId)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
   const selection = selectionSchema.parse(await request.json());
   const revision = await store.getLatestIdentityRevision(installationId);
   if (!revision || revision.id !== selection.id || revision.status !== "ready" || !revision.identity) {

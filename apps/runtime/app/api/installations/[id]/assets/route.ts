@@ -1,4 +1,5 @@
 import { assetRevisionSchema } from "@cradle/core";
+import { isInstallationManager } from "../../../../lib/management";
 import { store } from "../../../../lib/store";
 
 const requiredStates = ["canonical", "idle", "welcome", "listening", "thinking", "resolved", "away"] as const;
@@ -19,6 +20,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const headers = studioCorsHeaders(request);
   if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
   const { id } = await context.params;
+  if (!await isInstallationManager(request, id)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
   const revision = await store.getLatestIdentityRevision(id);
   if (!revision) return Response.json({ assets: [] }, { headers });
   return Response.json({ assets: await store.listAssetRevisions(revision.id) }, { headers });
@@ -29,6 +31,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const headers = studioCorsHeaders(request);
   if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
   const { id: installationId } = await context.params;
+  if (!await isInstallationManager(request, installationId)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
   const revision = await store.getLatestIdentityRevision(installationId);
   if (!revision || revision.status !== "selected") return Response.json({ error: "Select an identity direction before publishing assets." }, { status: 409, headers });
   const assets = await store.listAssetRevisions(revision.id);

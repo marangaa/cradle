@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Page = { url: string; title: string; markdown: string };
 type Direction = { id: string; name: string; archetype: "wayfinder" | "witness" | "keeper"; role: string; traits: string[]; motif: string; greeting: string; rationale: string; evidence: Array<{ sourceUrl: string; reason: string }>; palette: [string, string, string] };
 type Revision = { id: string; status: "queued" | "generating" | "ready" | "selected" | "failed"; identity?: { summary: string; audience: string; voice: string[]; visualLanguage: string; directions: Direction[] }; selectedDirectionId?: string; error?: string };
-type Onboarding = { installation: { id: string; name: string }; knowledge: { pages: Page[]; sourceUrl: string } };
+type Onboarding = { installation: { id: string; name: string; publicKey: string }; knowledge: { pages: Page[]; sourceUrl: string } };
 type Asset = { id: string; state: string; status: "draft" | "published" | "failed" };
 
 const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ?? "http://localhost:3002";
@@ -19,28 +19,32 @@ export default function StudioHome() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const managementHeaders = useMemo<Record<string, string>>(() => {
+    const key = result?.installation.publicKey;
+    return key ? { "x-cradle-installation-key": key } : {} as Record<string, string>;
+  }, [result?.installation.publicKey]);
 
   useEffect(() => {
     if (!result || !revision || !pending.has(revision.status)) return;
     const interval = window.setInterval(async () => {
-      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/identity`);
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/identity`, { headers: managementHeaders });
       const payload = await response.json();
       if (response.ok) setRevision(payload.revision);
     }, 2_000);
     return () => window.clearInterval(interval);
-  }, [result, revision]);
+  }, [result, revision, managementHeaders]);
 
   useEffect(() => {
     if (!result || revision?.status !== "selected") return;
     const refresh = async () => {
-      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/assets`);
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/assets`, { headers: managementHeaders });
       const payload = await response.json();
       if (response.ok) setAssets(payload.assets);
     };
     void refresh();
     const interval = window.setInterval(refresh, 2_000);
     return () => window.clearInterval(interval);
-  }, [result, revision?.status]);
+  }, [result, revision?.status, managementHeaders]);
 
   async function discover(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
@@ -57,7 +61,7 @@ export default function StudioHome() {
   async function generateIdentity() {
     if (!result) return; setBusy(true); setError("");
     try {
-      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/identity`, { method: "POST" });
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/identity`, { method: "POST", headers: managementHeaders });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Cradle could not queue an identity revision.");
       setRevision(payload.revision);
@@ -68,7 +72,7 @@ export default function StudioHome() {
   async function selectDirection(directionId: string) {
     if (!result || !revision) return; setBusy(true); setError("");
     try {
-      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/identity`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: revision.id, selectedDirectionId: directionId }) });
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/identity`, { method: "PATCH", headers: { "content-type": "application/json", ...managementHeaders }, body: JSON.stringify({ id: revision.id, selectedDirectionId: directionId }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Could not select this direction.");
       setRevision(payload.revision);
@@ -79,7 +83,7 @@ export default function StudioHome() {
   async function publishAssets() {
     if (!result) return; setBusy(true); setError("");
     try {
-      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/assets`, { method: "POST" });
+      const response = await fetch(`${runtime}/api/installations/${result.installation.id}/assets`, { method: "POST", headers: managementHeaders });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Cradle could not publish this asset pack.");
       setAssets(payload.assets);
