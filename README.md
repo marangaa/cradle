@@ -70,7 +70,7 @@ The runtime falls back to memory only when `DATABASE_URL` is intentionally omitt
 
 ## Operations
 
-For the Docker path, copy `compose.env.example` to the root `.env` once, then run `docker compose up --build`. Compose loads that file directly into Runtime and Worker, applies the committed database migrations, then starts Studio, Runtime, and the durable identity worker. PostgreSQL data is retained in the `cradle-postgres` volume; use `docker compose down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
+For the Docker path, copy `compose.env.example` to the root `.env` once, then run `docker compose up --build`. Compose loads that file directly into Runtime and Worker, applies the committed database migrations, then starts Studio, Runtime, and the durable identity worker. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `docker compose down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
 
 PostgreSQL persistence is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until encrypted configuration, per-installation credentials, rate limiting, the asset review/publish workflow, and operational monitoring are complete.
 
