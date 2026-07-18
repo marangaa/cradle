@@ -43,7 +43,7 @@ pnpm --filter @cradle/db db:migrate
 pnpm dev
 ```
 
-Next.js natively loads `.env.local` from each app directory. Set the OpenAI and Firecrawl keys in `apps/runtime/.env.local`; set Studio's public runtime URL in `apps/studio/.env.local`. The Worker loads the Runtime environment with `dotenv`, so the local backend uses one configuration file. The commands above start the local PostgreSQL service, apply the committed Drizzle migrations, then launch Studio (`3000`), Runtime (`3002`), Worker, and the optional local integration site (`3003`). Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
+Next.js natively loads `.env.local` from each app directory. Set the OpenAI and Firecrawl keys in `apps/runtime/.env.local`; set Studio's public runtime URL in `apps/studio/.env.local`. The Worker loads the Runtime environment with `dotenv`, so the local backend uses one configuration file. The commands above start the local PostgreSQL service, apply the committed Drizzle migrations, then launch Studio (`3000`), Runtime (`3002`), and Worker. Open Studio at `http://localhost:3000`, submit a public URL, then paste the generated snippet after reviewing the returned page snapshot.
 
 Set `CRADLE_WIDGET_TOKEN_SECRET` to a random 32-byte secret in every production Runtime deployment. Runtime mints five-minute, origin-bound bearer tokens from the widget manifest endpoint; chat rejects requests without one.
 
@@ -92,7 +92,7 @@ The runtime falls back to memory only when `DATABASE_URL` is intentionally omitt
 
 ## Operations
 
-For the complete Docker stack, copy `compose.env.example` to the root `.env` once, then run `pnpm dev:docker`. Compose loads that file directly into Runtime and Worker, applies the committed database migrations, then starts Studio, Runtime, and the durable identity worker. These are separate containers: Studio serves the owner UI, Runtime serves the public API/widget, Worker runs durable generation jobs, and PostgreSQL persists data. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `pnpm dev:docker:down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
+For the complete Docker stack, copy `.env.example` to the root `.env` once, then run `pnpm dev:docker`. Compose loads that file directly into Runtime and Worker, applies the committed database migrations, then starts Studio, Runtime, and the durable identity worker. These are separate containers: Studio serves the owner UI, Runtime serves the public API/widget, Worker runs durable generation jobs, and PostgreSQL persists data. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `pnpm dev:docker:down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
 
 The core review/publish pipeline is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until owner accounts/key recovery, encrypted secrets, rate limiting, automated asset QA, and operational monitoring are complete.
 
