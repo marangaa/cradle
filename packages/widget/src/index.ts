@@ -45,13 +45,21 @@ class CradleResident extends HTMLElement {
   private async loadFamiliar(apiBase: string, installationId: string, messages: HTMLElement) {
     const response = await fetch(`${apiBase}/api/installations/${installationId}`);
     if (!response.ok) return;
-    const payload = await response.json() as { familiar: { name: string; greeting: string; palette: [string, string, string] } | null };
+    const payload = await response.json() as { familiar: { name: string; greeting: string; palette: [string, string, string] } | null; assets: { canonical: { url: string } } | null };
     if (!payload.familiar) return;
     const [main, accent, wash] = payload.familiar.palette;
     this.style.setProperty("--familiar-main", main); this.style.setProperty("--familiar-accent", accent); this.style.setProperty("--familiar-wash", wash);
     const title = this.shadow.querySelector(".title");
     if (title) title.textContent = payload.familiar.name;
     messages.textContent = payload.familiar.greeting;
+    if (payload.assets?.canonical) {
+      const pet = this.shadow.querySelector(".pet") as HTMLButtonElement | null;
+      if (pet) {
+        pet.style.backgroundImage = `url(${apiBase}${payload.assets.canonical.url})`;
+        pet.style.backgroundSize = "cover";
+        pet.style.backgroundPosition = "center";
+      }
+    }
   }
 }
 

@@ -39,5 +39,22 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     await store.saveAssetRevision(next);
     return next;
   }));
+  const direction = revision.identity?.directions.find((item) => item.id === revision.selectedDirectionId);
+  const installation = await store.getInstallation(installationId);
+  if (direction && installation) {
+    await store.saveInstallation({ ...installation, familiar: {
+      id: direction.id,
+      name: direction.name,
+      archetype: direction.archetype,
+      role: direction.role,
+      traits: direction.traits,
+      motif: direction.motif,
+      greeting: direction.greeting,
+      rationale: direction.rationale,
+      evidence: direction.evidence.map((item) => item.sourceUrl),
+      palette: direction.palette,
+      version: revision.version,
+    } });
+  }
   return Response.json({ assets: published }, { headers });
 }
