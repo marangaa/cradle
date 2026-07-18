@@ -2,7 +2,7 @@ import type { AssetRevision, ChatEvent, IdentityRevision, Installation, Knowledg
 import { asc, desc, eq } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { assetRevisions, conversationEvents, identityRevisions, installations, knowledgeSnapshots } from "./schema.js";
+import { assetRevisions, conversationEvents, identityRevisions, installations, knowledgeSnapshots } from "#schema";
 
 const schema = { installations, knowledgeSnapshots, conversationEvents, identityRevisions, assetRevisions };
 type CradleDatabase = NodePgDatabase<typeof schema>;

@@ -99,10 +99,10 @@ function InstallSnippet({
   return (
     <section className="install">
       <p className="kicker">04 / Install</p>
-      <h2>Put it on your site.</h2>
+      <h2>Connect the runtime.</h2>
       <p>
-        Add this once before your closing <code>&lt;/body&gt;</code> tag. It
-        works on any website, not only Next.js.
+        Add one script tag before your closing <code>&lt;/body&gt;</code> tag.
+        The Cradle surface works on any website, not only Next.js.
       </p>
       <pre>
         <code>{snippet}</code>
@@ -510,29 +510,30 @@ export default function StudioHome() {
           </span>
           Cradle
         </Link>
-        <span className="topbar-context">Identity studio</span>
+        <span className="topbar-context">Cradle Studio</span>
         <p className="step-count">
           <span>0{result ? 2 : 1}</span> / 04
         </p>
       </header>
       <section className="hero">
         <div className="hero-copy">
-          <p className="kicker">The identity workspace</p>
+          <p className="kicker">Cradle Studio · identity + runtime</p>
           <h1>
-            Give your site
+            Build the living layer
             <br />
-            <em>a point of view.</em>
+            <em>for your website.</em>
           </h1>
           <p className="intro">
-            Cradle turns the public surface of your company into a grounded,
-            living presence—one source at a time.
+            Cradle turns your public site into a portable presence: review the
+            source, shape the identity, publish its states, and install the
+            runtime wherever your website lives.
           </p>
         </div>
         <aside className="hero-note">
           <span className="note-index">01</span>
-          <p>Start with the website your visitors already know.</p>
+          <p>Start with the source your company already owns.</p>
           <span className="note-line" aria-hidden="true" />
-          <small>Reviewable by design · no black-box publishing</small>
+          <small>Infrastructure, not a prewritten chatbot</small>
         </aside>
       </section>
       {!result ? (
@@ -540,7 +541,7 @@ export default function StudioHome() {
           <form className="discovery" onSubmit={discover}>
             <div className="form-heading">
               <span className="form-index">01</span>
-              <label htmlFor="site">Create an installation</label>
+              <label htmlFor="site">Create a Cradle installation</label>
             </div>
             <div>
               <input
@@ -557,14 +558,14 @@ export default function StudioHome() {
               </button>
             </div>
             <small>
-              Public, same-domain crawl. You review every source before
-              generation.
+              Public, same-domain crawl. Review and approve the source snapshot
+              before Cradle creates anything from it.
             </small>
           </form>
           <form className="resume" onSubmit={resume}>
             <div className="resume-heading">
               <span className="form-index">↳</span>
-              <label htmlFor="installation">Continue an installation</label>
+              <label htmlFor="installation">Continue a Cradle installation</label>
             </div>
             <input
               id="installation"
@@ -610,9 +611,9 @@ export default function StudioHome() {
             <p>Cradle stores only its hash. The embed never receives it.</p>
           </section>
           <section className="section-head">
-            <p className="kicker">01 / Knowledge</p>
-            <h2>Here is what Cradle found.</h2>
-            <p>These are the reviewed pages the identity is allowed to use.</p>
+            <p className="kicker">01 / Source snapshot</p>
+            <h2>Review the foundation.</h2>
+            <p>Choose the public pages Cradle is allowed to use. Nothing is generated until you approve this snapshot.</p>
           </section>
           <section className="knowledge">
             <div className="knowledge-summary">
@@ -629,7 +630,7 @@ export default function StudioHome() {
               </button>
               {!knowledgeReviewed && (
                 <p className="selection-note">
-                  Save this selection to continue.
+                  Approve this snapshot to continue.
                 </p>
               )}
             </div>
@@ -652,12 +653,12 @@ export default function StudioHome() {
             </div>
           </section>
           <section className="section-head">
-            <p className="kicker">02 / Identity</p>
-            <h2>Derive its direction from evidence.</h2>
+            <p className="kicker">02 / Presence</p>
+            <h2>Choose how it should show up.</h2>
             <p>
-              Cradle creates three distinct directions from the reviewed
-              snapshot. It does not publish a widget or generate visual assets
-              yet.
+              Cradle proposes three identity systems from the approved source:
+              role, voice, visual language, and the behavior your runtime can
+              express.
             </p>
           </section>
           {!revision && (
@@ -668,7 +669,7 @@ export default function StudioHome() {
             >
               {busyAction === "Generating identity directions…"
                 ? busyAction
-                : "Generate three directions"}
+                : "Create identity directions"}
             </button>
           )}
           {revision && pending.has(revision.status) && (
@@ -685,7 +686,7 @@ export default function StudioHome() {
           {revision?.identity && (
             <>
               <section className="section-head">
-                <p className="kicker">Brand brief</p>
+                <p className="kicker">Identity brief</p>
                 <h2>{revision.identity.summary}</h2>
                 <p>
                   For {revision.identity.audience}. Voice:{" "}
@@ -752,24 +753,24 @@ export default function StudioHome() {
               </section>
               {revision.status === "selected" && (
                 <section className="published">
-                  <p className="kicker">03 / Asset review</p>
+                  <p className="kicker">03 / Runtime states</p>
                   <h2>
                     {published
                       ? "Published."
                       : revision.error
                         ? "Generation needs another try."
                         : packReady
-                          ? "Your state pack is ready."
+                      ? "Your runtime states are ready."
                           : `Preparing assets (${draftStates.size}/7).`}
                   </h2>
                   <p>
                     {published
-                      ? "The widget can now fetch the immutable canonical asset."
+                      ? "Your Cradle runtime can now fetch the published state pack."
                       : revision.error
                         ? revision.error
                         : packReady
                           ? "Review every generated state, then publish the complete pack."
-                          : "Cradle is deriving each interaction state from one canonical base."}
+                          : "Cradle is deriving each runtime state from one canonical base."}
                   </p>
                   <AssetPackPreview assets={assets} previewUrls={previewUrls} />
                   {revision.error && (

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
-  "scripts": { "build": "tsc -p tsconfig.json", "check-types": "tsc --noEmit" },
+  "scripts": { "check-types": "tsc --noEmit" },
   "dependencies": { "@cradle/core": "workspace:*" },
   "devDependencies": { "@repo/typescript-config": "workspace:*" }
 }

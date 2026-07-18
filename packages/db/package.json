@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#schema": "./src/schema.ts",
+    "#store": "./src/store.ts"
+  },
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
     "check-types": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",

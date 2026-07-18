@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MemoryStore } from "./store.js";
+import { MemoryStore } from "#store";
 
 const installationId = "5ef884b4-a96e-4cba-9f3f-91f8768c13d6";
 const identityRevisionId = "8ec46ec6-653c-444a-9e81-720a9484938d";
