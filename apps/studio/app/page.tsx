@@ -17,6 +17,11 @@ function AssetPackPreview({ assets, previewUrls }: { assets: Asset[]; previewUrl
   return <div className="asset-pack" aria-label="Generated state pack">{assets.filter((asset) => asset.status !== "failed").map((asset) => <figure key={asset.id}><div>{previewUrls[asset.id] ? <img src={previewUrls[asset.id]} alt={`Generated ${asset.state} state`} /> : <span className="asset-placeholder">Preparing</span>}</div><figcaption>{asset.state}</figcaption></figure>)}</div>;
 }
 
+function InstallSnippet({ installationId }: { installationId: string }) {
+  const snippet = `<script src="${runtime}/widget.js"></script>\n<cradle-resident installation-id="${installationId}" api-base="${runtime}"></cradle-resident>`;
+  return <section className="install"><p className="kicker">04 / Install</p><h2>Put it on your site.</h2><p>Add this once before your closing <code>&lt;/body&gt;</code> tag. It works on any website, not only Next.js.</p><pre><code>{snippet}</code></pre><button onClick={() => void navigator.clipboard.writeText(snippet)}>Copy install snippet</button></section>;
+}
+
 export default function StudioHome() {
   const [url, setUrl] = useState("");
   const [result, setResult] = useState<Onboarding | null>(null);
@@ -167,7 +172,7 @@ export default function StudioHome() {
       {revision?.identity && <>
         <section className="section-head"><p className="kicker">Brand brief</p><h2>{revision.identity.summary}</h2><p>For {revision.identity.audience}. Voice: {revision.identity.voice.join(", ")}.</p></section>
         <section className="directions">{revision.identity.directions.map((direction) => <article className={`direction ${revision.selectedDirectionId === direction.id ? "chosen" : ""}`} key={direction.id} style={{ "--main": direction.palette[0], "--accent": direction.palette[1], "--wash": direction.palette[2] } as React.CSSProperties}><div className="being"><span></span><i></i></div><p className="archetype">{direction.archetype}</p><h3>{direction.name}</h3><p>{direction.role}</p><ul>{direction.traits.map((trait) => <li key={trait}>{trait}</li>)}</ul><details><summary>Why this fits</summary><p>{direction.rationale}</p>{direction.evidence.map((item) => <p key={item.sourceUrl}><a href={item.sourceUrl} target="_blank">Source</a>: {item.reason}</p>)}</details><button onClick={() => selectDirection(direction.id)} disabled={busy || revision.status !== "ready"}>{revision.selectedDirectionId === direction.id ? "Direction selected" : `Select ${direction.name}`}</button></article>)}</section>
-        {revision.status === "selected" && <section className="published"><p className="kicker">03 / Asset review</p><h2>{published ? "Published." : packReady ? "Your state pack is ready." : `Preparing assets (${draftStates.size}/7).`}</h2><p>{published ? "The widget can now fetch the immutable canonical asset." : packReady ? "Review every generated state, then publish the complete pack." : "Cradle is deriving each interaction state from one canonical base."}</p><AssetPackPreview assets={assets} previewUrls={previewUrls} />{!published && <button onClick={publishAssets} disabled={busy || !packReady}>Publish asset pack</button>}</section>}
+        {revision.status === "selected" && <section className="published"><p className="kicker">03 / Asset review</p><h2>{published ? "Published." : packReady ? "Your state pack is ready." : `Preparing assets (${draftStates.size}/7).`}</h2><p>{published ? "The widget can now fetch the immutable canonical asset." : packReady ? "Review every generated state, then publish the complete pack." : "Cradle is deriving each interaction state from one canonical base."}</p><AssetPackPreview assets={assets} previewUrls={previewUrls} />{!published && <button onClick={publishAssets} disabled={busy || !packReady}>Publish asset pack</button>}{published && <InstallSnippet installationId={result.installation.id} />}</section>}
       </>}
     </>}
     {error && <p className="error" role="alert">{error}</p>}
