@@ -7,7 +7,7 @@ const requiredStates = ["canonical", "idle", "welcome", "listening", "thinking",
 function studioCorsHeaders(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin || origin !== process.env.CRADLE_STUDIO_ORIGIN) return null;
-  return { "access-control-allow-origin": origin, "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "content-type", "cache-control": "no-store", vary: "Origin" };
+  return { "access-control-allow-origin": origin, "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "content-type, x-cradle-installation-key", "cache-control": "no-store", vary: "Origin" };
 }
 
 export function OPTIONS(request: Request) {

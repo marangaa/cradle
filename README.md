@@ -27,7 +27,7 @@ This is intentionally infrastructure, not another fixed "sales bot" or "support 
 1. **Discover:** Studio runs a bounded public crawl and shows the source pages.
 2. **Identity:** Studio queues an evidence-backed identity revision and asks the owner to select one direction.
 3. **Assets:** Worker generates a canonical image, then uses that image as the edit input for every interaction state.
-4. **Review:** Studio waits for the complete draft pack and requires an explicit publish action.
+4. **Review:** Studio streams draft assets only to the authorized owner session, shows every state, and requires an explicit publish action.
 5. **Embed:** Runtime exposes only published assets; the widget hydrates the resulting state manifest and changes appearance as visitors interact.
 
 Studio management routes require the installation key returned at onboarding. Treat that key as an owner credential; do not place it in the embed snippet or client site.
@@ -83,13 +83,13 @@ The runtime falls back to memory only when `DATABASE_URL` is intentionally omitt
 - `packages/core` — Zod contracts shared by every deployment.
 - `packages/db` — Drizzle schema, versioned migrations, and durable store adapter.
 - `packages/jobs` — Postgres-backed job contracts shared by Runtime and Worker.
-- `packages/media` — immutable local asset store and its self-host safety test.
+- `packages/media` — immutable filesystem and S3-compatible asset stores, plus storage safety tests.
 
 ## Operations
 
 For the Docker path, copy `compose.env.example` to the root `.env` once, then run `docker compose up --build`. Compose loads that file directly into Runtime and Worker, applies the committed database migrations, then starts Studio, Runtime, and the durable identity worker. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `docker compose down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
 
-The core review/publish pipeline is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until owner accounts/key recovery, encrypted secrets, signed private review URLs, rate limiting, an external object-store adapter, automated asset QA, and operational monitoring are complete.
+The core review/publish pipeline is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until owner accounts/key recovery, encrypted secrets, rate limiting, automated asset QA, and operational monitoring are complete.
 
 Self-hosted deployments use the shared local `cradle-assets` volume by default. Managed deployments can set `CRADLE_ASSET_STORAGE=s3` and provide S3-compatible credentials; this supports AWS S3, Cloudflare R2, or MinIO without changing the asset contract.
 
