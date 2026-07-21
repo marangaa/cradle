@@ -1,16 +1,10 @@
 import { petdexCatalogItemSchema, type PetdexCatalogItem } from "@cradle/core";
 
 const manifestUrl = "https://petdex.dev/api/manifest";
-const curatedAssetOrigin = "https://assets.petdex.dev";
 const cacheTtlMs = 5 * 60 * 1_000;
 let cachedCatalog: { expiresAt: number; items: PetdexCatalogItem[] } | null = null;
 
-function isCuratedAsset(url: string) {
-  const parsed = new URL(url);
-  return parsed.origin === curatedAssetOrigin && parsed.pathname.startsWith("/curated/");
-}
-
-/** Fetches only Petdex-maintained assets; community assets have separate creator rights. */
+/** Fetches every approved Petdex entry from its public manifest. */
 export async function listPetdexCatalog(): Promise<PetdexCatalogItem[]> {
   if (cachedCatalog && cachedCatalog.expiresAt > Date.now()) return cachedCatalog.items;
   const response = await fetch(manifestUrl, { signal: AbortSignal.timeout(10_000), next: { revalidate: 300 } });
@@ -20,7 +14,6 @@ export async function listPetdexCatalog(): Promise<PetdexCatalogItem[]> {
     .map((pet) => petdexCatalogItemSchema.safeParse(pet))
     .filter((result): result is { success: true; data: PetdexCatalogItem } => result.success)
     .map((result) => result.data)
-    .filter((pet) => isCuratedAsset(pet.spritesheetUrl))
     .sort((left, right) => left.displayName.localeCompare(right.displayName));
   cachedCatalog = { items, expiresAt: Date.now() + cacheTtlMs };
   return items;

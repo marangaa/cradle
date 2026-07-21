@@ -3,32 +3,8 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import type { BrandIdentity } from "@cradle/core";
-
-export type AssetState = "canonical" | "idle" | "running-right" | "running-left" | "waving" | "jumping" | "failed" | "waiting" | "running" | "review" | "atlas" | "contact-sheet";
-export type AssetVisibility = "private" | "published";
-
-/** Immutable metadata for an approved generated or uploaded character asset. */
-export interface CharacterAsset {
-  id: string;
-  installationId: string;
-  revision: number;
-  state: AssetState;
-  objectKey: string;
-  contentType: "image/png" | "image/webp";
-  checksum: string;
-  width: number;
-  height: number;
-  visibility: AssetVisibility;
-  parentAssetId?: string;
-  provider?: string;
-  model?: string;
-  promptVersion?: string;
-  createdAt: string;
-}
-
 export interface AssetStore {
-  put(input: { key: string; body: Uint8Array; contentType: CharacterAsset["contentType"]; visibility: AssetVisibility }): Promise<{ key: string; checksum: string }>;
+  put(input: { key: string; body: Uint8Array; contentType: "image/webp"; visibility: "private" | "published" }): Promise<{ key: string; checksum: string }>;
   get(key: string): Promise<Uint8Array>;
   getPublicUrl(key: string): string;
   getReviewUrl(key: string, expiresInSeconds: number): Promise<string>;
@@ -49,7 +25,7 @@ export class S3AssetStore implements AssetStore {
   constructor(private readonly config: S3AssetStoreConfig) {
     this.client = new S3Client({ region: config.region, endpoint: config.endpoint, forcePathStyle: Boolean(config.endpoint), credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } });
   }
-  async put(input: { key: string; body: Uint8Array; contentType: CharacterAsset["contentType"]; visibility: AssetVisibility }) {
+  async put(input: { key: string; body: Uint8Array; contentType: "image/webp"; visibility: "private" | "published" }) {
     const checksum = createHash("sha256").update(input.body).digest("hex");
     await this.client.send(new PutObjectCommand({ Bucket: this.config.bucket, Key: input.key, Body: input.body, ContentType: input.contentType, CacheControl: input.visibility === "published" ? "public, max-age=31536000, immutable" : "private, no-store", Metadata: { checksum } }));
     return { key: input.key, checksum };
@@ -85,7 +61,7 @@ export function createAssetStoreFromEnv(environment: NodeJS.ProcessEnv = process
 export class FilesystemAssetStore implements AssetStore {
   constructor(private readonly rootDirectory: string, private readonly publicBaseUrl: string) {}
 
-  async put(input: { key: string; body: Uint8Array; contentType: CharacterAsset["contentType"]; visibility: AssetVisibility }) {
+  async put(input: { key: string; body: Uint8Array; contentType: "image/webp"; visibility: "private" | "published" }) {
     const destination = resolve(this.rootDirectory, input.key);
     const root = resolve(this.rootDirectory);
     const relativePath = relative(root, destination);
@@ -105,21 +81,4 @@ export class FilesystemAssetStore implements AssetStore {
     return new Uint8Array(await readFile(destination));
   }
   async getReviewUrl(key: string) { return this.getPublicUrl(key); }
-}
-
-/** Async work contract: generation never blocks a request/response lifecycle. */
-export interface CharacterJob {
-  id: string;
-  installationId: string;
-  revision: number;
-  type: "concept" | "state-pack" | "quality-check";
-  status: "queued" | "running" | "failed" | "succeeded";
-  input: { identity: BrandIdentity; directionId: string; canonicalAssetId?: string; states?: AssetState[] };
-  error?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CharacterJobQueue {
-  enqueue(job: Omit<CharacterJob, "id" | "status" | "createdAt" | "updatedAt">): Promise<CharacterJob>;
 }

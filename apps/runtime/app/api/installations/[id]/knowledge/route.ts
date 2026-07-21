@@ -1,4 +1,4 @@
-import { installationSchema, knowledgeReviewSchema } from "@cradle/core";
+import { createDefaultCharacter, installationSchema, knowledgeReviewSchema } from "@cradle/core";
 import { isInstallationManager } from "../../../../lib/management";
 import { store } from "../../../../lib/store";
 
@@ -21,7 +21,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (!await isInstallationManager(request, id)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
   const [installation, knowledge] = await Promise.all([store.getInstallation(id), store.getKnowledge(id)]);
   if (!installation || !knowledge) return Response.json({ error: "Unknown or unready installation." }, { status: 404, headers });
-  return Response.json({ installation: { id: installation.id, name: installation.name }, knowledge }, { headers });
+  return Response.json({
+    installation: { id: installation.id, name: installation.name },
+    character: installation.character ?? createDefaultCharacter(installation.name),
+    brandProfile: installation.brandProfile ?? null,
+    knowledge,
+  }, { headers });
 }
 
 /** Saves an immutable owner-reviewed subset of the latest bounded crawl. */
@@ -30,9 +35,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
   const { id: installationId } = await context.params;
   if (!await isInstallationManager(request, installationId)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
-  const [installation, knowledge, latestIdentity] = await Promise.all([store.getInstallation(installationId), store.getKnowledge(installationId), store.getLatestIdentityRevision(installationId)]);
+  const [installation, knowledge] = await Promise.all([store.getInstallation(installationId), store.getKnowledge(installationId)]);
   if (!installation || !knowledge) return Response.json({ error: "Unknown or unready installation." }, { status: 404, headers });
-  if (latestIdentity) return Response.json({ error: "Start a new installation to change sources after identity generation has begun." }, { status: 409, headers });
   const review = knowledgeReviewSchema.parse(await request.json());
   const included = new Set(review.includedUrls);
   const pages = knowledge.pages.filter((page) => included.has(page.url));

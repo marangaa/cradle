@@ -21,13 +21,5 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       spritesheetPath: `/api/installations/${id}/sprite`,
     }, { headers });
   }
-  const revision = await store.getLatestIdentityRevision(id);
-  const atlas = revision ? (await store.listAssetRevisions(revision.id)).find((asset) => asset.status === "published" && asset.state === "atlas") : null;
-  if (!atlas || !installation.familiar) return Response.json({ error: "No published character package." }, { status: 404, headers });
-  return Response.json({
-    id: installation.familiar.id,
-    displayName: installation.familiar.name,
-    description: installation.familiar.role,
-    spritesheetPath: `/api/assets/${atlas.id}`,
-  }, { headers });
+  return Response.json({ error: "No companion package has been selected." }, { status: 404, headers });
 }

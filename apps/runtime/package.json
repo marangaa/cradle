@@ -11,17 +11,16 @@
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.16",
-    "@cradle/agent": "workspace:*",
+    "@ai-sdk/google": "^2.0.73",
     "@cradle/core": "workspace:*",
     "@cradle/crawler": "workspace:*",
     "@cradle/db": "workspace:*",
-    "@cradle/jobs": "workspace:*",
     "@cradle/media": "workspace:*",
     "@cradle/pet": "workspace:*",
     "@cradle/widget": "workspace:*",
     "ai": "^7.0.31",
     "next": "16.2.0",
+    "openbrand": "^0.2.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zod": "^3.25.76"

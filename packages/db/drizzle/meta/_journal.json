@@ -36,6 +36,34 @@
       "when": 1784389963683,
       "tag": "0004_companion-packages",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784556600000,
+      "tag": "0005_add_presence_manifest",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784628000000,
+      "tag": "0006_replace_presence_with_character",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784628600000,
+      "tag": "0007_remove_reference_chat",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784630400000,
+      "tag": "0008_add_brand_profile",
+      "breakpoints": true
     }
   ]
 }

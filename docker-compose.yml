@@ -20,20 +20,6 @@ services:
         condition: service_completed_successfully
     ports: ["3002:3002"]
     volumes: ["cradle-assets:/app/data/assets"]
-  worker:
-    build: { context: ., dockerfile: deploy/Dockerfile.worker }
-    env_file:
-      - path: ./apps/runtime/.env
-        required: false
-      - path: ./apps/runtime/.env.local
-        required: false
-    environment:
-      DATABASE_URL: postgres://cradle:cradle@postgres:5432/cradle
-      CRADLE_ASSET_DIRECTORY: /app/data/assets
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    volumes: ["cradle-assets:/app/data/assets"]
   migrate:
     build: { context: ., dockerfile: deploy/Dockerfile.runtime }
     command: pnpm --filter @cradle/db db:migrate

@@ -1,12 +1,12 @@
 import { crawlPublicSite } from "@cradle/crawler";
-import { crawlRequestSchema, installationSchema } from "@cradle/core";
+import { brandProfileSchema, createDefaultCharacter, crawlRequestSchema, installationSchema } from "@cradle/core";
+import { extractBrandAssets } from "openbrand";
 import { store } from "../../lib/store";
 import { hashManagementKey } from "../../lib/management";
 
 const onboardingSchema = crawlRequestSchema.extend({
   name: installationSchema.shape.name.optional(),
   instructions: installationSchema.shape.instructions.optional(),
-  runtime: installationSchema.shape.runtime.default("cradle"),
 });
 
 function resolveInstallationOrigin(sourceUrl: string) {
@@ -40,14 +40,29 @@ export async function POST(request: Request) {
   const input = onboardingSchema.parse(await request.json());
   const origin = resolveInstallationOrigin(input.url);
   const managementKey = crypto.randomUUID().replaceAll("-", "");
-  const installation = installationSchema.parse({
-    id: crypto.randomUUID(), managementKeyHash: hashManagementKey(managementKey), origin,
-    name: input.name ?? new URL(input.url).hostname,
-    instructions: input.instructions ?? "Be helpful, accurate, and concise.",
-    knowledgeVersion: 1, runtime: input.runtime,
-  });
-  const knowledge = await crawlPublicSite(input, installation.id);
+  const name = input.name ?? new URL(input.url).hostname;
+  const installationId = crypto.randomUUID();
+  const [crawlResult, brandResult] = await Promise.allSettled([
+    crawlPublicSite(input, installationId),
+    extractBrandAssets(input.url),
+  ]);
+  if (crawlResult.status === "rejected") throw crawlResult.reason;
+  const knowledge = crawlResult.value;
   if (knowledge.pages.length === 0) return Response.json({ error: "No usable public pages were found." }, { status: 422, headers });
+  const extractedBrand = brandResult.status === "fulfilled" ? brandResult.value : null;
+  const brandProfile = extractedBrand?.ok ? brandProfileSchema.parse({
+    name: extractedBrand.data.brand_name || name,
+    colors: extractedBrand.data.colors,
+    logos: extractedBrand.data.logos.map((logo) => ({ url: logo.url, ...(logo.alt ? { alt: logo.alt } : {}) })),
+    backdrops: extractedBrand.data.backdrop_images,
+    source: "openbrand",
+  }) : undefined;
+  const installation = installationSchema.parse({
+    id: installationId, managementKeyHash: hashManagementKey(managementKey), origin,
+    name,
+    instructions: input.instructions ?? "Be helpful, accurate, and concise.",
+    knowledgeVersion: 1, runtime: "cradle", character: createDefaultCharacter(name), ...(brandProfile ? { brandProfile } : {}),
+  });
   await Promise.all([store.saveInstallation(installation), store.saveKnowledge(knowledge)]);
-  return Response.json({ installation: { id: installation.id, name: installation.name, managementKey }, knowledge }, { status: 201, headers });
+  return Response.json({ installation: { id: installation.id, name: installation.name, managementKey }, knowledge, brandProfile }, { status: 201, headers });
 }

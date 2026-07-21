@@ -1,115 +1,157 @@
 # Cradle
 
-Open infrastructure for adding a website representative to any public site. Cradle turns a company's public website into reviewable knowledge, ships one portable custom element, and streams grounded conversations through a provider-neutral runtime.
+Open infrastructure for creating, hosting, and embedding animated, programmable characters on the web.
 
-Qualra Cloud runs the same contract as managed infrastructure and can forward verified conversations into Qualra's relationship intelligence. Cradle itself does not prescribe a sales, support, or research workflow.
+Cradle turns a reviewed public source bundle and a portable companion package into a Shadow-DOM custom element. It is open infrastructure: you control the crawler credentials, model provider, database, runtime behaviour, and visitor data in your deployment.
 
-## Why Cradle
+Cradle is **not** a customer-relationship platform and it is not a prebuilt sales or support bot. It gives your product an interaction surface. You decide what that surface can do.
 
-Companies currently stitch together a static chat widget, a separate knowledge base, and an internal relationship system. Cradle provides the shared interaction layer: an embeddable element with a stable visitor and conversation identity, an explicit knowledge snapshot, and a runtime contract that works the same way when self-hosted or operated by Qualra.
+## The product
 
-This is intentionally infrastructure, not another fixed "sales bot" or "support bot." Teams choose their instructions, tools, data stores, and workflow. Qualra Cloud is the managed path: it operates the runtime and can turn verified Cradle conversations into relationship memory and analysis.
+Cradle Studio has four operator-controlled steps:
 
-## What works today
+1. **Connect site** — run a bounded, same-origin public crawl and extract reviewable brand signals.
+2. **Review knowledge** — explicitly approve the public pages that describe the company.
+3. **Shape character** — set its name, welcome message, and animation package.
+4. **Go live** — install one portable custom element on any website.
 
-- Submit a public URL through Studio and run a bounded, same-origin Firecrawl crawl.
-- Persist installations, knowledge snapshots, and conversation events to PostgreSQL when `DATABASE_URL` is configured.
-- Generate an installation ID and embed the Shadow-DOM `cradle-resident` widget with one script tag.
-- Choose a companion from Cradle's curated Petdex catalog after approving the website source bundle.
-- Download, validate, checksum, and pin one Codex-compatible `spritesheet.webp` to the installation rather than hotlinking an upstream asset.
-- Persist the companion's Petdex provenance alongside the immutable imported asset on a shared self-hosted volume.
-- Maintain anonymous visitor and conversation IDs in the visitor's first-party browser storage.
-- Reject chat requests whose browser origin does not match the installation's configured origin.
-- Stream grounded answers through AI SDK and OpenAI (`CRADLE_MODEL_ID` defaults to `gpt-5.6-sol`).
+The generated widget is a visual state machine, not a static avatar or a chat widget. It moves through `idle`, `listening`, `thinking`, `responding`, `resolved`, and `error` states and exposes browser lifecycle events:
 
-## Flow
+```js
+window.addEventListener("cradle:ready", (event) => console.log(event.detail));
+window.addEventListener("cradle:state", (event) => console.log(event.detail.state));
+window.addEventListener("cradle:action", (event) => console.log(event.detail.action));
+```
 
-1. **Discover:** Studio runs a bounded public crawl; the owner saves a selected page subset as the immutable reviewed source version.
-2. **Choose:** Studio lists only Petdex-curated companions. The owner chooses one 8×9 spritesheet package.
-3. **Bundle:** Runtime downloads, validates, checksums, and pins the selected spritesheet with its Petdex source metadata.
-4. **Embed:** The website loads the imported package and maps visitor activity to its animation rows.
+Use the browser controller to compose Cradle with your own UI:
 
-Studio management routes require the installation key shown once at onboarding. Cradle stores only its SHA-256 hash; save the original in a password manager and never place it in the embed snippet or client site. Self-hosted operators can rotate a lost key directly in their database today; Cradle Cloud will bind installations to Qualra accounts rather than relying on this bootstrap credential.
+```js
+window.Cradle?.open();
+window.Cradle?.setState("thinking");
+window.Cradle?.trigger({ type: "open-pricing" });
+window.Cradle?.setContext({ experiment: "homepage-v2" });
+```
 
 ## Quick start
+
+Cradle requires Node.js 22 or newer, PostgreSQL, a Gemini API key, and a Firecrawl API key.
 
 ```sh
 pnpm install
 cp apps/runtime/.env.example apps/runtime/.env.local
 cp apps/studio/.env.example apps/studio/.env.local
 docker compose up postgres -d
-pnpm --filter @cradle/db db:migrate
+pnpm db:migrate
 pnpm dev
 ```
 
-Next.js natively loads `.env.local` from each app directory. Set the OpenAI and Firecrawl keys in `apps/runtime/.env.local`; set Studio's public runtime URL in `apps/studio/.env.local`. The Worker loads the Runtime environment with `dotenv`, so the local backend uses one configuration file. The commands above start the local PostgreSQL service, apply the committed Drizzle migrations, then launch Studio (`3000`), Runtime (`3002`), and Worker. Open Studio at `http://localhost:3000`, approve the returned page snapshot, choose a curated Petdex companion, then paste the install snippet into your site.
+Studio requires a database connection and Better Auth configuration in `apps/studio/.env.local`:
 
-Set `CRADLE_WIDGET_TOKEN_SECRET` to a random 32-byte secret in every production Runtime deployment. Runtime mints five-minute, origin-bound bearer tokens from the widget manifest endpoint; chat rejects requests without one.
+```text
+DATABASE_URL=postgres://cradle:cradle@localhost:5432/cradle
+BETTER_AUTH_SECRET=replace_with_a_random_32_byte_secret
+BETTER_AUTH_URL=http://localhost:3000
+```
 
-To test a public crawl on a local website, set `CRADLE_DEVELOPMENT_EMBED_ORIGIN=http://localhost:3004` in Runtime's `.env.local`. It is honored only while Runtime runs in development mode, so production installations always use the crawled site's own origin.
+Whether you deploy Cradle yourself or fork it, Studio uses the same Better Auth account system. Create Better Auth's required tables with its CLI rather than writing a migration by hand:
+
+```sh
+pnpm --dir apps/studio dlx auth@latest migrate
+```
+
+Open Studio at `http://localhost:3000`. The standard development command starts Studio, Runtime, and the widget build watcher.
+
+Set the following in `apps/runtime/.env.local`:
+
+```text
+GOOGLE_GENERATIVE_AI_API_KEY=...
+FIRECRAWL_API_KEY=...
+DATABASE_URL=postgres://cradle:cradle@localhost:5432/cradle
+CRADLE_WIDGET_TOKEN_SECRET=replace_with_a_random_32_byte_secret
+CRADLE_STUDIO_ORIGIN=http://localhost:3000
+CRADLE_MODEL_ID=gemini-2.5-flash
+```
+
+`CRADLE_DEVELOPMENT_EMBED_ORIGIN` is optional and works only during local development. It lets a local integration target use a source bundle crawled from a public URL.
+
+## Install on a site
+
+Studio generates this snippet after you approve sources and choose a companion:
 
 ```html
 <script src="https://runtime.example/widget.js"></script>
-<cradle-resident
-  installation-id="YOUR_INSTALLATION"
+<cradle-character
+  site-id="YOUR_PROJECT_ID"
   api-base="https://runtime.example"
-></cradle-resident>
+></cradle-character>
 ```
 
-The widget runs in a Shadow DOM, preserves a first-party anonymous visitor and conversation ID, and only the configured installation origin can use its chat endpoint. Its public character package is available at `/api/installations/:id/pet` and follows the portable `pet.json` + `spritesheet.webp` convention used by Codex-compatible pets.
+The host site controls placement. Omit `placement` for a draggable floating character, or render the element where it belongs in the page and set `placement="inline"`:
 
-## Companion packages
-
-Cradle uses the same practical asset shape as Codex pets: a transparent `1536`-pixel-wide WebP atlas with 192×208 cells and at least nine base rows. Cradle maps website events to the relevant rows (`idle`, `waving`, `review`, `running`, `jumping`, and `failed`) rather than treating the image as a static chatbot avatar. Extended Petdex sheets are preserved and their extra rows remain available for future mappings.
-
-Studio currently uses only Petdex assets hosted under its curated collection. Community-submitted assets are intentionally excluded because each creator retains its own asset rights. Runtime imports the selected WebP into Cradle storage, verifies its 8×9 geometry, and records the source URL, submitter, Petdex metadata URL, and checksum. It does not hotlink the live widget to Petdex.
-
-## Deploy
-
-Deploy `apps/runtime` with a managed PostgreSQL database and deploy `apps/studio` wherever you serve Next.js. Set Studio's `NEXT_PUBLIC_CRADLE_RUNTIME_URL` to the public runtime URL **before building Studio**. Runtime requires:
-
-```text
-OPENAI_API_KEY=...
-FIRECRAWL_API_KEY=...
-CRADLE_MODEL_ID=gpt-5.6-sol
-CRADLE_WIDGET_TOKEN_SECRET=replace_with_a_random_32_byte_secret
-CRADLE_STUDIO_ORIGIN=https://your-studio.vercel.app
-DATABASE_URL=postgres://...
+```html
+<aside class="product-guide">
+  <cradle-character
+    site-id="YOUR_PROJECT_ID"
+    api-base="https://runtime.example"
+    placement="inline"
+  ></cradle-character>
+</aside>
 ```
 
-Run `pnpm --filter @cradle/db db:migrate` as the release migration command before starting a new runtime version. Then open Studio, enter the exact public Qualra origin (for example, `https://qualra.example`), and paste the generated snippet into that site. The installation origin must exactly match the browser origin: `www` and non-`www` are different origins.
+The public project ID is safe to embed. The management credential is never included in the embed snippet or sent to visitors; the widget never receives it.
 
-The runtime falls back to memory only when `DATABASE_URL` is intentionally omitted for a throwaway local experiment. Never use that mode for a hosted installation.
+`@cradle/widget` is publishable as an Apache-2.0 IIFE package; its public asset is `@cradle/widget/widget.js`. Runtime delivery remains the default because it keeps the widget version aligned with the runtime contract.
+
+The widget stores an anonymous visitor ID and conversation ID in the visitor's first-party browser storage, then includes both in emitted browser events. Your host application decides whether and how to persist or authenticate them.
+
+Characters begin in the browser's bottom-right corner. Visitors can drag the character itself; Cradle stores that local position per installation in first-party browser storage. Its welcome message floats above the character without an enclosing chat window.
+
+## Runtime behaviour
+
+Cradle itself never assumes a sales, support, or chat workflow: compose the visual widget with your own tools, policies, model, and datastore while keeping the visual contract.
+
+Cradle intentionally does not accept a raw customer identity from browser JavaScript. If your custom runtime needs authenticated context, issue and validate a short-lived assertion from your own backend.
+
+## Brand profiles
+
+Studio uses [OpenBrand](https://github.com/tight-studio/openbrand) as a best-effort, self-hostable source of public brand signals: name, colors, logos, and backdrop images. It never replaces the source review. Brand data is stored with the installation so an operator can use it to guide later character design and animation choices.
+
+## Animation packages
+
+Cradle reads the complete public Petdex manifest, lets an operator choose a character, validates its sprite atlas, and pins a deployment copy before publishing it. Studio preserves the character name and submitter attribution; Petdex assets remain owned by their submitters.
+
+Petdex source code is MIT, but companion assets remain owned by their submitters. Self-hosted operators are responsible for selecting assets they are allowed to use; do not assume every community asset has commercial-use permission.
+
+## Qualra
+
+Qualra is a separate product. Cradle can link operators to Qualra when they need verified customer identity, long-term memory, and product learning, but Cradle never forwards conversation data to Qualra and does not require a Qualra account.
 
 ## Repository
 
-- `apps/studio` — URL onboarding, source review, curated companion selection, and install handoff.
-- `apps/runtime` — crawl onboarding, companion import, installation management, streaming, companion delivery, and widget delivery.
-- `apps/worker` — legacy durable identity and custom-atlas generation jobs; Studio no longer invokes this path.
-- `packages/widget` — framework-free `cradle-resident` custom element, compiled and served by Runtime at `/widget.js`.
-- `packages/crawler` — bounded, same-origin Firecrawl ingestion.
-- `packages/core` — Zod contracts shared by every deployment.
-- `packages/db` — Drizzle schema, versioned migrations, and durable store adapter.
-- `packages/jobs` — Postgres-backed job contracts shared by Runtime and Worker.
-- `packages/media` — immutable filesystem and S3-compatible asset stores, plus storage safety tests.
-- `packages/pet` — atlas geometry, chroma cleanup, frame validation, composition, and state metadata.
+- `apps/studio` — the authenticated four-screen character workflow.
+- `apps/runtime` — crawl onboarding, reviewed knowledge, brand extraction, character manifests, and widget delivery.
+- `packages/widget` — framework-free `<cradle-character>` custom element and browser API.
+- `packages/core` — Zod contracts shared by Studio, Runtime, and custom deployments.
+- `packages/crawler` — bounded Firecrawl ingestion.
+- `packages/db` — Drizzle schema, migrations, and durable PostgreSQL store.
+- `packages/pet` — sprite atlas validation and animation metadata.
 
-## Operations
+## Deploy
 
-For the complete Docker stack, configure `apps/runtime/.env` or `apps/runtime/.env.local`, then run `pnpm dev:docker`. Docker ignores host dependencies and build artifacts, prunes the monorepo to each service's dependency graph, then builds Studio, Runtime, Worker, and migrations independently. Compose loads the existing Runtime configuration directly into Runtime and Worker, applies the committed database migrations, then starts the services. PostgreSQL and generated assets are retained in the `cradle-postgres` and `cradle-assets` volumes; use `pnpm dev:docker:down -v` only when you deliberately want to erase local data. The runtime does not create or alter tables itself.
+Deploy Studio and Runtime as separate Node.js services, each from the same repository. Runtime needs PostgreSQL, persistent asset storage, and the environment variables above. Run the committed migration before a new Runtime release:
 
-The core review/import pipeline is now in place, but this is **not yet a production-ready customer deployment**. Do not put customer traffic on it until owner accounts/key recovery, encrypted secrets, rate limiting, automated asset QA, and operational monitoring are complete.
+```sh
+pnpm --filter @cradle/db db:migrate
+```
 
-Self-hosted deployments use the shared local `cradle-assets` volume by default. Managed deployments can set `CRADLE_ASSET_STORAGE=s3` and provide S3-compatible credentials; this supports AWS S3, Cloudflare R2, or MinIO without changing the asset contract.
-
-The crawler is deliberately public, same-domain, bounded (20 pages by default), and leaves Firecrawl's robots behavior enabled. Content is returned as a snapshot for review before it becomes part of the installed runtime bundle.
+For a local complete stack, run `pnpm dev:docker`. Docker starts PostgreSQL, migrations, Studio, and Runtime.
 
 ## Development
 
 ```sh
-pnpm lint
 pnpm check-types
-pnpm turbo run build --filter=runtime
+pnpm test
+pnpm build
 ```
 
-Use `pnpm` for all package operations. See `CONTRIBUTING.md` for contribution and release guidance, `SECURITY.md` for vulnerability reporting, and `LICENSE` for Apache-2.0 terms.
+Use `pnpm` for all dependency operations. See `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `NOTICE`, and `LICENSE` for OSS contribution and security policy details.

@@ -13,10 +13,14 @@
     "check-types": {
       "dependsOn": ["^check-types"]
     },
+    "test": {
+      "dependsOn": ["^test"],
+      "outputs": []
+    },
     "dev": {
       "cache": false,
       "persistent": true
     }
   },
-  "globalEnv": ["CRADLE_MODEL_ID", "CRADLE_STUDIO_ORIGIN", "CRADLE_DEVELOPMENT_EMBED_ORIGIN", "NODE_ENV"]
+  "globalEnv": ["BETTER_AUTH_SECRET", "BETTER_AUTH_URL", "CRADLE_DEVELOPMENT_EMBED_ORIGIN", "CRADLE_MODEL_ID", "CRADLE_STUDIO_ORIGIN", "CRADLE_WIDGET_TOKEN_SECRET", "DATABASE_URL", "NODE_ENV"]
 }
