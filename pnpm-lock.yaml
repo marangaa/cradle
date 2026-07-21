@@ -38,7 +38,7 @@ importers:
       '@cradle/pet':
         specifier: workspace:*
         version: link:../../packages/pet
-      '@cradle/widget':
+      '@maranga/cradle':
         specifier: workspace:*
         version: link:../../packages/widget
       ai:

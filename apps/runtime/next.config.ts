@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     "@cradle/crawler",
     "@cradle/db",
     "@cradle/media",
-    "@cradle/widget",
+    "@maranga/cradle",
   ],
 };
 export default nextConfig;

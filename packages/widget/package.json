@@ -1,8 +1,13 @@
 {
-  "name": "@cradle/widget",
+  "name": "@maranga/cradle",
   "version": "0.1.0",
   "type": "module",
   "license": "Apache-2.0",
+  "description": "Framework-free animated website characters for Cradle.",
+  "keywords": ["web-components", "custom-elements", "widget", "animation", "cradle"],
+  "repository": { "type": "git", "url": "git+https://github.com/marangaa/cradle.git", "directory": "packages/widget" },
+  "homepage": "https://github.com/marangaa/cradle#readme",
+  "bugs": { "url": "https://github.com/marangaa/cradle/issues" },
   "files": ["dist"],
   "sideEffects": true,
   "module": "./dist/widget.js",
@@ -14,6 +19,6 @@
     "./script": "./dist/widget.iife.js",
     "./widget.js": "./dist/widget.iife.js"
   },
-  "scripts": { "dev": "vite build --watch", "build": "vite build", "check-types": "tsc --noEmit", "prepack": "pnpm build" },
+  "scripts": { "dev": "vite build --watch", "build": "vite build", "check-types": "tsc --noEmit", "prepack": "vite build" },
   "devDependencies": { "@repo/typescript-config": "workspace:*", "vite": "^7.0.0" }
 }

@@ -17,7 +17,7 @@
     "@cradle/db": "workspace:*",
     "@cradle/media": "workspace:*",
     "@cradle/pet": "workspace:*",
-    "@cradle/widget": "workspace:*",
+    "@maranga/cradle": "workspace:*",
     "ai": "^7.0.31",
     "next": "16.2.0",
     "openbrand": "^0.2.3",

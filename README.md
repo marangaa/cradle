@@ -100,7 +100,7 @@ The host site controls placement. Omit `placement` for a draggable floating char
 
 The public project ID is safe to embed. The management credential is never included in the embed snippet or sent to visitors; the widget never receives it.
 
-`@cradle/widget` is publishable as an Apache-2.0 IIFE package; its public asset is `@cradle/widget/widget.js`. Runtime delivery remains the default because it keeps the widget version aligned with the runtime contract.
+`@maranga/cradle` is publishable as an Apache-2.0 IIFE package; its public asset is `@maranga/cradle/widget.js`. Runtime delivery remains the default because it keeps the widget version aligned with the runtime contract.
 
 The widget stores an anonymous visitor ID and conversation ID in the visitor's first-party browser storage, then includes both in emitted browser events. Your host application decides whether and how to persist or authenticate them.
 
