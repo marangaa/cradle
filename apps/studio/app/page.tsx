@@ -1,9 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Background, Controls, Handle, Position, ReactFlow, useNodesState, type Edge, type Node, type NodeProps } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 type Page = { url: string; title: string; markdown: string };
 type Presence = {
@@ -39,15 +36,6 @@ type ImportedCompanion = CatalogCompanion & {
 };
 type Screen = "connect" | "review" | "shape" | "live";
 type PreviewState = "idle" | "greeting" | "listening" | "thinking" | "responding" | "resolved" | "error";
-
-type ComposerNodeData = {
-  eyebrow: string;
-  title: string;
-  detail: string;
-  status: string;
-  visual?: ReactNode;
-  onOpen: () => void;
-};
 
 const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ?? "http://localhost:3002";
 const sessionKey = "cradle:studio:operator-session";
@@ -170,7 +158,7 @@ function InstallCode({
   </section>;
 }
 
-/** Renders an actionable part of a Cradle project on the visual workspace. */
+/* React Flow workspace experiment retained temporarily for reference.
 function ComposerNode({ data }: NodeProps<Node<ComposerNodeData, "composer">>) {
   return <article className="composer-node">
     <Handle type="target" position={Position.Left} />
@@ -187,7 +175,7 @@ function ComposerNode({ data }: NodeProps<Node<ComposerNodeData, "composer">>) {
 
 const composerNodeTypes = { composer: ComposerNode };
 
-/** Keeps Cradle's configuration beside the thing the operator is creating. */
+ * Keeps Cradle's configuration beside the thing the operator is creating.
 function PresenceComposer({
   session,
   presence,
@@ -343,6 +331,7 @@ function PresenceComposer({
     </AnimatePresence>
   </main>;
 }
+*/
 
 export default function StudioHome() {
   const [screen, setScreen] = useState<Screen>("connect");
@@ -576,31 +565,6 @@ export default function StudioHome() {
 
   const canShape = Boolean(session && reviewed);
   const canGoLive = Boolean(session && reviewed && companion);
-
-  if (session && presence) {
-    return <>
-      <PresenceComposer
-        session={session}
-        presence={presence}
-        companion={companion}
-        catalog={catalog}
-        includedUrls={includedUrls}
-        screen={screen}
-        busy={busy}
-        copied={copied}
-        onScreenChange={setScreen}
-        onPresenceChange={setPresence}
-        onTogglePage={togglePage}
-        onSaveKnowledge={saveKnowledge}
-        onSavePresence={savePresence}
-        onChooseCompanion={chooseCompanion}
-        onCopy={copySnippet}
-        onReset={reset}
-      />
-      {(busy || notice) && <p className="status" role="status">{busy ?? notice}</p>}
-      {error && <p className="error" role="alert">{error}</p>}
-    </>;
-  }
 
   return <main className="studio-shell">
     <header className="studio-topbar">
