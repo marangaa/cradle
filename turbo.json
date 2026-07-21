@@ -13,6 +13,11 @@
     "check-types": {
       "dependsOn": ["^check-types"]
     },
+    "render": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "../../public/video/**"],
+      "outputs": ["out/**"]
+    },
     "test": {
       "dependsOn": ["^test"],
       "outputs": []

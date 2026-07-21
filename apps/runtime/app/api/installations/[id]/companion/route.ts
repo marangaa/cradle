@@ -1,12 +1,11 @@
+import { createHash } from "node:crypto";
 import { companionPackageSchema } from "@cradle/core";
-import { createAssetStoreFromEnv } from "@cradle/media";
 import { validatePetAtlas } from "@cradle/pet";
 import { z } from "zod";
 import { isInstallationManager } from "../../../../lib/management";
 import { getPetdexCompanion } from "../../../../lib/petdex";
 import { store } from "../../../../lib/store";
 
-const assetStore = createAssetStoreFromEnv();
 const selectionSchema = z.object({ provider: z.literal("petdex"), slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/) });
 const maxSpriteBytes = 12 * 1024 * 1024;
 
@@ -56,7 +55,6 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   } catch (cause) {
     return Response.json({ error: cause instanceof Error ? cause.message : "The selected Petdex spritesheet is not compatible with Cradle." }, { status: 422, headers });
   }
-  const stored = await assetStore.put({ key: `installations/${installationId}/companions/petdex/${upstream.slug}/${crypto.randomUUID()}.webp`, body: sprite, contentType: "image/webp", visibility: "published" });
   const companion = companionPackageSchema.parse({
     id: crypto.randomUUID(),
     installationId,
@@ -68,8 +66,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     submittedBy: upstream.submittedBy,
     sourceUrl: upstream.spritesheetUrl,
     petJsonUrl: upstream.petJsonUrl,
-    objectKey: stored.key,
-    checksum: stored.checksum,
+    objectKey: upstream.spritesheetUrl,
+    checksum: createHash("sha256").update(sprite).digest("hex"),
     contentType: "image/webp",
     ...atlas,
     createdAt: new Date().toISOString(),

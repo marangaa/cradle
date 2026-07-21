@@ -47,5 +47,4 @@ export const companionPackages = pgTable("companion_packages", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => [
   uniqueIndex("companion_packages_installation_idx").on(table.installationId),
-  uniqueIndex("companion_packages_object_key_idx").on(table.objectKey),
 ]);

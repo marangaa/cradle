@@ -6,7 +6,6 @@ const nextConfig: NextConfig = {
     "@cradle/core",
     "@cradle/crawler",
     "@cradle/db",
-    "@cradle/media",
     "@maranga/cradle",
   ],
 };

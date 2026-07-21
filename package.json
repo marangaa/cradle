@@ -5,6 +5,8 @@
     "build": "turbo run build",
     "db:migrate": "pnpm --filter @cradle/db db:migrate",
     "dev": "turbo run dev --filter=studio --filter=runtime --filter=@maranga/cradle",
+    "video": "pnpm --filter @cradle/video dev",
+    "video:render": "pnpm --filter @cradle/video render",
     "dev:docker": "docker compose up --build",
     "dev:docker:down": "docker compose down",
     "lint": "turbo run lint",

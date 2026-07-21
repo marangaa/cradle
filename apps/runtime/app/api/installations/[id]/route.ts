@@ -43,7 +43,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   const companion = await store.getCompanionPackage(id);
   const atlas = companion ? {
-    url: `/api/installations/${id}/sprite`,
+    url: companion.sourceUrl,
     columns: companion.columns,
     rows: companion.rows,
     cellWidth: companion.cellWidth,
