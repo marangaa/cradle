@@ -7,8 +7,10 @@ export async function GET() {
   const widget = await readFile(widgetPath, "utf8");
   return new Response(widget, {
     headers: {
+      "access-control-allow-origin": "*",
       "cache-control": "public, max-age=0, must-revalidate",
       "content-type": "application/javascript; charset=utf-8",
     },
   });
+
 }
