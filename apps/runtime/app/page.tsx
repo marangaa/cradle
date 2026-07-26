@@ -9,9 +9,8 @@ const endpoints = [
 ];
 
 export default function RuntimeHome() {
-  const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
-
   return (
+
     <main style={{ width: "min(900px, calc(100% - 48px))", margin: "0 auto", padding: "48px 0 96px" }}>
       {/* Header */}
       <header style={{ marginBottom: 48 }}>
@@ -71,13 +70,7 @@ export default function RuntimeHome() {
         </div>
       </section>
 
-      {/* Widget embed example */}
-      <section style={{ marginTop: 40 }}>
-        <h2 style={{ margin: "0 0 14px", fontSize: "1.1rem", fontWeight: 780, letterSpacing: "-.04em" }}>Widget embed</h2>
-        <pre style={{ margin: 0, border: "3px solid #111", background: "#111", color: "#e7ff36", boxShadow: "5px 5px 0 #111", padding: "16px 20px", fontFamily: "monospace", fontSize: ".7rem", lineHeight: 1.7, overflowX: "auto", whiteSpace: "pre" }}>
-          {`<script src="${runtimeUrl}/widget.js"></script>\n<cradle-character\n  site-id="<your-installation-id>"\n  api-base="${runtimeUrl}"\n></cradle-character>`}
-        </pre>
-      </section>
     </main>
   );
 }
+
