@@ -213,7 +213,8 @@ class CradleCharacter extends HTMLElement {
 
   private animateCompanions(atlas: PetAtlas, sprite: { row: number; frames: number; durationMs: number }) {
     const yPosition = (sprite.row / Math.max(atlas.rows - 1, 1)) * 100;
-    const xPosition = (Math.max(sprite.frames - 1, 0) / Math.max(atlas.columns - 1, 1)) * 100;
+    const numSteps = Math.max(sprite.frames - 1, 1);
+    const xPosition = (numSteps / Math.max(atlas.columns - 1, 1)) * 100;
     this.petAnimations.forEach((animation) => animation.cancel());
     this.petAnimations = [];
     this.shadow.querySelectorAll<HTMLElement>(".companion").forEach((companion) => {
@@ -221,10 +222,11 @@ class CradleCharacter extends HTMLElement {
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       this.petAnimations.push(companion.animate(
         [{ backgroundPosition: "0% " + yPosition + "%" }, { backgroundPosition: xPosition + "% " + yPosition + "%" }],
-        { duration: sprite.durationMs, iterations: Infinity, easing: "steps(" + sprite.frames + ", end)" },
+        { duration: sprite.durationMs, iterations: Infinity, easing: "steps(" + numSteps + ", end)" },
       ));
     });
   }
+
 
   private startDrag(event: PointerEvent) {
     if (event.button !== 0 || this.placement === "inline") return;
