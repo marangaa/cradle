@@ -19,7 +19,9 @@ import { authClient } from "./lib/auth-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type WebState = "idle" | "greeting" | "listening" | "thinking" | "responding" | "resolved" | "error";
 type Page = { url: string; title: string; markdown: string };
+
 type Character = { displayName: string; greeting: string };
 type Installation = { id: string; name: string };
 type OwnedInstallation = {
@@ -186,9 +188,11 @@ function CompanionSkeleton() {
   );
 }
 
-function CharacterPreview({ character, companion }: { character: Character; companion: ImportedCompanion }) {
+function CharacterPreview({ character, companion, overrideState }: { character: Character; companion: ImportedCompanion; overrideState?: WebState }) {
   const [state, setState] = useState<PreviewState>("idle");
   const [open, setOpen] = useState(false);
+
+  const activeState = overrideState ?? state;
 
   function togglePreview() {
     setOpen((current) => {
@@ -214,13 +218,94 @@ function CharacterPreview({ character, companion }: { character: Character; comp
         aria-expanded={open}
       >
         <span className="preview-drag-handle" aria-hidden="true">⠿</span>
-        <CompanionSprite companion={companion} state={state} className="trigger-sprite" />
+        <CompanionSprite companion={companion} state={activeState} className="trigger-sprite" />
       </button>
     </div>
   );
 }
 
-function InstallCode({ installationId, copied, onCopy }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void> }) {
+
+const PLAYGROUND_STATES: { id: WebState; label: string; icon: string; snippet: string }[] = [
+  { id: "idle", label: "Idle", icon: "🟢", snippet: 'window.Cradle?.setState("idle");' },
+  { id: "greeting", label: "Greeting / Wave", icon: "👋", snippet: 'window.Cradle?.setState("greeting");' },
+  { id: "listening", label: "Listening", icon: "🔍", snippet: 'window.Cradle?.setState("listening");' },
+  { id: "thinking", label: "Thinking / Running", icon: "⚡", snippet: 'window.Cradle?.setState("thinking");' },
+  { id: "resolved", label: "Resolved / Jump", icon: "🎉", snippet: 'window.Cradle?.resolveAction(true);' },
+  { id: "error", label: "Error / Dizzy", icon: "❌", snippet: 'window.Cradle?.resolveAction(false);' },
+];
+
+function CharacterStatePlayground({ onTestState }: { onTestState(state: WebState): void }) {
+  const [activeState, setActiveState] = useState<WebState>("idle");
+  const [copiedState, setCopiedState] = useState(false);
+
+  const current = PLAYGROUND_STATES.find((s) => s.id === activeState) ?? PLAYGROUND_STATES[0]!;
+
+
+  const testState = (state: WebState) => {
+    setActiveState(state);
+    onTestState(state);
+  };
+
+  const copySnippet = async () => {
+    await navigator.clipboard.writeText(current.snippet);
+    setCopiedState(true);
+    setTimeout(() => setCopiedState(false), 2000);
+  };
+
+  return (
+    <div style={{ marginTop: 22, paddingTop: 18, borderTop: "2px dashed var(--soft)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <strong style={{ fontSize: ".85rem", fontWeight: 780, color: "#111" }}>
+            Character State Playground
+          </strong>
+          <p style={{ margin: "2px 0 0", fontSize: ".72rem", color: "var(--muted)", fontFamily: "var(--mono)" }}>
+            Test your companion&apos;s animations live & copy the JS call to drive it from your app.
+          </p>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
+        {PLAYGROUND_STATES.map((st) => (
+          <button
+            key={st.id}
+            type="button"
+            className={`button${activeState === st.id ? " primary" : ""}`}
+            onClick={() => testState(st.id)}
+            style={{ fontSize: ".68rem", padding: "5px 9px", gap: 5 }}
+          >
+            <span>{st.icon}</span>
+            <span>{st.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 12, background: "var(--ink)", padding: "10px 12px", border: "2px solid #111", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <code style={{ fontFamily: "var(--mono)", fontSize: ".7rem", color: "var(--yellow)" }}>
+          {current.snippet}
+        </code>
+        <button
+          type="button"
+          onClick={() => void copySnippet()}
+          style={{
+            background: "none",
+            border: "1px solid var(--yellow)",
+            color: "var(--yellow)",
+            fontFamily: "var(--mono)",
+            fontSize: ".64rem",
+            padding: "3px 8px",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          {copiedState ? "Copied!" : "Copy JS call"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function InstallCode({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: WebState): void }) {
   const [tab, setTab] = useState<"script" | "npm">("script");
 
   const scriptSnippet = `<script src="${runtime}/widget.js"></script>\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n></cradle-character>`;
@@ -260,17 +345,21 @@ function InstallCode({ installationId, copied, onCopy }: { installationId: strin
       <button className="button primary" style={{ marginTop: 14 }} onClick={() => void onCopy(activeSnippet)}>
         {copied ? "Copied to clipboard" : `Copy ${tab === "script" ? "script tag" : "NPM snippet"}`}
       </button>
+
+      <CharacterStatePlayground onTestState={onTestState} />
     </section>
   );
 }
 
-function LiveIntegrationSection({ installationId, copied, onCopy }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void> }) {
+
+function LiveIntegrationSection({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: WebState): void }) {
   return (
     <div className="live-integration-wrapper">
       <div className="live-dual-grid">
         {/* Left Column: Embed Code */}
         <div className="live-col left-col">
-          <InstallCode installationId={installationId} copied={copied} onCopy={onCopy} />
+          <InstallCode installationId={installationId} copied={copied} onCopy={onCopy} onTestState={onTestState} />
+
           <div className="connector-node node-left" title="Cradle Widget Connection">
             <span className="node-dot" />
           </div>
@@ -408,6 +497,8 @@ export default function StudioHome() {
   const [screen, setScreen]               = useState<Screen>("connect");
   const [siteUrl, setSiteUrl]             = useState("");
   const [session, setSession]             = useState<StudioSession | null>(null);
+  const [playgroundState, setPlaygroundState] = useState<WebState | undefined>(undefined);
+
   const [pickerDismissed, setPickerDismissed] = useState(false);
   const [includedUrls, setIncludedUrls]   = useState<Set<string>>(new Set());
   const [character, setCharacter]         = useState<Character | null>(null);
@@ -988,15 +1079,20 @@ export default function StudioHome() {
                 <h1>Put it on your site.</h1>
                 <p>{companion.displayName} is ready to meet people on your website.</p>
               </div>
-              <LiveIntegrationSection installationId={session.installation.id} copied={copied} onCopy={copySnippet} />
+              <LiveIntegrationSection
+                installationId={session.installation.id}
+                copied={copied}
+                onCopy={copySnippet}
+                onTestState={(st) => setPlaygroundState(st)}
+              />
             </section>
-
           )}
 
           {/* Floating character preview */}
           {hasPreview && character && companion && (
-            <CharacterPreview character={character} companion={companion} />
+            <CharacterPreview character={character} companion={companion} overrideState={playgroundState} />
           )}
+
         </>
       )}
     </main>

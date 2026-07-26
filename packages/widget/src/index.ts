@@ -19,9 +19,11 @@ type CradleController = {
   close(siteId?: string): void;
   toggle(siteId?: string): void;
   trigger(action: CradleAction, siteId?: string): void;
+  resolveAction(success?: boolean, siteId?: string): void;
   setState(state: WebState, siteId?: string): void;
   setContext(context: Record<string, unknown>, siteId?: string): void;
 };
+
 
 declare global {
   interface Window {
@@ -71,6 +73,9 @@ class CradleCharacter extends HTMLElement {
     this.petAnimations = [];
   }
 
+  private stateTimer: ReturnType<typeof setTimeout> | null = null;
+  private currentState: WebState = "idle";
+
   /** Opens the character and emits an activation event for the host experience. */
   openPanel() {
     this.open = true;
@@ -80,11 +85,19 @@ class CradleCharacter extends HTMLElement {
     trigger?.setAttribute("aria-expanded", "true");
     this.setVisualState("greeting");
     this.emit("cradle:open", this.eventContext());
+
+    if (this.stateTimer) clearTimeout(this.stateTimer);
+    this.stateTimer = setTimeout(() => {
+      if (this.open && this.currentState === "greeting") {
+        this.setVisualState("idle");
+      }
+    }, 2500);
   }
 
   /** Closes the character without discarding the host-owned visitor context. */
   closePanel() {
     this.open = false;
+    if (this.stateTimer) clearTimeout(this.stateTimer);
     const panel = this.shadow.querySelector(".panel") as HTMLElement | null;
     const trigger = this.shadow.querySelector(".trigger") as HTMLButtonElement | null;
     if (panel) panel.hidden = true;
@@ -102,10 +115,27 @@ class CradleCharacter extends HTMLElement {
     const normalized = typeof action === "string" ? { type: "action", value: action } : action;
     this.setVisualState("listening");
     this.emit("cradle:action", { ...this.eventContext(), action: normalized });
+
+    if (this.stateTimer) clearTimeout(this.stateTimer);
+    this.stateTimer = setTimeout(() => {
+      if (this.currentState === "listening") {
+        this.setVisualState("thinking");
+      }
+    }, 1000);
+  }
+
+  /** Finishes an ongoing action with a celebration jump or error fallback. */
+  resolveAction(success = true) {
+    this.setVisualState(success ? "resolved" : "error");
+    if (this.stateTimer) clearTimeout(this.stateTimer);
+    this.stateTimer = setTimeout(() => {
+      this.setVisualState("idle");
+    }, 2200);
   }
 
   /** Updates the companion animation without coupling it to a particular workflow. */
   setVisualState(state: WebState) {
+    this.currentState = state;
     const sprite = this.atlas?.states[stateRows[state]] ?? this.atlas?.states.idle;
     if (sprite && this.atlas) this.animateCompanions(this.atlas, sprite);
     this.emit("cradle:state", { ...this.eventContext(), state });
@@ -116,6 +146,7 @@ class CradleCharacter extends HTMLElement {
     this.pageContext = { ...this.pageContext, ...context };
     this.emit("cradle:context", this.eventContext());
   }
+
 
   private render() {
     this.shadow.innerHTML = [
@@ -259,6 +290,8 @@ window.Cradle = {
   close: (siteId) => getCharacter(siteId)?.closePanel(),
   toggle: (siteId) => getCharacter(siteId)?.togglePanel(),
   trigger: (action, siteId) => getCharacter(siteId)?.trigger(action),
+  resolveAction: (success, siteId) => getCharacter(siteId)?.resolveAction(success),
   setState: (state, siteId) => getCharacter(siteId)?.setVisualState(state),
   setContext: (context, siteId) => getCharacter(siteId)?.setContext(context),
 };
+
