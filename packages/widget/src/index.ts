@@ -310,3 +310,19 @@ window.Cradle = {
   setContext: (context, siteId) => getCharacter(siteId)?.setContext(context),
 };
 
+type CradleCharacterElementProps = {
+  "site-id"?: string;
+  "api-base"?: string;
+  placement?: "floating" | "inline";
+};
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      "cradle-character": CradleCharacterElementProps & Record<string, unknown>;
+    }
+  }
+}
+
+
+
