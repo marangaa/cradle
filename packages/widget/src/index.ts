@@ -186,10 +186,7 @@ class CradleCharacter extends HTMLElement {
   private async loadManifest() {
     try {
       const baseUrl = (this.apiBase || "").replace(/\/$/, "");
-      const response = await fetch(baseUrl + "/api/installations/" + this.siteId, {
-        mode: "cors",
-        credentials: "omit",
-      });
+      const response = await fetch(baseUrl + "/api/installations/" + this.siteId);
       if (!response.ok) throw new Error("The character manifest could not be loaded.");
       const manifest = await response.json() as { character: Character; assets: { atlas: PetAtlas } | null };
       const shell = this.shadow.querySelector(".shell") as HTMLElement;
@@ -209,21 +206,17 @@ class CradleCharacter extends HTMLElement {
 
   private configureAtlas(atlas: PetAtlas) {
     const baseUrl = (this.apiBase || "").replace(/\/$/, "");
-    let url = (atlas.url.startsWith("http://") || atlas.url.startsWith("https://"))
+    const url = (atlas.url.startsWith("http://") || atlas.url.startsWith("https://"))
       ? atlas.url
       : baseUrl + atlas.url;
-
-    if (url.includes("assets.petdex.dev")) {
-      url = baseUrl + "/api/assets/proxy?url=" + encodeURIComponent(url);
-    }
 
     this.atlas = { ...atlas, url };
     this.shadow.querySelectorAll<HTMLElement>(".companion").forEach((companion) => {
       companion.style.backgroundImage = 'url("' + url + '")';
-
       companion.style.backgroundSize = (this.atlas?.columns ?? 8) * 100 + "% " + (this.atlas?.rows ?? 9) * 100 + "%";
     });
   }
+
 
 
   private animateCompanions(atlas: PetAtlas, sprite: { row: number; frames: number; durationMs: number }) {
