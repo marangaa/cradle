@@ -51,8 +51,11 @@ export class PostgresStore implements CradleStore {
   constructor(private readonly database: CradleDatabase) {}
 
   async getInstallation(id: string): Promise<Installation | null> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) return null;
     const row = await this.database.query.installations.findFirst({ where: eq(installations.id, id) });
     if (!row) return null;
+
 
     return {
       id: row.id,
