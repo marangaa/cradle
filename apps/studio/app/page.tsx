@@ -307,8 +307,10 @@ function CharacterStatePlayground({ onTestState }: { onTestState(state: WebState
 
 function InstallCode({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: WebState): void }) {
   const [tab, setTab] = useState<"script" | "npm">("script");
+  const runtime = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:3002";
 
   const scriptSnippet = `<script src="${runtime}/widget.js"></script>\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n></cradle-character>`;
+
 
   const npmSnippet = `# 1. Install package\npnpm add @maranga/cradle\n\n# 2. Import & render in React / Next.js\nimport "@maranga/cradle";\n\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n/>`;
 
