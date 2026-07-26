@@ -264,6 +264,128 @@ function InstallCode({ installationId, copied, onCopy }: { installationId: strin
   );
 }
 
+function LiveIntegrationSection({ installationId, copied, onCopy }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void> }) {
+
+  return (
+    <div className="live-integration-wrapper">
+      <div className="live-dual-grid">
+        {/* Left Column: Embed Code */}
+        <div className="live-col left-col">
+          <div className="connector-node node-left" title="Cradle Widget Output Node">
+            <span className="node-dot" />
+            <span className="node-label">Widget Output</span>
+          </div>
+          <InstallCode installationId={installationId} copied={copied} onCopy={onCopy} />
+        </div>
+
+        {/* Center Connecting 3D String / Cable */}
+        <div className="string-connector-container" aria-hidden="true">
+          <svg className="string-svg" viewBox="0 0 110 320" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="stringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#3559ff" />
+                <stop offset="50%" stopColor="#ff8bd4" />
+                <stop offset="100%" stopColor="#e7ff36" />
+              </linearGradient>
+              <filter id="stringGlowFilter" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+
+            {/* Cable shadow */}
+            <path
+              d="M 5 125 C 60 125, 50 185, 105 185"
+              fill="none"
+              stroke="#111"
+              strokeWidth="7"
+              strokeLinecap="round"
+            />
+            {/* Glowing gradient cable */}
+            <path
+              d="M 5 125 C 60 125, 50 185, 105 185"
+              fill="none"
+              stroke="url(#stringGrad)"
+              strokeWidth="4"
+              filter="url(#stringGlowFilter)"
+              strokeLinecap="round"
+            />
+            {/* Animated data pulses */}
+            <path
+              className="pulse-path"
+              d="M 5 125 C 60 125, 50 185, 105 185"
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="2.5"
+              strokeDasharray="10 20"
+              strokeLinecap="round"
+            />
+          </svg>
+
+          <div className="pipeline-badge">
+            <span className="pulse-indicator" />
+            <span>Memory Pipeline</span>
+          </div>
+        </div>
+
+        {/* Right Column: Qualra Memory Showcase Card */}
+        <div className="live-col right-col">
+          <div className="connector-node node-right" title="Qualra Memory Input Node">
+            <span className="node-dot" />
+            <span className="node-label">Memory Engine</span>
+          </div>
+
+          <article className="qualra-card">
+            <div>
+              <span className="qualra-eyebrow">Want it to remember people?</span>
+              <div className="qualra-header">
+                <h2>Meet <em>Qualra.</em></h2>
+              </div>
+              <p className="qualra-desc">
+                Qualra helps teams build ongoing customer relationships, so every conversation can pick up where the last one left off.
+              </p>
+
+              <ul className="qualra-features">
+                <li>
+                  <span className="feature-icon">🧠</span>
+                  <div>
+                    <strong>Persistent Visitor Memory</strong>
+                    <small>Recognises returning users across site sessions</small>
+                  </div>
+                </li>
+                <li>
+                  <span className="feature-icon">🔄</span>
+                  <div>
+                    <strong>Continuous Context</strong>
+                    <small>Resumes previous conversations with full history</small>
+                  </div>
+                </li>
+                <li>
+                  <span className="feature-icon">⚡</span>
+                  <div>
+                    <strong>Zero-latency Sync</strong>
+                    <small>Instant state restoration for embedded companions</small>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <a
+              href="https://www.qualra.xyz"
+              target="_blank"
+              rel="noreferrer"
+              className="button primary qualra-cta"
+            >
+              Explore Qualra →
+            </a>
+          </article>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 
 function KindTabs({ active, onChange }: { active: KindFilter; onChange(k: KindFilter): void }) {
   return (
@@ -873,16 +995,9 @@ export default function StudioHome() {
                 <h1>Put it on your site.</h1>
                 <p>{companion.displayName} is ready to meet people on your website.</p>
               </div>
-              <div className="live-grid">
-                <InstallCode installationId={session.installation.id} copied={copied} onCopy={copySnippet} />
-              </div>
-              <aside className="runtime-note">
-                <span className="eyebrow">Want it to remember people?</span>
-                <h3>Meet Qualra.</h3>
-                <p>Qualra helps teams build ongoing customer relationships, so every conversation can pick up where the last one left off.</p>
-              </aside>
-              <p className="qualra-link"><a href="https://www.qualra.xyz" target="_blank" rel="noreferrer">Explore Qualra</a></p>
+              <LiveIntegrationSection installationId={session.installation.id} copied={copied} onCopy={copySnippet} />
             </section>
+
           )}
 
           {/* Floating character preview */}

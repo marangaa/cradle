@@ -143,3 +143,37 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
 
 .brand-profile { border-top: 2px solid var(--ink); margin-top: 18px; padding-top: 14px; }.brand-profile > span { display: block; font-family: var(--mono); font-size: .55rem; font-weight: 700; text-transform: uppercase; }.brand-profile strong { display: block; margin: 6px 0 10px; font-size: .9rem; letter-spacing: -.04em; }.brand-profile div { display: flex; gap: 5px; flex-wrap: wrap; }.brand-profile i { width: 28px; height: 28px; border: 2px solid var(--ink); border-radius: 50%; box-shadow: 2px 2px 0 var(--ink); transition: transform .13s; }.brand-profile i:hover { transform: scale(1.18); }
+
+/* Live Integration Dual Column + 3D String Connector */
+.live-integration-wrapper { margin-top: 20px; position: relative; }
+.live-dual-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) 110px minmax(320px, 440px); align-items: stretch; gap: 0; position: relative; }
+.live-col { position: relative; display: flex; flex-direction: column; }
+.node-left { position: absolute; right: -8px; top: 125px; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; z-index: 5; }
+.node-right { position: absolute; left: -8px; top: 185px; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; z-index: 5; }
+.connector-node .node-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--yellow); border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); animation: node-pulse 2s infinite ease-in-out; }
+.connector-node .node-label { font-family: var(--mono); font-size: .55rem; font-weight: 800; text-transform: uppercase; background: var(--ink); color: var(--yellow); padding: 2px 6px; border-radius: 2px; white-space: nowrap; }
+@keyframes node-pulse { 0%, 100% { transform: scale(1); box-shadow: 2px 2px 0 var(--ink); } 50% { transform: scale(1.25); background: var(--pink); box-shadow: 3px 3px 0 var(--blue); } }
+
+.string-connector-container { position: relative; width: 110px; display: flex; align-items: center; justify-content: center; }
+.string-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+@keyframes string-data-flow { from { stroke-dashoffset: 72; } to { stroke-dashoffset: 0; } }
+.pulse-path { animation: string-data-flow 1.4s linear infinite; }
+.pipeline-badge { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 5px; background: var(--ink); color: var(--white); border: 2px solid var(--yellow); box-shadow: 3px 3px 0 var(--ink); padding: 4px 8px; font-family: var(--mono); font-size: .54rem; font-weight: 800; white-space: nowrap; z-index: 6; }
+.pulse-indicator { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: badge-glow 1.5s infinite alternate; }
+@keyframes badge-glow { from { opacity: .4; transform: scale(.8); } to { opacity: 1; transform: scale(1.2); } }
+
+.qualra-card { height: 100%; border: var(--line); background: #111111; color: #ffffff; box-shadow: var(--shadow); padding: 26px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
+.qualra-card::before { content: ""; position: absolute; top: -40px; right: -40px; width: 130px; height: 130px; background: radial-gradient(circle, rgba(231, 255, 54, .28) 0%, transparent 70%); pointer-events: none; }
+.qualra-eyebrow { display: inline-block; background: var(--yellow); color: var(--ink); font-family: var(--mono); font-size: .58rem; font-weight: 800; padding: 3px 7px; text-transform: uppercase; width: max-content; }
+.qualra-header h2 { margin: 12px 0 6px; font-size: 2.1rem; font-weight: 820; letter-spacing: -.06em; color: #fff; line-height: 1; }
+.qualra-header h2 em { font-style: normal; color: var(--yellow); }
+.qualra-desc { color: #d1d5db; font-size: .82rem; line-height: 1.55; margin: 0 0 18px; }
+.qualra-features { list-style: none; padding: 0; margin: 0 0 22px; display: flex; flex-direction: column; gap: 12px; }
+.qualra-features li { display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14); padding: 9px 11px; border-radius: 4px; }
+.feature-icon { font-size: 1.15rem; line-height: 1; }
+.qualra-features strong { display: block; font-size: .78rem; font-weight: 750; color: #f9fafb; }
+.qualra-features small { display: block; font-size: .66rem; color: #9ca3af; }
+.qualra-cta { width: 100%; background: var(--yellow) !important; color: var(--ink) !important; text-decoration: none; font-size: .78rem; font-weight: 800; border: var(--line) !important; box-shadow: 3px 3px 0 var(--ink) !important; }
+.qualra-cta:hover { background: var(--pink) !important; color: var(--ink) !important; transform: translate(-2px, -2px) !important; box-shadow: 5px 5px 0 var(--ink) !important; }
+@media (max-width: 980px) { .live-dual-grid { grid-template-columns: 1fr; gap: 28px; } .string-connector-container, .connector-node { display: none; } }
+
