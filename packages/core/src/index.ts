@@ -73,6 +73,8 @@ export const installationSchema = z.object({
   brandProfile: brandProfileSchema.optional(),
 });
 
+
+
 export type Installation = z.infer<typeof installationSchema>;
 
 export const crawlRequestSchema = z.object({

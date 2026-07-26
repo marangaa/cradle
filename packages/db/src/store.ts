@@ -12,7 +12,8 @@ export interface CradleStore {
   getInstallation(id: string): Promise<Installation | null>;
   saveInstallation(installation: Installation): Promise<void>;
   deleteInstallation(id: string, ownerId: string): Promise<boolean>;
-  listInstallationsByOwner(ownerId: string): Promise<Installation[]>;
+  listInstallationsByOwner(ownerId: string): Promise<(Installation & { updatedAt?: string })[]>;
+
   getKnowledge(installationId: string): Promise<KnowledgeSnapshot | null>;
   saveKnowledge(snapshot: KnowledgeSnapshot): Promise<void>;
   getCompanionPackage(installationId: string): Promise<CompanionPackage | null>;
@@ -66,7 +67,8 @@ export class PostgresStore implements CradleStore {
     };
   }
 
-  async listInstallationsByOwner(ownerId: string): Promise<Installation[]> {
+  async listInstallationsByOwner(ownerId: string): Promise<(Installation & { updatedAt?: string })[]> {
+
     const rows = await this.database.query.installations.findMany({ where: eq(installations.ownerId, ownerId), orderBy: [desc(installations.updatedAt)] });
     return rows.map((row) => ({
       id: row.id,
@@ -76,10 +78,12 @@ export class PostgresStore implements CradleStore {
       instructions: row.instructions,
       knowledgeVersion: row.knowledgeVersion,
       runtime: "cradle",
+      updatedAt: row.updatedAt ? row.updatedAt.toISOString() : undefined,
       ...(row.character ? { character: row.character } : {}),
       ...(row.brandProfile ? { brandProfile: row.brandProfile } : {}),
     }));
   }
+
 
   async saveInstallation(installation: Installation): Promise<void> {
     await this.database.insert(installations).values({

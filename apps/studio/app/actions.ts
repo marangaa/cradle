@@ -37,8 +37,18 @@ export async function getRuntimeHealth() {
 }
 
 export async function listOwnedInstallations() {
-  return runtimeRequest<{ installations: Array<{ id: string; name: string; knowledgeVersion: number }> }>("/api/installations");
+  return runtimeRequest<{
+    installations: Array<{
+      id: string;
+      name: string;
+      origin: string;
+      knowledgeVersion: number;
+      updatedAt?: string;
+      character?: { displayName: string; greeting: string } | null;
+    }>;
+  }>("/api/installations");
 }
+
 
 export async function deleteOwnedInstallation(installationId: string) {
   return runtimeRequest<{ ok: boolean; deletedId: string }>(`/api/installations/${installationId}`, {

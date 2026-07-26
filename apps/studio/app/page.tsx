@@ -22,7 +22,15 @@ import { authClient } from "./lib/auth-client";
 type Page = { url: string; title: string; markdown: string };
 type Character = { displayName: string; greeting: string };
 type Installation = { id: string; name: string };
-type OwnedInstallation = { id: string; name: string; knowledgeVersion: number };
+type OwnedInstallation = {
+  id: string;
+  name: string;
+  origin: string;
+  knowledgeVersion: number;
+  updatedAt?: string;
+  character?: { displayName: string; greeting: string } | null;
+};
+
 type Knowledge = { pages: Page[]; sourceUrl: string; version: number };
 type BrandProfile = {
   name: string;
@@ -523,26 +531,113 @@ export default function StudioHome() {
                     Loading your sites…
                   </p>
                 )}
-                <div className="site-list">
-                  {ownedInstallations.map((inst) => (
-                    <div key={inst.id} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-                      <button className="button" type="button" style={{ flex: 1, textAlign: "left" }} disabled={Boolean(busy)} onClick={() => void resumeInstallation(inst.id)}>
-                        {inst.name}
-                      </button>
-                      <button
-                        className="button"
-                        type="button"
-                        disabled={Boolean(busy)}
-                        onClick={(e) => void removeInstallation(e, inst.id, inst.name)}
-                        style={{ background: "#fee2e2", color: "#991b1b", padding: "0 12px", border: "2px solid #111" }}
-                        title={`Delete ${inst.name}`}
-                        aria-label={`Delete ${inst.name}`}
+                <div className="site-list" style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16 }}>
+                  {ownedInstallations.map((inst, index) => {
+                    const isLatest = index === 0;
+                    const hostname = inst.origin ? new URL(inst.origin).hostname : inst.name;
+                    const showHostname = hostname !== inst.name;
+                    const customCharacter = inst.character?.displayName && inst.character.displayName !== inst.name ? inst.character.displayName : null;
+                    const isApproved = inst.knowledgeVersion > 1;
+                    const formattedDate = inst.updatedAt
+                      ? new Date(inst.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                      : null;
+
+                    return (
+                      <article
+                        key={inst.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 16,
+                          padding: "16px 18px",
+                          background: "#fff",
+                          border: "3px solid #111",
+                          boxShadow: isLatest ? "5px 5px 0 #e7ff36, 5px 5px 0 3px #111" : "4px 4px 0 #111",
+                          position: "relative",
+                        }}
                       >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
+                        <button
+                          type="button"
+                          disabled={Boolean(busy)}
+                          onClick={() => void resumeInstallation(inst.id)}
+                          style={{
+                            flex: 1,
+                            background: "none",
+                            border: "none",
+                            padding: 0,
+                            textAlign: "left",
+                            cursor: "pointer",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <strong style={{ fontSize: "1.05rem", fontWeight: 820, color: "#111", letterSpacing: "-.02em" }}>
+                              {inst.name}
+                            </strong>
+
+                            {isLatest && (
+                              <span style={{ background: "#e7ff36", border: "2px solid #111", padding: "2px 6px", fontFamily: "var(--mono)", fontSize: ".6rem", fontWeight: 800, textTransform: "uppercase" }}>
+                                Latest
+                              </span>
+                            )}
+
+                            <span style={{
+                              background: isApproved ? "#dcfce7" : "#fef9c3",
+                              color: isApproved ? "#15803d" : "#854d0e",
+                              border: "1.5px solid #111",
+                              padding: "1px 6px",
+                              fontFamily: "var(--mono)",
+                              fontSize: ".62rem",
+                              fontWeight: 800,
+                              textTransform: "uppercase",
+                            }}>
+                              {isApproved ? "Active" : "Draft"}
+                            </span>
+
+                            {customCharacter && (
+                              <span style={{ background: "#f3f4f6", border: "1.5px solid #111", padding: "1px 6px", fontFamily: "var(--mono)", fontSize: ".65rem" }}>
+                                🤖 {customCharacter}
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: ".72rem", color: "#54544f", fontFamily: "var(--mono)" }}>
+                            {showHostname && <span>🌐 {hostname}</span>}
+                            {formattedDate && <span>Updated {formattedDate}</span>}
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={Boolean(busy)}
+                          onClick={(e) => void removeInstallation(e, inst.id, inst.name)}
+                          style={{
+                            background: "#fee2e2",
+                            color: "#991b1b",
+                            border: "2px solid #111",
+                            boxShadow: "2px 2px 0 #111",
+                            padding: "8px 12px",
+                            fontFamily: "var(--mono)",
+                            fontSize: ".7rem",
+                            fontWeight: 800,
+                            cursor: "pointer",
+                            borderRadius: 0,
+                            flexShrink: 0,
+                          }}
+                          title={`Delete ${inst.name}`}
+                          aria-label={`Delete ${inst.name}`}
+                        >
+                          Delete ✕
+                        </button>
+                      </article>
+                    );
+                  })}
                 </div>
+
+
                 <button className="quiet-button" type="button" onClick={() => setPickerDismissed(true)}>
                   Map a new site instead
                 </button>

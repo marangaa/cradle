@@ -24,7 +24,9 @@ export async function POST(request: Request) {
   const input = onboardingSchema.parse(await request.json());
   const origin = resolveInstallationOrigin(input.url);
   const name = input.name ?? new URL(input.url).hostname;
-  const installationId = crypto.randomUUID();
+  const existingInstallations = await store.listInstallationsByOwner(session.user.id);
+  const existing = existingInstallations.find((inst) => inst.origin === origin);
+  const installationId = existing ? existing.id : crypto.randomUUID();
 
   const [crawlResult, brandResult] = await Promise.allSettled([
     crawlPublicSite(input, installationId),
@@ -48,11 +50,17 @@ export async function POST(request: Request) {
   }) : undefined;
 
   const installation = installationSchema.parse({
-    id: installationId, ownerId: session.user.id, origin,
-    name,
-    instructions: input.instructions ?? "Be helpful, accurate, and concise.",
-    knowledgeVersion: 1, runtime: "cradle", character: createDefaultCharacter(name), ...(brandProfile ? { brandProfile } : {}),
+    id: installationId,
+    ownerId: session.user.id,
+    origin,
+    name: existing?.name ?? name,
+    instructions: input.instructions ?? existing?.instructions ?? "Be helpful, accurate, and concise.",
+    knowledgeVersion: 1,
+    runtime: "cradle",
+    character: existing?.character ?? createDefaultCharacter(name),
+    ...(brandProfile ? { brandProfile } : (existing?.brandProfile ? { brandProfile: existing.brandProfile } : {})),
   });
+
   await Promise.all([store.saveInstallation(installation), store.saveKnowledge(knowledge)]);
   return Response.json({ installation: { id: installation.id, name: installation.name }, knowledge, brandProfile }, { status: 201 });
 }

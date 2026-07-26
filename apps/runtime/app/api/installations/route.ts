@@ -8,6 +8,14 @@ export async function GET(request: Request) {
 
   const installations = await store.listInstallationsByOwner(session.user.id);
   return Response.json({
-    installations: installations.map((installation) => ({ id: installation.id, name: installation.name, knowledgeVersion: installation.knowledgeVersion })),
+    installations: installations.map((installation) => ({
+      id: installation.id,
+      name: installation.name,
+      origin: installation.origin,
+      knowledgeVersion: installation.knowledgeVersion,
+      updatedAt: installation.updatedAt,
+      character: installation.character ?? null,
+    })),
   });
 }
+
