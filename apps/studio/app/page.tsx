@@ -227,12 +227,14 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
 
 const PLAYGROUND_STATES: { id: WebState; label: string; icon: string; snippet: string }[] = [
   { id: "idle", label: "Idle", icon: "🟢", snippet: 'window.Cradle?.setState("idle");' },
-  { id: "greeting", label: "Greeting / Wave", icon: "👋", snippet: 'window.Cradle?.setState("greeting");' },
+  { id: "greeting", label: "Greeting", icon: "👋", snippet: 'window.Cradle?.setState("greeting");' },
   { id: "listening", label: "Listening", icon: "🔍", snippet: 'window.Cradle?.setState("listening");' },
-  { id: "thinking", label: "Thinking / Running", icon: "⚡", snippet: 'window.Cradle?.setState("thinking");' },
-  { id: "resolved", label: "Resolved / Jump", icon: "🎉", snippet: 'window.Cradle?.resolveAction(true);' },
-  { id: "error", label: "Error / Dizzy", icon: "❌", snippet: 'window.Cradle?.resolveAction(false);' },
+  { id: "thinking", label: "Thinking", icon: "⚡", snippet: 'window.Cradle?.setState("thinking");' },
+  { id: "responding", label: "Responding", icon: "💬", snippet: 'window.Cradle?.setState("responding");' },
+  { id: "resolved", label: "Resolved", icon: "🎉", snippet: 'window.Cradle?.resolveAction(true);' },
+  { id: "error", label: "Error", icon: "❌", snippet: 'window.Cradle?.resolveAction(false);' },
 ];
+
 
 function CharacterStatePlayground({ onTestState }: { onTestState(state: WebState): void }) {
   const [activeState, setActiveState] = useState<WebState>("idle");
