@@ -221,21 +221,49 @@ function CharacterPreview({ character, companion }: { character: Character; comp
 }
 
 function InstallCode({ installationId, copied, onCopy }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void> }) {
-  const snippet = `<script src="${runtime}/widget.js"></script>\n<cradle-character site-id="${installationId}" api-base="${runtime}"></cradle-character>`;
+  const [tab, setTab] = useState<"script" | "npm">("script");
+
+  const scriptSnippet = `<script src="${runtime}/widget.js"></script>\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n></cradle-character>`;
+
+  const npmSnippet = `# 1. Install package\npnpm add @maranga/cradle\n\n# 2. Import & render in React / Next.js\nimport "@maranga/cradle";\n\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n/>`;
+
+  const activeSnippet = tab === "script" ? scriptSnippet : npmSnippet;
+
   return (
     <section className="install-code">
       <div className="section-copy">
         <span className="eyebrow">Embed</span>
         <h2>Add your character to the site.</h2>
-        <p>Send this to whoever manages your website. They choose where the character belongs in the page.</p>
+        <p>Choose your preferred integration method below.</p>
       </div>
-      <pre><code>{snippet}</code></pre>
-      <button className="button primary" onClick={() => void onCopy(snippet)}>
-        {copied ? "Copied to clipboard" : "Copy install snippet"}
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <button
+          type="button"
+          className={`button${tab === "script" ? " primary" : ""}`}
+          onClick={() => setTab("script")}
+          style={{ fontSize: ".75rem", padding: "6px 12px" }}
+        >
+          HTML Script Tag
+        </button>
+        <button
+          type="button"
+          className={`button${tab === "npm" ? " primary" : ""}`}
+          onClick={() => setTab("npm")}
+          style={{ fontSize: ".75rem", padding: "6px 12px" }}
+        >
+          NPM Package (@maranga/cradle)
+        </button>
+      </div>
+
+      <pre><code>{activeSnippet}</code></pre>
+      <button className="button primary" style={{ marginTop: 14 }} onClick={() => void onCopy(activeSnippet)}>
+        {copied ? "Copied to clipboard" : `Copy ${tab === "script" ? "script tag" : "NPM snippet"}`}
       </button>
     </section>
   );
 }
+
 
 function KindTabs({ active, onChange }: { active: KindFilter; onChange(k: KindFilter): void }) {
   return (

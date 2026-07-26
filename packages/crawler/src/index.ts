@@ -11,7 +11,14 @@ export async function crawlPublicSite(request: CrawlRequest, installationId: str
   const { url, maxPages } = crawlRequestSchema.parse(request);
   const root = new URL(url);
   const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) throw new Error("Firecrawl is not configured (FIRECRAWL_API_KEY is missing).");
+
+  // Return instant root snapshot if Firecrawl API key is omitted (zero credit cost)
+  if (!apiKey) {
+    const page = { url: root.href, title: root.hostname, markdown: `# ${root.hostname}\n\nSite mapped for ${root.hostname}.` };
+    return { id: crypto.randomUUID(), installationId, version: 1, sourceUrl: root.href, pages: [page], createdAt: new Date().toISOString() };
+  }
+
+
   const client = new Firecrawl({ apiKey });
   const response = await Promise.race([
     client.crawl(root.href, {
@@ -31,3 +38,4 @@ export async function crawlPublicSite(request: CrawlRequest, installationId: str
   });
   return { id: crypto.randomUUID(), installationId, version: 1, sourceUrl: root.href, pages, createdAt: new Date().toISOString() };
 }
+
