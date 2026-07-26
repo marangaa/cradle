@@ -531,7 +531,7 @@ export default function StudioHome() {
                     Loading your sites…
                   </p>
                 )}
-                <div className="site-list" style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16 }}>
+                <div className="site-list" style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 16 }}>
                   {ownedInstallations.map((inst, index) => {
                     const isLatest = index === 0;
                     const hostname = inst.origin ? new URL(inst.origin).hostname : inst.name;
@@ -543,18 +543,16 @@ export default function StudioHome() {
                       : null;
 
                     return (
-                      <article
+                      <div
                         key={inst.id}
                         style={{
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
                           gap: 16,
-                          padding: "16px 18px",
-                          background: "#fff",
-                          border: "3px solid #111",
-                          boxShadow: isLatest ? "5px 5px 0 #e7ff36, 5px 5px 0 3px #111" : "4px 4px 0 #111",
-                          position: "relative",
+                          padding: "12px 14px",
+                          borderBottom: index < ownedInstallations.length - 1 ? "1px solid #e8e7df" : "none",
+                          background: "transparent",
                         }}
                       >
                         <button
@@ -570,16 +568,16 @@ export default function StudioHome() {
                             cursor: "pointer",
                             display: "flex",
                             flexDirection: "column",
-                            gap: 6,
+                            gap: 4,
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                            <strong style={{ fontSize: "1.05rem", fontWeight: 820, color: "#111", letterSpacing: "-.02em" }}>
+                            <strong style={{ fontSize: ".95rem", fontWeight: 780, color: "#111", letterSpacing: "-.02em" }}>
                               {inst.name}
                             </strong>
 
                             {isLatest && (
-                              <span style={{ background: "#e7ff36", border: "2px solid #111", padding: "2px 6px", fontFamily: "var(--mono)", fontSize: ".6rem", fontWeight: 800, textTransform: "uppercase" }}>
+                              <span style={{ background: "#e7ff36", border: "1.5px solid #111", padding: "1px 5px", fontFamily: "var(--mono)", fontSize: ".56rem", fontWeight: 800, textTransform: "uppercase" }}>
                                 Latest
                               </span>
                             )}
@@ -587,24 +585,24 @@ export default function StudioHome() {
                             <span style={{
                               background: isApproved ? "#dcfce7" : "#fef9c3",
                               color: isApproved ? "#15803d" : "#854d0e",
-                              border: "1.5px solid #111",
-                              padding: "1px 6px",
+                              border: "1px solid #111",
+                              padding: "1px 5px",
                               fontFamily: "var(--mono)",
-                              fontSize: ".62rem",
-                              fontWeight: 800,
+                              fontSize: ".58rem",
+                              fontWeight: 700,
                               textTransform: "uppercase",
                             }}>
                               {isApproved ? "Active" : "Draft"}
                             </span>
 
                             {customCharacter && (
-                              <span style={{ background: "#f3f4f6", border: "1.5px solid #111", padding: "1px 6px", fontFamily: "var(--mono)", fontSize: ".65rem" }}>
+                              <span style={{ background: "#f3f4f6", border: "1px solid #d1d5db", padding: "1px 5px", fontFamily: "var(--mono)", fontSize: ".6rem", color: "#374151" }}>
                                 🤖 {customCharacter}
                               </span>
                             )}
                           </div>
 
-                          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: ".72rem", color: "#54544f", fontFamily: "var(--mono)" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: ".7rem", color: "#6b7280", fontFamily: "var(--mono)" }}>
                             {showHostname && <span>🌐 {hostname}</span>}
                             {formattedDate && <span>Updated {formattedDate}</span>}
                           </div>
@@ -615,27 +613,28 @@ export default function StudioHome() {
                           disabled={Boolean(busy)}
                           onClick={(e) => void removeInstallation(e, inst.id, inst.name)}
                           style={{
-                            background: "#fee2e2",
-                            color: "#991b1b",
-                            border: "2px solid #111",
-                            boxShadow: "2px 2px 0 #111",
-                            padding: "8px 12px",
+                            background: "none",
+                            color: "#9ca3af",
+                            border: "none",
+                            padding: "4px 8px",
                             fontFamily: "var(--mono)",
-                            fontSize: ".7rem",
-                            fontWeight: 800,
+                            fontSize: ".72rem",
+                            fontWeight: 600,
                             cursor: "pointer",
-                            borderRadius: 0,
                             flexShrink: 0,
                           }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "#dc2626"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = "#9ca3af"; }}
                           title={`Delete ${inst.name}`}
                           aria-label={`Delete ${inst.name}`}
                         >
                           Delete ✕
                         </button>
-                      </article>
+                      </div>
                     );
                   })}
                 </div>
+
 
 
                 <button className="quiet-button" type="button" onClick={() => setPickerDismissed(true)}>
