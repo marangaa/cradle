@@ -152,9 +152,10 @@ class CradleCharacter extends HTMLElement {
     this.shadow.innerHTML = [
       '<style>',
       ':host{all:initial;position:fixed;right:0;bottom:0;width:0;height:0;z-index:2147483647;pointer-events:none;color:#f6f7fb;font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.4}',
-      '*,*:before,*:after{box-sizing:border-box}.shell{position:fixed;right:22px;bottom:22px;z-index:2147483647;pointer-events:auto}.shell[data-placement="inline"]{position:relative;right:auto;bottom:auto;width:100%;max-width:330px}',
-      '.panel{width:min(310px,calc(100vw - 28px));margin-bottom:8px;padding:0;background:transparent}.panel[hidden]{display:none}.copy{padding:0 5px 9px;text-align:right;text-shadow:0 2px 14px rgba(8,8,15,.72)}.title{display:block;color:#f8fafc;font-size:.93rem;font-weight:760;letter-spacing:-.035em}.greeting{margin:5px 0 0;color:#d6dae5;font-size:.74rem;line-height:1.48}',
+      '.shell{position:fixed;right:22px;bottom:22px;z-index:2147483647;pointer-events:auto}.shell[data-placement="inline"]{position:relative;right:auto;bottom:auto;width:100%;max-width:330px}',
+      '.panel{position:absolute;bottom:100%;right:0;margin-bottom:12px;width:min(320px,calc(100vw - 32px));padding:14px 18px;background:rgba(17,17,19,0.92);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.14);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,0.5)}.panel[hidden]{display:none}.copy{text-align:left}.title{display:block;color:#f8fafc;font-size:.92rem;font-weight:750;letter-spacing:-.02em}.greeting{margin:6px 0 0;color:#cbd5e1;font-size:.8rem;line-height:1.5}',
       '.trigger{display:grid;width:94px;height:102px;place-items:center;border:0;background:transparent;box-shadow:none;cursor:grab;touch-action:none}.trigger:active{cursor:grabbing}.trigger:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}.trigger .companion{width:88px;height:96px;background-repeat:no-repeat;background-size:800% 900%}@media (prefers-reduced-motion:reduce){.companion{animation:none!important}}',
+
 
       '</style>',
       '<div class="shell"><section class="panel" hidden aria-label="Website character"><div class="copy"><strong class="title">Loading</strong><p class="greeting"></p></div></section><button class="trigger" type="button" aria-label="Open website character" aria-expanded="false"><span class="companion" aria-hidden="true"></span></button></div>',
