@@ -265,45 +265,43 @@ function InstallCode({ installationId, copied, onCopy }: { installationId: strin
 }
 
 function LiveIntegrationSection({ installationId, copied, onCopy }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void> }) {
-
   return (
     <div className="live-integration-wrapper">
       <div className="live-dual-grid">
         {/* Left Column: Embed Code */}
         <div className="live-col left-col">
-          <div className="connector-node node-left" title="Cradle Widget Output Node">
-            <span className="node-dot" />
-            <span className="node-label">Widget Output</span>
-          </div>
           <InstallCode installationId={installationId} copied={copied} onCopy={onCopy} />
+          <div className="connector-node node-left" title="Cradle Widget Connection">
+            <span className="node-dot" />
+          </div>
         </div>
 
         {/* Center Connecting 3D String / Cable */}
         <div className="string-connector-container" aria-hidden="true">
-          <svg className="string-svg" viewBox="0 0 110 320" preserveAspectRatio="none">
+          <svg className="string-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
             <defs>
-              <linearGradient id="stringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <linearGradient id="stringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="#3559ff" />
                 <stop offset="50%" stopColor="#ff8bd4" />
                 <stop offset="100%" stopColor="#e7ff36" />
               </linearGradient>
-              <filter id="stringGlowFilter" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="3" result="blur" />
+              <filter id="stringGlowFilter" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="2.5" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
 
             {/* Cable shadow */}
             <path
-              d="M 5 125 C 60 125, 50 185, 105 185"
+              d="M 0 50 C 40 25, 60 75, 100 50"
               fill="none"
-              stroke="#111"
+              stroke="#111111"
               strokeWidth="7"
               strokeLinecap="round"
             />
             {/* Glowing gradient cable */}
             <path
-              d="M 5 125 C 60 125, 50 185, 105 185"
+              d="M 0 50 C 40 25, 60 75, 100 50"
               fill="none"
               stroke="url(#stringGrad)"
               strokeWidth="4"
@@ -313,58 +311,52 @@ function LiveIntegrationSection({ installationId, copied, onCopy }: { installati
             {/* Animated data pulses */}
             <path
               className="pulse-path"
-              d="M 5 125 C 60 125, 50 185, 105 185"
+              d="M 0 50 C 40 25, 60 75, 100 50"
               fill="none"
               stroke="#ffffff"
               strokeWidth="2.5"
-              strokeDasharray="10 20"
+              strokeDasharray="8 16"
               strokeLinecap="round"
             />
           </svg>
-
-          <div className="pipeline-badge">
-            <span className="pulse-indicator" />
-            <span>Memory Pipeline</span>
-          </div>
         </div>
 
         {/* Right Column: Qualra Memory Showcase Card */}
         <div className="live-col right-col">
-          <div className="connector-node node-right" title="Qualra Memory Input Node">
+          <div className="connector-node node-right" title="Qualra Memory Connection">
             <span className="node-dot" />
-            <span className="node-label">Memory Engine</span>
           </div>
 
           <article className="qualra-card">
             <div>
-              <span className="qualra-eyebrow">Want it to remember people?</span>
+              <span className="qualra-eyebrow">Customer Memory Layer</span>
               <div className="qualra-header">
                 <h2>Meet <em>Qualra.</em></h2>
               </div>
               <p className="qualra-desc">
-                Qualra helps teams build ongoing customer relationships, so every conversation can pick up where the last one left off.
+                Qualra remembers every customer conversation, turning raw interactions into clear evidence your product team can act on. Never start from zero.
               </p>
 
               <ul className="qualra-features">
                 <li>
                   <span className="feature-icon">🧠</span>
                   <div>
-                    <strong>Persistent Visitor Memory</strong>
-                    <small>Recognises returning users across site sessions</small>
+                    <strong>Persistent Context</strong>
+                    <small>Remembers goals, feedback & past visits so customers never repeat themselves.</small>
                   </div>
                 </li>
                 <li>
-                  <span className="feature-icon">🔄</span>
+                  <span className="feature-icon">🗺️</span>
                   <div>
-                    <strong>Continuous Context</strong>
-                    <small>Resumes previous conversations with full history</small>
+                    <strong>Turn Conversations into Roadmaps</strong>
+                    <small>Converts continuous customer touchpoints into clear roadmap insights.</small>
                   </div>
                 </li>
                 <li>
-                  <span className="feature-icon">⚡</span>
+                  <span className="feature-icon">🤝</span>
                   <div>
-                    <strong>Zero-latency Sync</strong>
-                    <small>Instant state restoration for embedded companions</small>
+                    <strong>Continuous Relationships</strong>
+                    <small>Pick up right where you left off. Qualra handles remembering, your team builds.</small>
                   </div>
                 </li>
               </ul>
@@ -384,6 +376,7 @@ function LiveIntegrationSection({ installationId, copied, onCopy }: { installati
     </div>
   );
 }
+
 
 
 
