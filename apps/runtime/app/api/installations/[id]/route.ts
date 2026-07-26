@@ -1,36 +1,15 @@
-import { brandProfileSchema, characterSchema, createDefaultCharacter, installationSchema } from "@cradle/core";
-import { z } from "zod";
-import { isInstallationManager } from "../../../lib/management";
+import { createDefaultCharacter } from "@cradle/core";
+import { auth } from "@cradle/db";
 import { store } from "../../../lib/store";
-import { issueWidgetToken } from "../../../lib/widget-token";
 
-const updateSchema = z.object({
-  name: installationSchema.shape.name.optional(),
-  instructions: installationSchema.shape.instructions.optional(),
-  character: characterSchema.optional(),
-  brandProfile: brandProfileSchema.optional(),
-}).refine((value) => Object.keys(value).length > 0, "Provide at least one setting to update.");
-
+/**
+ * CORS for the embedded widget itself — scoped to each installation's own site origin.
+ * This is the ONLY route in this file a browser calls directly (from wherever the widget is
+ * embedded); PATCH below is Studio-server-to-Runtime-server only and needs no CORS at all.
+ */
 function widgetCorsHeaders(request: Request, origin: string) {
   if (request.headers.get("origin") !== origin) return null;
   return { "access-control-allow-origin": origin, "cache-control": "no-store", vary: "Origin" };
-}
-
-function studioCorsHeaders(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin || origin !== process.env.CRADLE_STUDIO_ORIGIN) return null;
-  return {
-    "access-control-allow-origin": origin,
-    "access-control-allow-methods": "PATCH, OPTIONS",
-    "access-control-allow-headers": "content-type, x-cradle-installation-key",
-    "cache-control": "no-store",
-    vary: "Origin",
-  };
-}
-
-export function OPTIONS(request: Request) {
-  const headers = studioCorsHeaders(request);
-  return headers ? new Response(null, { status: 204, headers }) : new Response(null, { status: 403 });
 }
 
 /** Returns the public manifest used by the installed website character. */
@@ -63,7 +42,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   return Response.json({
     site: { id, name: installation.name },
-    token: issueWidgetToken(id, installation.origin),
     character: installation.character ?? createDefaultCharacter(installation.name),
     companion: companion ? {
       id: companion.id,
@@ -76,20 +54,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }, { headers });
 }
 
-/** Updates the operator-controlled character and reference-runtime instructions. */
-export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
-  const headers = studioCorsHeaders(request);
-  if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
+/** Deletes an installation owned by the signed-in account. */
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  if (!await isInstallationManager(request, id)) {
-    return Response.json({ error: "Installation operator key is invalid." }, { status: 401, headers });
-  }
-  const installation = await store.getInstallation(id);
-  if (!installation) return Response.json({ error: "Unknown installation." }, { status: 404, headers });
-  const update = updateSchema.parse(await request.json());
-  const name = update.name ?? installation.name;
-  const character = update.character ?? installation.character ?? createDefaultCharacter(name);
-  const next = installationSchema.parse({ ...installation, ...update, name, character, runtime: "cradle" });
-  await store.saveInstallation(next);
-  return Response.json({ installation: { id: next.id, name: next.name }, character: next.character, brandProfile: next.brandProfile ?? null }, { headers });
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) return Response.json({ error: "Sign in to Studio first." }, { status: 401 });
+
+  const deleted = await store.deleteInstallation(id, session.user.id);
+  if (!deleted) return Response.json({ error: "Installation not found or not owned by you." }, { status: 404 });
+  return Response.json({ ok: true, deletedId: id });
 }
+

@@ -1,11 +1,11 @@
 {
-  "id": "48dd02c8-700b-4e35-b8cc-3f30d72b3914",
+  "id": "a177ca81-8335-423a-81fd-eb65f09797a6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.conversation_events": {
-      "name": "conversation_events",
+    "public.companion_packages": {
+      "name": "companion_packages",
       "schema": "",
       "columns": {
         "id": {
@@ -20,85 +20,124 @@
           "primaryKey": false,
           "notNull": true
         },
-        "visitor_id": {
-          "name": "visitor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "conversation_id": {
-          "name": "conversation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "type": {
-          "name": "type",
+        "provider": {
+          "name": "provider",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "occurred_at": {
-          "name": "occurred_at",
-          "type": "timestamp with time zone",
+        "slug": {
+          "name": "slug",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "payload": {
-          "name": "payload",
-          "type": "jsonb",
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "submitted_by": {
+          "name": "submitted_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pet_json_url": {
+          "name": "pet_json_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "object_key": {
+          "name": "object_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checksum": {
+          "name": "checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "columns": {
+          "name": "columns",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rows": {
+          "name": "rows",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cell_width": {
+          "name": "cell_width",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cell_height": {
+          "name": "cell_height",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         }
       },
       "indexes": {
-        "conversation_events_conversation_occurred_idx": {
-          "name": "conversation_events_conversation_occurred_idx",
-          "columns": [
-            {
-              "expression": "conversation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "occurred_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "conversation_events_installation_occurred_idx": {
-          "name": "conversation_events_installation_occurred_idx",
+        "companion_packages_installation_idx": {
+          "name": "companion_packages_installation_idx",
           "columns": [
             {
               "expression": "installation_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            },
-            {
-              "expression": "occurred_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
         }
       },
       "foreignKeys": {
-        "conversation_events_installation_id_installations_id_fk": {
-          "name": "conversation_events_installation_id_installations_id_fk",
-          "tableFrom": "conversation_events",
+        "companion_packages_installation_id_installations_id_fk": {
+          "name": "companion_packages_installation_id_installations_id_fk",
+          "tableFrom": "companion_packages",
           "tableTo": "installations",
           "columnsFrom": [
             "installation_id"
@@ -126,8 +165,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "public_key": {
-          "name": "public_key",
+        "owner_id": {
+          "name": "owner_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -162,8 +201,14 @@
           "primaryKey": false,
           "notNull": true
         },
-        "familiar": {
-          "name": "familiar",
+        "character": {
+          "name": "character",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "brand_profile": {
+          "name": "brand_profile",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -183,7 +228,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "installations_owner_id_idx": {
+          "name": "installations_owner_id_idx",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

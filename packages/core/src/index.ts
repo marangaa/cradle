@@ -63,7 +63,7 @@ export type PetdexCatalogItem = z.infer<typeof petdexCatalogItemSchema>;
 
 export const installationSchema = z.object({
   id: z.string().uuid(),
-  managementKeyHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  ownerId: z.string().min(1),
   origin: z.string().url(),
   name: z.string().min(1).max(120),
   instructions: z.string().max(12_000),

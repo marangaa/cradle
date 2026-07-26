@@ -5,7 +5,10 @@
   "type": "module",
   "imports": {
     "#schema": "./src/schema.ts",
-    "#store": "./src/store.ts"
+    "#store": "./src/store.ts",
+    "#db": "./src/db.ts",
+    "#auth": "./src/auth.ts",
+    "#auth-schema": "./src/auth-schema.ts"
   },
   "exports": {
     ".": "./src/index.ts"
@@ -13,11 +16,13 @@
   "scripts": {
     "check-types": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/migrate.ts",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@cradle/core": "workspace:*",
+    "better-auth": "^1.6.23",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.22.0"

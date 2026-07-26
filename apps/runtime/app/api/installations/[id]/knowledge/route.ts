@@ -1,50 +1,39 @@
 import { createDefaultCharacter, installationSchema, knowledgeReviewSchema } from "@cradle/core";
-import { isInstallationManager } from "../../../../lib/management";
+import { auth } from "@cradle/db";
 import { store } from "../../../../lib/store";
 
-function studioCorsHeaders(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin || origin !== process.env.CRADLE_STUDIO_ORIGIN) return null;
-  return { "access-control-allow-origin": origin, "access-control-allow-methods": "GET, PATCH, OPTIONS", "access-control-allow-headers": "content-type, x-cradle-installation-key", "cache-control": "no-store", vary: "Origin" };
-}
-
-export function OPTIONS(request: Request) {
-  const headers = studioCorsHeaders(request);
-  return headers ? new Response(null, { status: 204, headers }) : new Response(null, { status: 403 });
-}
-
-/** Restores the latest reviewed source snapshot to an authorized Studio session. */
+/** Restores the latest reviewed source snapshot. Called only by Studio's server. */
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  const headers = studioCorsHeaders(request);
-  if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
   const { id } = await context.params;
-  if (!await isInstallationManager(request, id)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
-  const [installation, knowledge] = await Promise.all([store.getInstallation(id), store.getKnowledge(id)]);
-  if (!installation || !knowledge) return Response.json({ error: "Unknown or unready installation." }, { status: 404, headers });
+  const installation = await store.getInstallation(id);
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session || installation?.ownerId !== session.user.id) return Response.json({ error: "You do not have access to this installation." }, { status: 401 });
+  const knowledge = await store.getKnowledge(id);
+  if (!installation || !knowledge) return Response.json({ error: "Unknown or unready installation." }, { status: 404 });
   return Response.json({
     installation: { id: installation.id, name: installation.name },
     character: installation.character ?? createDefaultCharacter(installation.name),
     brandProfile: installation.brandProfile ?? null,
     knowledge,
-  }, { headers });
+  });
 }
 
-/** Saves an immutable owner-reviewed subset of the latest bounded crawl. */
+/** Saves an immutable owner-reviewed subset of the latest bounded crawl. Called only by Studio's server. */
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
-  const headers = studioCorsHeaders(request);
-  if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
   const { id: installationId } = await context.params;
-  if (!await isInstallationManager(request, installationId)) return Response.json({ error: "Installation management key is invalid." }, { status: 401, headers });
-  const [installation, knowledge] = await Promise.all([store.getInstallation(installationId), store.getKnowledge(installationId)]);
-  if (!installation || !knowledge) return Response.json({ error: "Unknown or unready installation." }, { status: 404, headers });
+  const installation = await store.getInstallation(installationId);
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session || installation?.ownerId !== session.user.id) return Response.json({ error: "You do not have access to this installation." }, { status: 401 });
+  const knowledge = await store.getKnowledge(installationId);
+  if (!installation || !knowledge) return Response.json({ error: "Unknown or unready installation." }, { status: 404 });
   const review = knowledgeReviewSchema.parse(await request.json());
   const included = new Set(review.includedUrls);
   const pages = knowledge.pages.filter((page) => included.has(page.url));
-  if (pages.length !== included.size) return Response.json({ error: "One or more reviewed pages do not belong to this crawl." }, { status: 422, headers });
+  if (pages.length !== included.size) return Response.json({ error: "One or more reviewed pages do not belong to this crawl." }, { status: 422 });
   const reviewed = { ...knowledge, id: crypto.randomUUID(), version: knowledge.version + 1, pages, createdAt: new Date().toISOString() };
   await Promise.all([
     store.saveKnowledge(reviewed),
     store.saveInstallation(installationSchema.parse({ ...installation, knowledgeVersion: reviewed.version })),
   ]);
-  return Response.json({ knowledge: reviewed }, { headers });
+  return Response.json({ knowledge: reviewed });
 }

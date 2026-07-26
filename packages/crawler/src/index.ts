@@ -5,18 +5,25 @@ import { crawlRequestSchema, type CrawlRequest, type KnowledgeSnapshot } from "@
  * Bounded Firecrawl-backed public-site crawler. It keeps the provider's robots
  * behavior enabled and returns reviewable content rather than publishing it.
  */
+const crawlTimeoutMs = 90_000;
+
 export async function crawlPublicSite(request: CrawlRequest, installationId: string): Promise<KnowledgeSnapshot> {
   const { url, maxPages } = crawlRequestSchema.parse(request);
   const root = new URL(url);
-  const client = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY });
-  const response = await client.crawl(root.href, {
-    limit: maxPages,
-    crawlEntireDomain: true,
-    allowExternalLinks: false,
-    allowSubdomains: false,
-    ignoreQueryParameters: true,
-    scrapeOptions: { formats: ["markdown"], onlyMainContent: true },
-  });
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) throw new Error("Firecrawl is not configured (FIRECRAWL_API_KEY is missing).");
+  const client = new Firecrawl({ apiKey });
+  const response = await Promise.race([
+    client.crawl(root.href, {
+      limit: maxPages,
+      crawlEntireDomain: true,
+      allowExternalLinks: false,
+      allowSubdomains: false,
+      ignoreQueryParameters: true,
+      scrapeOptions: { formats: ["markdown"], onlyMainContent: true },
+    }),
+    new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("Firecrawl did not respond in time.")), crawlTimeoutMs)),
+  ]);
   const pages = (response.data ?? []).flatMap((page) => {
     const sourceUrl = page.metadata?.sourceURL ?? page.metadata?.url;
     if (!sourceUrl || new URL(sourceUrl).origin !== root.origin || !page.markdown) return [];

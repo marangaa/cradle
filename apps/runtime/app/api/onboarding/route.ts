@@ -1,8 +1,8 @@
 import { crawlPublicSite } from "@cradle/crawler";
 import { brandProfileSchema, createDefaultCharacter, crawlRequestSchema, installationSchema } from "@cradle/core";
+import { auth } from "@cradle/db";
 import { extractBrandAssets } from "openbrand";
 import { store } from "../../lib/store";
-import { hashManagementKey } from "../../lib/management";
 
 const onboardingSchema = crawlRequestSchema.extend({
   name: installationSchema.shape.name.optional(),
@@ -16,39 +16,28 @@ function resolveInstallationOrigin(sourceUrl: string) {
   return new URL(developmentOrigin).origin;
 }
 
-function studioCorsHeaders(request: Request) {
-  const origin = request.headers.get("origin");
-  const configuredOrigin = process.env.CRADLE_STUDIO_ORIGIN;
-  if (!origin || !configuredOrigin || origin !== configuredOrigin) return null;
-  return {
-    "access-control-allow-origin": origin,
-    "access-control-allow-methods": "POST, OPTIONS",
-    "access-control-allow-headers": "content-type",
-    vary: "Origin",
-  };
-}
-
-export function OPTIONS(request: Request) {
-  const headers = studioCorsHeaders(request);
-  return headers ? new Response(null, { status: 204, headers }) : new Response(null, { status: 403 });
-}
-
-/** Creates a reviewable, bounded knowledge snapshot and installation. */
+/** Creates a reviewable, bounded knowledge snapshot and installation owned by the signed-in account. Called only by Studio's server, never a browser. */
 export async function POST(request: Request) {
-  const headers = studioCorsHeaders(request);
-  if (!headers) return Response.json({ error: "Studio origin is not authorized." }, { status: 403 });
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) return Response.json({ error: "Sign in to Studio before mapping a site." }, { status: 401 });
+
   const input = onboardingSchema.parse(await request.json());
   const origin = resolveInstallationOrigin(input.url);
-  const managementKey = crypto.randomUUID().replaceAll("-", "");
   const name = input.name ?? new URL(input.url).hostname;
   const installationId = crypto.randomUUID();
+
   const [crawlResult, brandResult] = await Promise.allSettled([
     crawlPublicSite(input, installationId),
     extractBrandAssets(input.url),
   ]);
-  if (crawlResult.status === "rejected") throw crawlResult.reason;
+
+  if (crawlResult.status === "rejected") {
+    const message = crawlResult.reason instanceof Error ? crawlResult.reason.message : "Cradle could not read this site.";
+    return Response.json({ error: `Could not crawl this site: ${message}` }, { status: 502 });
+  }
   const knowledge = crawlResult.value;
-  if (knowledge.pages.length === 0) return Response.json({ error: "No usable public pages were found." }, { status: 422, headers });
+  if (knowledge.pages.length === 0) return Response.json({ error: "No usable public pages were found." }, { status: 422 });
+
   const extractedBrand = brandResult.status === "fulfilled" ? brandResult.value : null;
   const brandProfile = extractedBrand?.ok ? brandProfileSchema.parse({
     name: extractedBrand.data.brand_name || name,
@@ -57,12 +46,13 @@ export async function POST(request: Request) {
     backdrops: extractedBrand.data.backdrop_images,
     source: "openbrand",
   }) : undefined;
+
   const installation = installationSchema.parse({
-    id: installationId, managementKeyHash: hashManagementKey(managementKey), origin,
+    id: installationId, ownerId: session.user.id, origin,
     name,
     instructions: input.instructions ?? "Be helpful, accurate, and concise.",
     knowledgeVersion: 1, runtime: "cradle", character: createDefaultCharacter(name), ...(brandProfile ? { brandProfile } : {}),
   });
   await Promise.all([store.saveInstallation(installation), store.saveKnowledge(knowledge)]);
-  return Response.json({ installation: { id: installation.id, name: installation.name, managementKey }, knowledge, brandProfile }, { status: 201, headers });
+  return Response.json({ installation: { id: installation.id, name: installation.name }, knowledge, brandProfile }, { status: 201 });
 }

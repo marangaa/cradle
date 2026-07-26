@@ -1,6 +1,6 @@
 import { Composition, Still } from "remotion";
-import { CradleLaunch, type CradleLaunchProps } from "./compositions/CradleLaunch";
-import { LaunchThumbnail } from "./compositions/LaunchThumbnail";
+import { CradleLaunch, type CradleLaunchProps } from "./compositions/CradleLaunch.js";
+import { LaunchThumbnail } from "./compositions/LaunchThumbnail.js";
 
 const fps = 30;
 

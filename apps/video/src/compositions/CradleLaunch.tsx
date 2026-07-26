@@ -1,5 +1,5 @@
 import { AbsoluteFill, Audio, Sequence, staticFile } from "remotion";
-import { ClosingScene, ConnectScene, OpeningScene, ShapeScene, InstallScene } from "../scenes";
+import { ClosingScene, ConnectScene, OpeningScene, ShapeScene, InstallScene } from "../scenes.js";
 
 export type CradleLaunchProps = {
   siteName: string;

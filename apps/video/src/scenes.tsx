@@ -1,5 +1,5 @@
 import { Easing, Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
-import type { CradleLaunchProps } from "./compositions/CradleLaunch";
+import type { CradleLaunchProps } from "./compositions/CradleLaunch.js";
 
 const colors = { ink: "#10110d", paper: "#f6f5eb", acid: "#d8ff33", cobalt: "#3d56ff", coral: "#ff8065", line: "#2e302a" };
 const font = "Arial, Helvetica, sans-serif";

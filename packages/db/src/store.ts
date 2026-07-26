@@ -1,5 +1,5 @@
 import type { CompanionPackage, Installation, KnowledgeSnapshot } from "@cradle/core";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { companionPackages, installations, knowledgeSnapshots } from "#schema";
@@ -11,10 +11,14 @@ type CradleDatabase = NodePgDatabase<typeof schema>;
 export interface CradleStore {
   getInstallation(id: string): Promise<Installation | null>;
   saveInstallation(installation: Installation): Promise<void>;
+  deleteInstallation(id: string, ownerId: string): Promise<boolean>;
+  listInstallationsByOwner(ownerId: string): Promise<Installation[]>;
   getKnowledge(installationId: string): Promise<KnowledgeSnapshot | null>;
   saveKnowledge(snapshot: KnowledgeSnapshot): Promise<void>;
   getCompanionPackage(installationId: string): Promise<CompanionPackage | null>;
   saveCompanionPackage(companion: CompanionPackage): Promise<void>;
+  /** Cheap connectivity probe used by the health-check route — throws if the store is unreachable. */
+  ping(): Promise<void>;
 }
 
 /** Lightweight development store used only when a database is deliberately not configured. */
@@ -25,10 +29,20 @@ export class MemoryStore implements CradleStore {
 
   async getInstallation(id: string) { return this.installations.get(id) ?? null; }
   async saveInstallation(installation: Installation) { this.installations.set(installation.id, installation); }
+  async deleteInstallation(id: string, ownerId: string) {
+    const inst = this.installations.get(id);
+    if (!inst || inst.ownerId !== ownerId) return false;
+    this.installations.delete(id);
+    this.knowledge.delete(id);
+    this.companions.delete(id);
+    return true;
+  }
+  async listInstallationsByOwner(ownerId: string) { return [...this.installations.values()].filter((installation) => installation.ownerId === ownerId); }
   async getKnowledge(installationId: string) { return this.knowledge.get(installationId) ?? null; }
   async saveKnowledge(snapshot: KnowledgeSnapshot) { this.knowledge.set(snapshot.installationId, snapshot); }
   async getCompanionPackage(installationId: string) { return this.companions.get(installationId) ?? null; }
   async saveCompanionPackage(companion: CompanionPackage) { this.companions.set(companion.installationId, companion); }
+  async ping() {}
 }
 
 /** Drizzle-backed store for durable local and self-hosted Cradle deployments. */
@@ -41,7 +55,7 @@ export class PostgresStore implements CradleStore {
 
     return {
       id: row.id,
-      managementKeyHash: row.managementKeyHash,
+      ownerId: row.ownerId,
       origin: row.origin,
       name: row.name,
       instructions: row.instructions,
@@ -52,6 +66,21 @@ export class PostgresStore implements CradleStore {
     };
   }
 
+  async listInstallationsByOwner(ownerId: string): Promise<Installation[]> {
+    const rows = await this.database.query.installations.findMany({ where: eq(installations.ownerId, ownerId), orderBy: [desc(installations.updatedAt)] });
+    return rows.map((row) => ({
+      id: row.id,
+      ownerId: row.ownerId,
+      origin: row.origin,
+      name: row.name,
+      instructions: row.instructions,
+      knowledgeVersion: row.knowledgeVersion,
+      runtime: "cradle",
+      ...(row.character ? { character: row.character } : {}),
+      ...(row.brandProfile ? { brandProfile: row.brandProfile } : {}),
+    }));
+  }
+
   async saveInstallation(installation: Installation): Promise<void> {
     await this.database.insert(installations).values({
       ...installation,
@@ -60,7 +89,7 @@ export class PostgresStore implements CradleStore {
     }).onConflictDoUpdate({
       target: installations.id,
       set: {
-        managementKeyHash: installation.managementKeyHash,
+        ownerId: installation.ownerId,
         origin: installation.origin,
         name: installation.name,
         instructions: installation.instructions,
@@ -71,6 +100,17 @@ export class PostgresStore implements CradleStore {
         updatedAt: new Date(),
       },
     });
+  }
+
+  async deleteInstallation(id: string, ownerId: string): Promise<boolean> {
+    const result = await this.database.delete(installations)
+      .where(sql`${installations.id} = ${id} AND ${installations.ownerId} = ${ownerId}`);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  /** Cheap connectivity probe used by the health-check route. */
+  async ping(): Promise<void> {
+    await this.database.execute(sql`select 1`);
   }
 
   async getKnowledge(installationId: string): Promise<KnowledgeSnapshot | null> {

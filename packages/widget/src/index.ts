@@ -1,5 +1,3 @@
-const VISITOR_KEY_PREFIX = "cradle:visitor:";
-
 type PetAtlas = {
   url: string;
   columns: number;
@@ -62,10 +60,9 @@ class CradleCharacter extends HTMLElement {
     if (!this.siteId || !this.apiBase) {
       throw new Error("CradleCharacter requires site-id and api-base attributes.");
     }
-    this.visitorId = this.getVisitorId(this.siteId);
-    this.conversationId = this.getConversationId(this.siteId);
+    this.visitorId = crypto.randomUUID();
+    this.conversationId = crypto.randomUUID();
     this.render();
-    if (this.placement === "floating") this.restorePosition();
     void this.loadManifest();
   }
 
@@ -221,28 +218,9 @@ class CradleCharacter extends HTMLElement {
     if (this.dragged) {
       this.ignoreNextClick = true;
       const shell = this.shadow.querySelector(".shell") as HTMLElement;
-      localStorage.setItem(this.positionKey(), JSON.stringify({ left: shell.offsetLeft, top: shell.offsetTop }));
       this.emit("cradle:move", { ...this.eventContext(), position: { left: shell.offsetLeft, top: shell.offsetTop } });
     }
     this.dragStart = null;
-  }
-
-  private restorePosition() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(this.positionKey()) ?? "null") as { left?: unknown; top?: unknown } | null;
-      if (!saved || typeof saved.left !== "number" || typeof saved.top !== "number") return;
-      const shell = this.shadow.querySelector(".shell") as HTMLElement;
-      shell.style.left = Math.min(Math.max(0, saved.left), window.innerWidth - shell.offsetWidth) + "px";
-      shell.style.top = Math.min(Math.max(0, saved.top), window.innerHeight - shell.offsetHeight) + "px";
-      shell.style.right = "auto";
-      shell.style.bottom = "auto";
-    } catch {
-      localStorage.removeItem(this.positionKey());
-    }
-  }
-
-  private positionKey() {
-    return "cradle:position:" + this.siteId;
   }
 
   private get placement() {
@@ -264,23 +242,6 @@ class CradleCharacter extends HTMLElement {
     window.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
-  private getVisitorId(siteId: string) {
-    const key = VISITOR_KEY_PREFIX + siteId;
-    const existing = localStorage.getItem(key);
-    if (existing) return existing;
-    const created = crypto.randomUUID();
-    localStorage.setItem(key, created);
-    return created;
-  }
-
-  private getConversationId(siteId: string) {
-    const key = "cradle:conversation:" + siteId;
-    const existing = localStorage.getItem(key);
-    if (existing) return existing;
-    const created = crypto.randomUUID();
-    localStorage.setItem(key, created);
-    return created;
-  }
 }
 
 function getCharacter(siteId?: string) {

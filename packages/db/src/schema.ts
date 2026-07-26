@@ -1,9 +1,11 @@
 import type { BrandProfile, Character, CompanionPackage, KnowledgeSnapshot } from "@cradle/core";
 import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
+export * from "#auth-schema";
+
 export const installations = pgTable("installations", {
   id: uuid("id").primaryKey(),
-  managementKeyHash: text("management_key_hash").notNull(),
+  ownerId: text("owner_id").notNull(),
   origin: text("origin").notNull(),
   name: text("name").notNull(),
   instructions: text("instructions").notNull(),
@@ -13,7 +15,9 @@ export const installations = pgTable("installations", {
   brandProfile: jsonb("brand_profile").$type<BrandProfile | null>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("installations_owner_id_idx").on(table.ownerId),
+]);
 
 export const knowledgeSnapshots = pgTable("knowledge_snapshots", {
   id: uuid("id").primaryKey(),

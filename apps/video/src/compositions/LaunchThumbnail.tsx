@@ -1,6 +1,6 @@
 import { AbsoluteFill } from "remotion";
-import { CharacterOrb, Grain, Wordmark } from "../scenes";
-import type { CradleLaunchProps } from "./CradleLaunch";
+import { CharacterOrb, Grain, Wordmark } from "../scenes.js";
+import type { CradleLaunchProps } from "./CradleLaunch.js";
 
 /** Still thumbnail paired with the launch composition. */
 export const LaunchThumbnail = ({ characterName }: CradleLaunchProps) => {
