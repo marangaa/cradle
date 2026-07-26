@@ -308,15 +308,16 @@ function CharacterStatePlayground({ onTestState }: { onTestState(state: WebState
 }
 
 function InstallCode({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: WebState): void }) {
-  const [tab, setTab] = useState<"script" | "npm">("script");
-  const runtime = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:3002";
+  const [tab, setTab] = useState<"script" | "npm" | "types">("script");
+  const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL || process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
 
   const scriptSnippet = `<script src="${runtime}/widget.js"></script>\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n></cradle-character>`;
 
-
   const npmSnippet = `# 1. Install package\npnpm add @maranga/cradle\n\n# 2. Import & render in React / Next.js\nimport "@maranga/cradle";\n\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n/>`;
 
-  const activeSnippet = tab === "script" ? scriptSnippet : npmSnippet;
+  const typesSnippet = `// React 19 / Next.js 15+ Custom Element TypeScript Declaration\n// Add to layout.tsx or global.d.ts if TypeScript flags <cradle-character>:\n\ndeclare module "react" {\n  namespace JSX {\n    interface IntrinsicElements {\n      "cradle-character": React.DetailedHTMLProps<\n        React.HTMLAttributes<HTMLElement> & {\n          "site-id"?: string;\n          "api-base"?: string;\n          placement?: "floating" | "inline";\n        },\n        HTMLElement\n      >;\n    }\n  }\n}`;
+
+  const activeSnippet = tab === "script" ? scriptSnippet : tab === "npm" ? npmSnippet : typesSnippet;
 
   return (
     <section className="install-code">
@@ -326,7 +327,7 @@ function InstallCode({ installationId, copied, onCopy, onTestState }: { installa
         <p>Choose your preferred integration method below.</p>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         <button
           type="button"
           className={`button${tab === "script" ? " primary" : ""}`}
@@ -343,17 +344,26 @@ function InstallCode({ installationId, copied, onCopy, onTestState }: { installa
         >
           NPM Package (@maranga/cradle)
         </button>
+        <button
+          type="button"
+          className={`button${tab === "types" ? " primary" : ""}`}
+          onClick={() => setTab("types")}
+          style={{ fontSize: ".75rem", padding: "6px 12px" }}
+        >
+          React 19 / TS Declaration
+        </button>
       </div>
 
       <pre><code>{activeSnippet}</code></pre>
       <button className="button primary" style={{ marginTop: 14 }} onClick={() => void onCopy(activeSnippet)}>
-        {copied ? "Copied to clipboard" : `Copy ${tab === "script" ? "script tag" : "NPM snippet"}`}
+        {copied ? "Copied to clipboard" : `Copy ${tab === "script" ? "script tag" : tab === "npm" ? "NPM snippet" : "TS declaration"}`}
       </button>
 
       <CharacterStatePlayground onTestState={onTestState} />
     </section>
   );
 }
+
 
 
 function LiveIntegrationSection({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: WebState): void }) {
