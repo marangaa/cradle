@@ -178,7 +178,8 @@ class CradleCharacter extends HTMLElement {
 
   private async loadManifest() {
     try {
-      const response = await fetch(this.apiBase + "/api/installations/" + this.siteId);
+      const baseUrl = (this.apiBase || "").replace(/\/$/, "");
+      const response = await fetch(baseUrl + "/api/installations/" + this.siteId);
       if (!response.ok) throw new Error("The character manifest could not be loaded.");
       const manifest = await response.json() as { character: Character; assets: { atlas: PetAtlas } | null };
       const shell = this.shadow.querySelector(".shell") as HTMLElement;
@@ -197,12 +198,17 @@ class CradleCharacter extends HTMLElement {
   }
 
   private configureAtlas(atlas: PetAtlas) {
-    this.atlas = { ...atlas, url: this.apiBase + atlas.url };
+    const baseUrl = (this.apiBase || "").replace(/\/$/, "");
+    const url = (atlas.url.startsWith("http://") || atlas.url.startsWith("https://"))
+      ? atlas.url
+      : baseUrl + atlas.url;
+    this.atlas = { ...atlas, url };
     this.shadow.querySelectorAll<HTMLElement>(".companion").forEach((companion) => {
-      companion.style.backgroundImage = "url(" + this.atlas?.url + ")";
+      companion.style.backgroundImage = 'url("' + url + '")';
       companion.style.backgroundSize = (this.atlas?.columns ?? 8) * 100 + "% " + (this.atlas?.rows ?? 9) * 100 + "%";
     });
   }
+
 
   private animateCompanions(atlas: PetAtlas, sprite: { row: number; frames: number; durationMs: number }) {
     const yPosition = (sprite.row / Math.max(atlas.rows - 1, 1)) * 100;
