@@ -16,24 +16,24 @@ Or load the pre-bundled script directly via CDN / Runtime:
 
 ```html
 <script src="http://localhost:3002/widget.js"></script>
-<cradle-character site-id="YOUR_SITE_ID" api-base="http://localhost:3002"></cradle-character>
+<cradle-character site-id="YOUR_INSTALLATION_ID" api-base="http://localhost:3002"></cradle-character>
 ```
 
 ---
 
-## Visual Animation States
+## Developer Animation State Primitives
 
 Drive character visual states dynamically using `window.Cradle.setState(state)`:
 
-| Visual State | Animation Mapped | Use Case / Trigger |
+| Developer Primitive | State Description | Use Case / Backend Trigger |
 |---|---|---|
-| `"idle"` | `idle` | Default standing / waiting state |
-| `"greeting"` | `waving` | Character welcome / panel opened |
-| `"listening"` | `review` | Attentive state when user interacts |
-| `"thinking"` | `running` | Processing an AI request or fetching data |
-| `"responding"` | `waving` | Outputting response to visitor |
-| `"resolved"` | `jumping` | Task completion / success milestone |
-| `"error"` | `failed` | Failure / network fallback |
+| `"idle"` | Default standing / waiting state | Default state when inactive |
+| `"greeting"` | Welcome wave | Visitor lands on site or opens companion |
+| `"listening"` | Attentive / focused state | Visitor is typing input or submitting a query |
+| `"thinking"` | Processing / running state | AI engine querying database, tools, or memory |
+| `"responding"` | Outputting / speaking state | AI engine streaming response to visitor |
+| `"resolved"` | Victory / task complete | Action succeeded or milestone completed |
+| `"error"` | Dizzy / error fallback | Failure, timeout, or network exception |
 
 ---
 
@@ -42,15 +42,16 @@ Drive character visual states dynamically using `window.Cradle.setState(state)`:
 Control any connected character from your host application code:
 
 ```ts
-// Control panels
-window.Cradle?.open();               // Open character panel & trigger greeting
-window.Cradle?.close();              // Close panel & return to idle
+// Control speech card popover
+window.Cradle?.open();               // Open floating speech card & trigger greeting
+window.Cradle?.close();              // Close floating speech card & return to idle
 window.Cradle?.toggle();             // Toggle open/closed state
 
-// Drive state & context
-window.Cradle?.setState("thinking");                 // Switch animation state
-window.Cradle?.trigger({ type: "open-pricing" });    // Emit custom action event
-window.Cradle?.setContext({ userPlan: "pro" });       // Attach non-sensitive page metadata
+// Drive visual state machine
+window.Cradle?.setState("thinking");                 // Switch to thinking state
+window.Cradle?.setState("responding");               // Switch to responding state
+window.Cradle?.trigger({ type: "open-pricing" });    // Emit custom action event to host app
+window.Cradle?.setContext({ userPlan: "pro" });       // Attach page metadata context
 ```
 
 ---
@@ -65,7 +66,7 @@ window.addEventListener("cradle:ready", (e: CustomEvent) => {
 });
 
 window.addEventListener("cradle:open", (e: CustomEvent) => {
-  console.log("Panel opened for visitor:", e.detail.visitorId);
+  console.log("Companion clicked by visitor:", e.detail);
 });
 
 window.addEventListener("cradle:state", (e: CustomEvent) => {
@@ -73,7 +74,7 @@ window.addEventListener("cradle:state", (e: CustomEvent) => {
 });
 
 window.addEventListener("cradle:action", (e: CustomEvent) => {
-  console.log("User triggered action:", e.detail.action);
+  console.log("Custom action triggered:", e.detail.action);
 });
 ```
 
@@ -91,7 +92,6 @@ export function CharacterWidget({ siteId }: { siteId: string }) {
   useEffect(() => {
     function onAction(event: CustomEvent) {
       console.log("Custom action triggered:", event.detail.action);
-      // Open your AI chat modal, search drawer, or help widget here
     }
 
     window.addEventListener("cradle:action", onAction as EventListener);
@@ -113,4 +113,5 @@ export function CharacterWidget({ siteId }: { siteId: string }) {
 
 - `site-id`: (Required) The UUID of your Cradle installation.
 - `api-base`: (Required) Base URL of your Cradle Runtime service.
-- `placement`: (Optional) `"floating"` (default, draggable bottom-right) or `"inline"` (embeds inside normal page flow).
+- `placement`: (Optional) `"floating"` (default, bottom-right floating anchor) or `"inline"` (embeds inside normal page flow).
+
