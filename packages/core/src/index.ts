@@ -26,6 +26,35 @@ export function createDefaultCharacter(siteName: string): Character {
   };
 }
 
+/**
+ * Petdex's spritesheet protocol is fixed, not per-pet: 8 columns always, and either the v1
+ * (9-row) or v2 (11-row) grid at 192x208 cells. Nothing beyond that is declared anywhere by
+ * Petdex (not the manifest, not pet.json), so this is the full set of geometry values that can
+ * legitimately vary per companion — anything else (frame counts, durations) must be derived from
+ * the actual image at render time, never guessed here.
+ */
+export const PETDEX_GRID_VERSIONS = [9, 11] as const;
+
+/**
+ * Canonical row → state mapping, confirmed against Petdex's own "State viewer" UI copy
+ * (idle, running-right, running-left, waving, jumping, failed, waiting, running, review).
+ * This is Petdex's documented convention, not something Cradle invented, so it's fixed here
+ * as a single source of truth rather than re-declared per installation.
+ */
+export const PETDEX_STATE_ROWS = {
+  idle: 0,
+  "running-right": 1,
+  "running-left": 2,
+  waving: 3,
+  jumping: 4,
+  failed: 5,
+  waiting: 6,
+  running: 7,
+  review: 8,
+} as const;
+
+export type PetdexState = keyof typeof PETDEX_STATE_ROWS;
+
 export const companionPackageSchema = z.object({
   id: z.string().uuid(),
   installationId: z.string().uuid(),
@@ -41,7 +70,7 @@ export const companionPackageSchema = z.object({
   checksum: z.string().regex(/^[a-f0-9]{64}$/),
   contentType: z.literal("image/webp"),
   columns: z.literal(8),
-  rows: z.number().int().min(9).max(32),
+  rows: z.union([z.literal(9), z.literal(11)]),
   cellWidth: z.literal(192),
   cellHeight: z.literal(208),
   createdAt: z.string().datetime(),

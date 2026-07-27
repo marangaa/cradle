@@ -1,16 +1,45 @@
+/**
+ * Canonical Petdex row -> state map. Confirmed against Petdex's own "State viewer" UI copy
+ * (idle, running-right, running-left, waving, jumping, failed, waiting, running, review), so
+ * this is Petdex's documented convention, not something Cradle invented. Duplicated here
+ * (rather than imported from @cradle/core) because this package ships standalone to npm/unpkg
+ * as a zero-dependency embed script.
+ */
+const STATE_ROWS = {
+  idle: 0,
+  "running-right": 1,
+  "running-left": 2,
+  waving: 3,
+  jumping: 4,
+  failed: 5,
+  waiting: 6,
+  running: 7,
+  review: 8,
+} as const;
+
+/** The only visual states that exist — one per real spritesheet row, nothing invented. */
+type PetdexState = keyof typeof STATE_ROWS;
+
+const STATE_ORDER = Object.keys(STATE_ROWS) as PetdexState[];
+
+/** Presentation-only timing: Petdex declares no per-frame duration anywhere, so this is ours. */
+const MS_PER_FRAME = 140;
+const MIN_STATE_DURATION_MS = 400;
+
+/** Below this alpha value (0-255) a pixel counts as empty when detecting real frame counts. */
+const ALPHA_THRESHOLD = 12;
+
 type PetAtlas = {
   url: string;
   columns: number;
   rows: number;
-  states: Record<string, { row: number; frames: number; durationMs: number }>;
+  stateRows: Record<string, number>;
 };
 
 type Character = {
   displayName: string;
   greeting: string;
 };
-
-type WebState = "idle" | "greeting" | "listening" | "thinking" | "responding" | "resolved" | "error";
 
 type CradleAction = string | { type: string; value?: string; [key: string]: unknown };
 
@@ -20,7 +49,8 @@ type CradleController = {
   toggle(siteId?: string): void;
   trigger(action: CradleAction, siteId?: string): void;
   resolveAction(success?: boolean, siteId?: string): void;
-  setState(state: WebState, siteId?: string): void;
+  /** Accepts only the 9 real spritesheet states — there is nothing else to set. */
+  setState(state: PetdexState, siteId?: string): void;
   setContext(context: Record<string, unknown>, siteId?: string): void;
 };
 
@@ -31,21 +61,59 @@ declare global {
   }
 }
 
-const stateRows: Record<WebState, string> = {
-  idle: "idle",
-  greeting: "waving",
-  listening: "review",
-  thinking: "running",
-  responding: "waving",
-  resolved: "jumping",
-  error: "failed",
-};
+/**
+ * Inspects a loaded spritesheet's alpha channel to find how many columns of each row actually
+ * have drawn content, scanning from the last column inward. Petdex never declares frame counts
+ * anywhere (not the manifest, not pet.json), so this is the only reliable source of truth for
+ * how many frames a given state's row really has.
+ */
+function detectRowFrameCounts(image: HTMLImageElement, columns: number, rows: number): number[] {
+  const counts = new Array<number>(rows).fill(columns);
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx || canvas.width === 0 || canvas.height === 0) return counts;
+
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const cellWidth = canvas.width / columns;
+  const cellHeight = canvas.height / rows;
+
+  for (let row = 0; row < rows; row += 1) {
+    let lastNonEmptyColumn = -1;
+    for (let column = 0; column < columns; column += 1) {
+      const x = Math.round(column * cellWidth);
+      const y = Math.round(row * cellHeight);
+      const w = Math.max(1, Math.round(cellWidth));
+      const h = Math.max(1, Math.round(cellHeight));
+      let hasContent = false;
+      try {
+        const { data } = ctx.getImageData(x, y, w, h);
+        for (let i = 3; i < data.length; i += 4) {
+          if ((data[i] ?? 0) > ALPHA_THRESHOLD) {
+            hasContent = true;
+            break;
+          }
+        }
+      } catch {
+        // Cross-origin canvas taint or similar - keep the full-row default for this row.
+        hasContent = true;
+      }
+      if (hasContent) lastNonEmptyColumn = column;
+    }
+    // A fully blank row means this pet never drew that state - fall back to a full row rather
+    // than a zero/one-frame animation that would look frozen.
+    counts[row] = lastNonEmptyColumn >= 0 ? lastNonEmptyColumn + 1 : columns;
+  }
+  return counts;
+}
 
 /** Framework-free custom element for an animated, programmable website character. */
 class CradleCharacter extends HTMLElement {
   private readonly shadow = this.attachShadow({ mode: "open" });
   private petAnimations: Animation[] = [];
   private atlas: PetAtlas | null = null;
+  private rowFrameCounts: number[] = [];
   private open = false;
   private apiBase = "";
   private siteId = "";
@@ -71,10 +139,15 @@ class CradleCharacter extends HTMLElement {
   disconnectedCallback() {
     this.petAnimations.forEach((animation) => animation.cancel());
     this.petAnimations = [];
+    this.stopCycle();
   }
 
   private stateTimer: ReturnType<typeof setTimeout> | null = null;
-  private currentState: WebState = "idle";
+  private cycleTimer: ReturnType<typeof setTimeout> | null = null;
+  private cycling = false;
+  private explicitState = false;
+  private cycleStep = 0;
+  private currentState: PetdexState = "idle";
 
   /** Opens the character and emits an activation event for the host experience. */
   openPanel() {
@@ -83,13 +156,14 @@ class CradleCharacter extends HTMLElement {
     const trigger = this.shadow.querySelector(".trigger") as HTMLButtonElement | null;
     if (panel) panel.hidden = false;
     trigger?.setAttribute("aria-expanded", "true");
-    this.setVisualState("greeting");
+    this.explicitState = true;
+    this.setVisualState("waving");
     this.emit("cradle:open", this.eventContext());
 
     if (this.stateTimer) clearTimeout(this.stateTimer);
     this.stateTimer = setTimeout(() => {
-      if (this.open && this.currentState === "greeting") {
-        this.setVisualState("idle");
+      if (this.open && this.currentState === "waving") {
+        this.releaseToCycle();
       }
     }, 2500);
   }
@@ -102,7 +176,7 @@ class CradleCharacter extends HTMLElement {
     const trigger = this.shadow.querySelector(".trigger") as HTMLButtonElement | null;
     if (panel) panel.hidden = true;
     trigger?.setAttribute("aria-expanded", "false");
-    this.setVisualState("idle");
+    this.releaseToCycle();
     this.emit("cradle:close", this.eventContext());
   }
 
@@ -113,32 +187,70 @@ class CradleCharacter extends HTMLElement {
   /** Emits an intent for the host site to handle in its own interface or runtime. */
   trigger(action: CradleAction) {
     const normalized = typeof action === "string" ? { type: "action", value: action } : action;
-    this.setVisualState("listening");
+    this.explicitState = true;
+    this.setVisualState("review");
     this.emit("cradle:action", { ...this.eventContext(), action: normalized });
 
     if (this.stateTimer) clearTimeout(this.stateTimer);
     this.stateTimer = setTimeout(() => {
-      if (this.currentState === "listening") {
-        this.setVisualState("thinking");
+      if (this.currentState === "review") {
+        this.setVisualState("running");
       }
     }, 1000);
   }
 
   /** Finishes an ongoing action with a celebration jump or error fallback. */
   resolveAction(success = true) {
-    this.setVisualState(success ? "resolved" : "error");
+    this.explicitState = true;
+    this.setVisualState(success ? "jumping" : "failed");
     if (this.stateTimer) clearTimeout(this.stateTimer);
     this.stateTimer = setTimeout(() => {
-      this.setVisualState("idle");
+      this.releaseToCycle();
     }, 2200);
   }
 
-  /** Updates the companion animation without coupling it to a particular workflow. */
-  setVisualState(state: WebState) {
+  /**
+   * Hands control back from an explicit, real-event-driven animation (open/trigger/resolve) to
+   * the idle showcase cycle - resuming from "idle" rather than freezing on whatever state the
+   * explicit sequence last set.
+   */
+  private releaseToCycle() {
+    this.explicitState = false;
+    this.setVisualState("idle");
+    this.scheduleNextCycleFrame();
+  }
+
+  /** Starts the default idle showcase, cycling through every declared state in turn. */
+  private startCycle() {
+    if (this.cycling) return;
+    this.cycling = true;
+    this.scheduleNextCycleFrame();
+  }
+
+  private stopCycle() {
+    this.cycling = false;
+    if (this.cycleTimer) clearTimeout(this.cycleTimer);
+    this.cycleTimer = null;
+  }
+
+  private scheduleNextCycleFrame() {
+    if (this.cycleTimer) clearTimeout(this.cycleTimer);
+    if (!this.cycling || this.explicitState || !this.atlas) return;
+    const state = STATE_ORDER[this.cycleStep % STATE_ORDER.length] ?? "idle";
+    this.cycleStep += 1;
+    const durationMs = this.setVisualState(state);
+    this.cycleTimer = setTimeout(() => this.scheduleNextCycleFrame(), Math.max(durationMs, MIN_STATE_DURATION_MS));
+  }
+
+  /** Updates the companion animation dynamically from the atlas, returning the duration used. */
+  setVisualState(state: PetdexState): number {
     this.currentState = state;
-    const sprite = this.atlas?.states[stateRows[state]] ?? this.atlas?.states.idle;
-    if (sprite && this.atlas) this.animateCompanions(this.atlas, sprite);
+    const atlas = this.atlas;
+    if (!atlas) return MIN_STATE_DURATION_MS;
+    const row = atlas.stateRows[state] ?? atlas.stateRows.idle ?? 0;
+    const duration = this.animateCompanions(atlas, row);
     this.emit("cradle:state", { ...this.eventContext(), state });
+    return duration;
   }
 
   /** Supplies non-sensitive page context that host code can associate with character events. */
@@ -158,12 +270,7 @@ class CradleCharacter extends HTMLElement {
       '.greeting-bubble{position:relative;width:100%;padding:14px 18px;background:#ffffff;color:#09090b;border:2.5px solid #09090b;border-radius:20px 20px 4px 20px;box-shadow:4px 4px 0px #09090b,0 10px 25px rgba(0,0,0,0.12)}.greeting-bubble::after{content:"";position:absolute;bottom:-8px;right:20px;width:14px;height:14px;background:#ffffff;border-right:2.5px solid #09090b;border-bottom:2.5px solid #09090b;transform:rotate(45deg)}.greeting{margin:0;color:#09090b;font-size:.86rem;line-height:1.5;font-weight:600}',
       '.trigger{display:grid;width:94px;height:102px;place-items:center;border:0;background:transparent;box-shadow:none;cursor:grab;touch-action:none}.trigger:active{cursor:grabbing}.trigger:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}.trigger .companion{width:88px;height:96px;background-repeat:no-repeat;background-size:800% 900%}@media (prefers-reduced-motion:reduce){.companion{animation:none!important}}',
       '</style>',
-      '<div class="shell"><section class="panel" hidden aria-label="Website character"><div class="name-tag"><span class="title">Boba</span></div><div class="greeting-bubble"><p class="greeting">Hey there! 👋 I\'m Boba, your AI product companion. Ask me anything or click me to interact!</p></div></section><button class="trigger" type="button" aria-label="Open website character" aria-expanded="false"><span class="companion" aria-hidden="true"></span></button></div>',
-
-
-
-
-
+      '<div class="shell"><section class="panel" hidden aria-label="Website character"><div class="name-tag"><span class="title">Companion</span></div><div class="greeting-bubble"><p class="greeting">Hi there! \uD83D\uDC4B Ask me anything or click to interact.</p></div></section><button class="trigger" type="button" aria-label="Open website character" aria-expanded="false"><span class="companion" aria-hidden="true"></span></button></div>',
     ].join("");
     const trigger = this.shadow.querySelector(".trigger") as HTMLButtonElement;
     trigger.addEventListener("click", (event) => {
@@ -188,18 +295,23 @@ class CradleCharacter extends HTMLElement {
       const baseUrl = (this.apiBase || "").replace(/\/$/, "");
       const response = await fetch(baseUrl + "/api/installations/" + this.siteId);
       if (!response.ok) throw new Error("The character manifest could not be loaded.");
-      const manifest = await response.json() as { character: Character; assets: { atlas: PetAtlas } | null };
+      const manifest = await response.json() as { character: Character; assets: { atlas: PetAtlas | null } | null };
       const shell = this.shadow.querySelector(".shell") as HTMLElement;
       const title = this.shadow.querySelector(".title") as HTMLElement;
       const greeting = this.shadow.querySelector(".greeting") as HTMLElement;
       shell.dataset.placement = this.placement;
       title.textContent = manifest.character.displayName;
       greeting.textContent = manifest.character.greeting;
-      if (manifest.assets?.atlas) this.configureAtlas(manifest.assets.atlas);
-      this.setVisualState("idle");
+      if (manifest.assets?.atlas) {
+        await this.configureAtlas(manifest.assets.atlas);
+        this.startCycle();
+      } else {
+        this.emit("cradle:ready", { ...this.eventContext(), character: manifest.character });
+        return;
+      }
       this.emit("cradle:ready", { ...this.eventContext(), character: manifest.character });
     } catch (error) {
-      this.setVisualState("error");
+      this.setVisualState("failed");
       this.emit("cradle:error", { ...this.eventContext(), error: error instanceof Error ? error.message : "Manifest loading failed" });
     }
   }
@@ -213,10 +325,12 @@ class CradleCharacter extends HTMLElement {
     this.atlas = { ...atlas, url };
 
     let imageUrl = url;
+    let blobForDetection: Blob | null = null;
     try {
       const res = await fetch(url, { referrerPolicy: "no-referrer" });
       if (res.ok) {
         const blob = await res.blob();
+        blobForDetection = blob;
         imageUrl = URL.createObjectURL(blob);
       }
     } catch {
@@ -227,16 +341,34 @@ class CradleCharacter extends HTMLElement {
       companion.style.backgroundImage = 'url("' + imageUrl + '")';
       companion.style.backgroundSize = (this.atlas?.columns ?? 8) * 100 + "% " + (this.atlas?.rows ?? 9) * 100 + "%";
     });
+
+    this.rowFrameCounts = await this.detectFrameCounts(imageUrl, blobForDetection, atlas.columns, atlas.rows);
   }
 
+  /** Loads the spritesheet into an offscreen image and detects each row's real frame count. */
+  private async detectFrameCounts(imageUrl: string, blob: Blob | null, columns: number, rows: number): Promise<number[]> {
+    try {
+      const image = new Image();
+      if (!blob) image.crossOrigin = "anonymous";
+      const decoded = await new Promise<HTMLImageElement>((resolve, reject) => {
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("Spritesheet failed to decode."));
+        image.src = imageUrl;
+      });
+      return detectRowFrameCounts(decoded, columns, rows);
+    } catch {
+      return new Array<number>(rows).fill(columns);
+    }
+  }
 
-
-
-  private animateCompanions(atlas: PetAtlas, sprite: { row: number; frames: number; durationMs: number }) {
-    const yPosition = (sprite.row / Math.max(atlas.rows - 1, 1)) * 100;
-    const numFrames = Math.max(sprite.frames, 1);
+  private animateCompanions(atlas: PetAtlas, row: number): number {
+    const yPosition = (row / Math.max(atlas.rows - 1, 1)) * 100;
+    const detected = this.rowFrameCounts[row];
+    const numFrames = Math.max(detected ?? atlas.columns, 1);
     const colDenom = Math.max(atlas.columns - 1, 1);
     const endXPosition = (numFrames / colDenom) * 100;
+    const durationMs = Math.max(numFrames * MS_PER_FRAME, MIN_STATE_DURATION_MS);
+
     this.petAnimations.forEach((animation) => animation.cancel());
     this.petAnimations = [];
     this.shadow.querySelectorAll<HTMLElement>(".companion").forEach((companion) => {
@@ -244,9 +376,10 @@ class CradleCharacter extends HTMLElement {
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       this.petAnimations.push(companion.animate(
         [{ backgroundPosition: "0% " + yPosition + "%" }, { backgroundPosition: endXPosition + "% " + yPosition + "%" }],
-        { duration: sprite.durationMs, iterations: Infinity, easing: "steps(" + numFrames + ", end)" },
+        { duration: durationMs, iterations: Infinity, easing: "steps(" + numFrames + ", end)" },
       ));
     });
+    return durationMs;
   }
 
 
@@ -340,6 +473,4 @@ declare global {
     }
   }
 }
-
-
 

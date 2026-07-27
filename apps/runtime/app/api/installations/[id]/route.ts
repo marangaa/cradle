@@ -1,4 +1,4 @@
-import { createDefaultCharacter } from "@cradle/core";
+import { createDefaultCharacter, PETDEX_STATE_ROWS } from "@cradle/core";
 import { auth } from "@cradle/db";
 import { store } from "../../../lib/store";
 
@@ -26,41 +26,23 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   };
 
   const companion = installation ? await store.getCompanionPackage(id) : null;
+
+  /**
+   * We only ever send the widget what Petdex actually gives us: the spritesheet, its real grid
+   * dimensions, and the canonical row→state map (confirmed against Petdex's own UI copy). We do
+   * NOT send frame counts or animation durations — Petdex declares neither anywhere, so guessing
+   * them here was the source of stale/misaligned playback. The widget derives real per-row frame
+   * counts itself by inspecting the spritesheet's alpha channel at load time.
+   *
+   * If no companion is configured for this installation, atlas is simply null — no invented
+   * default pet, no stale hardcoded fallback image.
+   */
   const atlas = companion ? {
     url: companion.sourceUrl,
     columns: companion.columns,
     rows: companion.rows,
-    cellWidth: companion.cellWidth,
-    cellHeight: companion.cellHeight,
-    states: {
-      idle: { row: 0, frames: 6, durationMs: 1100 },
-      "running-right": { row: 1, frames: 8, durationMs: 1060 },
-      "running-left": { row: 2, frames: 8, durationMs: 1060 },
-      waving: { row: 3, frames: 4, durationMs: 700 },
-      jumping: { row: 4, frames: 5, durationMs: 840 },
-      failed: { row: 5, frames: 8, durationMs: 1220 },
-      waiting: { row: 6, frames: 6, durationMs: 1010 },
-      running: { row: 7, frames: 6, durationMs: 820 },
-      review: { row: 8, frames: 6, durationMs: 1030 },
-    },
-  } : {
-    url: "https://raw.githubusercontent.com/crafter-station/petdex/main/pets/boba/spritesheet.png",
-    columns: 8,
-    rows: 9,
-    cellWidth: 32,
-    cellHeight: 32,
-    states: {
-      idle: { row: 0, frames: 6, durationMs: 1100 },
-      "running-right": { row: 1, frames: 8, durationMs: 1060 },
-      "running-left": { row: 2, frames: 8, durationMs: 1060 },
-      waving: { row: 3, frames: 4, durationMs: 700 },
-      jumping: { row: 4, frames: 5, durationMs: 840 },
-      failed: { row: 5, frames: 8, durationMs: 1220 },
-      waiting: { row: 6, frames: 6, durationMs: 1010 },
-      running: { row: 7, frames: 6, durationMs: 820 },
-      review: { row: 8, frames: 6, durationMs: 1030 },
-    },
-  };
+    stateRows: PETDEX_STATE_ROWS,
+  } : null;
 
   const character = installation?.character ?? createDefaultCharacter(installation?.name ?? "Qualra Companion");
 
@@ -73,13 +55,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       provider: companion.provider,
       slug: companion.slug,
       submittedBy: companion.submittedBy,
-    } : {
-      id: "boba",
-      name: "Boba",
-      provider: "petdex",
-      slug: "boba",
-      submittedBy: "cradle",
-    },
+    } : null,
     assets: { atlas },
   }, { headers: corsHeaders });
 }

@@ -19,7 +19,25 @@ import { authClient } from "./lib/auth-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type WebState = "idle" | "greeting" | "listening" | "thinking" | "responding" | "resolved" | "error";
+/**
+ * Canonical Petdex row -> state map, mirroring @cradle/widget. Duplicated here (rather than a
+ * shared import) to avoid wiring a new cross-package dependency for this fix; keep both in sync
+ * if Petdex ever changes its convention.
+ */
+const STATE_ROWS = {
+  idle: 0,
+  "running-right": 1,
+  "running-left": 2,
+  waving: 3,
+  jumping: 4,
+  failed: 5,
+  waiting: 6,
+  running: 7,
+  review: 8,
+} as const;
+
+type PetdexState = keyof typeof STATE_ROWS;
+
 type Page = { url: string; title: string; markdown: string };
 
 type Character = { displayName: string; greeting: string };
@@ -28,9 +46,10 @@ type OwnedInstallation = {
   id: string;
   name: string;
   origin: string;
-  knowledgeVersion: number;
+  knowledgeVersion?: number;
   updatedAt?: string;
-  character?: { displayName: string; greeting: string } | null;
+  companionSlug?: string;
+  character?: Character | null;
 };
 
 type Knowledge = { pages: Page[]; sourceUrl: string; version: number };
@@ -55,11 +74,6 @@ type CatalogCompanion = {
   submittedBy: string;
   spritesheetUrl: string;
   petJsonUrl: string;
-  columns?: number;
-  rows?: number;
-  cellWidth?: number;
-  cellHeight?: number;
-  states?: Record<string, { row: number; frames: number; durationMs?: number }>;
 };
 type ImportedCompanion = CatalogCompanion & {
   id: string;
@@ -74,37 +88,17 @@ type ImportedCompanion = CatalogCompanion & {
   cellHeight: number;
 };
 
-const WEB_TO_CODEX_STATE_MAP: Record<PreviewState, string> = {
-  idle: "idle",
-  greeting: "waving",
-  listening: "review",
-  thinking: "running",
-  responding: "waving",
-  resolved: "jumping",
-  error: "failed",
-};
-
 type HealthPayload = { ok: boolean; services: Record<string, { ok: boolean }> };
 
 type Screen = "connect" | "review" | "shape" | "live";
-type PreviewState = "idle" | "greeting" | "listening" | "thinking" | "responding" | "resolved" | "error";
+type PreviewState = PetdexState;
 type KindFilter = "all" | "character" | "creature" | "object";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL || "http://localhost:3002";
 
-const PREVIEW_STATES: Record<PreviewState, { label: string; row: number; frames: number; durationMs: number }> = {
-  idle:       { label: "Idle",       row: 0, frames: 6, durationMs: 1_100 },
-  greeting:   { label: "Greeting",   row: 3, frames: 4, durationMs:   700 },
-  listening:  { label: "Listening",  row: 8, frames: 6, durationMs: 1_030 },
-  thinking:   { label: "Thinking",   row: 7, frames: 6, durationMs:   820 },
-  responding: { label: "Responding", row: 3, frames: 4, durationMs:   700 },
-  resolved:   { label: "Resolved",   row: 4, frames: 5, durationMs:   840 },
-  error:      { label: "Error",      row: 5, frames: 8, durationMs: 1_220 },
-};
-
-const CATALOG_CYCLE: PreviewState[] = ["idle", "greeting", "thinking", "resolved"];
+const CATALOG_CYCLE = Object.keys(STATE_ROWS) as PetdexState[];
 
 const KIND_LABELS: Record<KindFilter, string> = {
   all: "All", character: "Characters", creature: "Creatures", object: "Objects",
@@ -153,25 +147,87 @@ function getSpriteUrl(companion: CatalogCompanion | ImportedCompanion) {
   return url;
 }
 
-function getCompanionStateSpec(companion: CatalogCompanion | ImportedCompanion, requestedState: string) {
-  const states = companion.states;
-  if (states) {
-    const codexKey = WEB_TO_CODEX_STATE_MAP[requestedState as PreviewState] ?? requestedState;
-    const match = states[codexKey] ?? states[requestedState] ?? Object.values(states)[0];
-    if (match) {
-      return {
-        row: match.row,
-        frames: match.frames,
-        durationMs: match.durationMs || 1000,
-      };
-    }
-  }
-  const fallback = PREVIEW_STATES[requestedState as PreviewState] ?? PREVIEW_STATES.idle;
-  return {
-    row: fallback.row,
-    frames: fallback.frames,
-    durationMs: fallback.durationMs,
-  };
+/**
+ * Petdex declares neither grid dimensions nor frame counts anywhere in its manifest or pet.json,
+ * so this is the only reliable source of truth: decode the real spritesheet once, derive
+ * columns/rows from its actual pixel size (192x208 cells), and detect each row's real frame
+ * count from its alpha channel — mirroring the same technique @cradle/widget uses at runtime.
+ */
+type DetectedAtlas = { columns: number; rows: number; frameCounts: number[] };
+
+const CELL_WIDTH = 192;
+const CELL_HEIGHT = 208;
+const ALPHA_THRESHOLD = 12;
+
+const atlasCache = new Map<string, Promise<DetectedAtlas>>();
+
+function detectAtlas(spriteUrl: string): Promise<DetectedAtlas> {
+  const cached = atlasCache.get(spriteUrl);
+  if (cached) return cached;
+
+  const promise = new Promise<DetectedAtlas>((resolve) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      const width = image.naturalWidth || CELL_WIDTH * 8;
+      const height = image.naturalHeight || CELL_HEIGHT * 9;
+      const columns = Math.max(1, Math.round(width / CELL_WIDTH));
+      const rows = Math.max(1, Math.round(height / CELL_HEIGHT));
+      const fallback = { columns, rows, frameCounts: new Array<number>(rows).fill(columns) };
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) { resolve(fallback); return; }
+
+      try {
+        ctx.drawImage(image, 0, 0, width, height);
+        const cellW = width / columns;
+        const cellH = height / rows;
+        const frameCounts: number[] = [];
+        for (let row = 0; row < rows; row += 1) {
+          let lastNonEmpty = -1;
+          for (let column = 0; column < columns; column += 1) {
+            const x = Math.round(column * cellW);
+            const y = Math.round(row * cellH);
+            const w = Math.max(1, Math.round(cellW));
+            const h = Math.max(1, Math.round(cellH));
+            let hasContent = false;
+            try {
+              const { data } = ctx.getImageData(x, y, w, h);
+              for (let i = 3; i < data.length; i += 4) {
+                if ((data[i] ?? 0) > ALPHA_THRESHOLD) { hasContent = true; break; }
+              }
+            } catch {
+              hasContent = true;
+            }
+            if (hasContent) lastNonEmpty = column;
+          }
+          frameCounts.push(lastNonEmpty >= 0 ? lastNonEmpty + 1 : columns);
+        }
+        resolve({ columns, rows, frameCounts });
+      } catch {
+        resolve(fallback);
+      }
+    };
+    image.onerror = () => resolve({ columns: 8, rows: 9, frameCounts: new Array(9).fill(8) });
+    image.src = spriteUrl;
+  });
+
+  atlasCache.set(spriteUrl, promise);
+  return promise;
+}
+
+function useCompanionAtlas(spriteUrl: string): DetectedAtlas | null {
+  const [atlas, setAtlas] = useState<DetectedAtlas | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setAtlas(null);
+    void detectAtlas(spriteUrl).then((result) => { if (!cancelled) setAtlas(result); });
+    return () => { cancelled = true; };
+  }, [spriteUrl]);
+  return atlas;
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -187,21 +243,25 @@ function CompanionSprite({
   className?: string;
 }) {
   const spriteRef = useRef<HTMLSpanElement>(null);
-  const spec = getCompanionStateSpec(companion, state);
-  const columns = companion.columns || 8;
-  const rows    = companion.rows    || 9;
   const spriteUrl = getSpriteUrl(companion);
+  const atlas = useCompanionAtlas(spriteUrl);
 
-  const yPercent = (spec.row / Math.max(rows - 1, 1)) * 100;
+  const columns = atlas?.columns ?? 8;
+  const rows = atlas?.rows ?? 9;
+  const row = Math.min(STATE_ROWS[state] ?? 0, rows - 1);
+  const frames = Math.max(atlas?.frameCounts[row] ?? columns, 1);
+  const durationMs = Math.max(frames * 140, 400);
+
+  const yPercent = (row / Math.max(rows - 1, 1)) * 100;
   const colDenom = Math.max(columns - 1, 1);
-  const endXPercent = (spec.frames / colDenom) * 100;
+  const endXPercent = (frames / colDenom) * 100;
 
   useEffect(() => {
     const el = spriteRef.current;
     if (!el) return;
 
     if (controlledFrame !== undefined) {
-      const activeFrame = controlledFrame % Math.max(spec.frames, 1);
+      const activeFrame = controlledFrame % Math.max(frames, 1);
       const xPercent = (activeFrame / Math.max(columns - 1, 1)) * 100;
       el.style.backgroundPosition = `${xPercent}% ${yPercent}%`;
       return;
@@ -218,14 +278,14 @@ function CompanionSprite({
         { backgroundPosition: `${endXPercent}% ${yPercent}%` },
       ],
       {
-        duration: spec.durationMs,
+        duration: durationMs,
         iterations: Infinity,
-        easing: `steps(${spec.frames}, end)`,
+        easing: `steps(${frames}, end)`,
       }
     );
 
     return () => animation.cancel();
-  }, [animated, columns, controlledFrame, endXPercent, spec.durationMs, spec.frames, yPercent]);
+  }, [animated, columns, controlledFrame, endXPercent, durationMs, frames, yPercent]);
 
   return (
     <span
@@ -237,7 +297,7 @@ function CompanionSprite({
         backgroundImage: `url(${spriteUrl})`,
         backgroundSize: `${columns * 100}% ${rows * 100}%`,
         backgroundPosition: `0% ${yPercent}%`,
-        ...(companion.cellWidth && companion.cellHeight ? { aspectRatio: `${companion.cellWidth} / ${companion.cellHeight}` } : {}),
+        aspectRatio: `${CELL_WIDTH} / ${CELL_HEIGHT}`,
       }}
     />
   );
@@ -258,7 +318,7 @@ function CompanionSkeleton() {
   );
 }
 
-function CharacterPreview({ character, companion, overrideState }: { character: Character; companion: ImportedCompanion; overrideState?: WebState }) {
+function CharacterPreview({ character, companion, overrideState }: { character: Character; companion: ImportedCompanion; overrideState?: PetdexState }) {
   const [state, setState] = useState<PreviewState>("idle");
   const [open, setOpen] = useState(false);
 
@@ -267,7 +327,7 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
   function togglePreview() {
     setOpen((current) => {
       const next = !current;
-      setState(next ? "greeting" : "idle");
+      setState(next ? "waving" : "idle");
       return next;
     });
   }
@@ -295,27 +355,27 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
 }
 
 
-const PLAYGROUND_STATES: { id: WebState; label: string; icon: string; snippet: string }[] = [
-  { id: "idle", label: "Idle", icon: "🟢", snippet: 'window.Cradle?.setState("idle");' },
-  { id: "greeting", label: "Greeting", icon: "👋", snippet: 'window.Cradle?.setState("greeting");' },
-  { id: "listening", label: "Listening", icon: "🔍", snippet: 'window.Cradle?.setState("listening");' },
-  { id: "thinking", label: "Thinking", icon: "⚡", snippet: 'window.Cradle?.setState("thinking");' },
-  { id: "responding", label: "Responding", icon: "💬", snippet: 'window.Cradle?.setState("responding");' },
-  { id: "resolved", label: "Resolved", icon: "🎉", snippet: 'window.Cradle?.resolveAction(true);' },
-  { id: "error", label: "Error", icon: "❌", snippet: 'window.Cradle?.resolveAction(false);' },
+/** Every entry previews a real spritesheet row and ships the accurate JS call for it. */
+const PLAYGROUND_ACTIONS: { previewState: PetdexState; label: string; icon: string; snippet: string }[] = [
+  { previewState: "idle", label: "Idle", icon: "🟢", snippet: 'window.Cradle?.setState("idle");' },
+  { previewState: "waving", label: "Waving", icon: "👋", snippet: 'window.Cradle?.setState("waving");' },
+  { previewState: "review", label: "Review", icon: "🔍", snippet: 'window.Cradle?.setState("review");' },
+  { previewState: "running", label: "Running", icon: "⚡", snippet: 'window.Cradle?.setState("running");' },
+  { previewState: "jumping", label: "Resolved", icon: "🎉", snippet: 'window.Cradle?.resolveAction(true);' },
+  { previewState: "failed", label: "Failed", icon: "❌", snippet: 'window.Cradle?.resolveAction(false);' },
 ];
 
 
-function CharacterStatePlayground({ onTestState }: { onTestState(state: WebState): void }) {
-  const [activeState, setActiveState] = useState<WebState>("idle");
+function CharacterStatePlayground({ onTestState }: { onTestState(state: PetdexState): void }) {
+  const [activeIndex, setActiveIndex] = useState(0);
   const [copiedState, setCopiedState] = useState(false);
 
-  const current = PLAYGROUND_STATES.find((s) => s.id === activeState) ?? PLAYGROUND_STATES[0]!;
+  const current = PLAYGROUND_ACTIONS[activeIndex] ?? PLAYGROUND_ACTIONS[0]!;
 
 
-  const testState = (state: WebState) => {
-    setActiveState(state);
-    onTestState(state);
+  const testState = (index: number) => {
+    setActiveIndex(index);
+    onTestState(PLAYGROUND_ACTIONS[index]!.previewState);
   };
 
   const copySnippet = async () => {
@@ -338,16 +398,16 @@ function CharacterStatePlayground({ onTestState }: { onTestState(state: WebState
       </div>
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
-        {PLAYGROUND_STATES.map((st) => (
+        {PLAYGROUND_ACTIONS.map((action, index) => (
           <button
-            key={st.id}
+            key={action.previewState + action.label}
             type="button"
-            className={`button${activeState === st.id ? " primary" : ""}`}
-            onClick={() => testState(st.id)}
+            className={`button${activeIndex === index ? " primary" : ""}`}
+            onClick={() => testState(index)}
             style={{ fontSize: ".68rem", padding: "5px 9px", gap: 5 }}
           >
-            <span>{st.icon}</span>
-            <span>{st.label}</span>
+            <span>{action.icon}</span>
+            <span>{action.label}</span>
           </button>
         ))}
       </div>
@@ -377,7 +437,7 @@ function CharacterStatePlayground({ onTestState }: { onTestState(state: WebState
   );
 }
 
-function InstallCode({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: WebState): void }) {
+function InstallCode({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: PetdexState): void }) {
   const [tab, setTab] = useState<"script" | "npm" | "types">("script");
   const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL || process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
 
@@ -436,7 +496,7 @@ function InstallCode({ installationId, copied, onCopy, onTestState }: { installa
 
 
 
-function LiveIntegrationSection({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: WebState): void }) {
+function LiveIntegrationSection({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: PetdexState): void }) {
   return (
     <div className="live-integration-wrapper">
       <div className="live-dual-grid">
@@ -581,7 +641,7 @@ export default function StudioHome() {
   const [screen, setScreen]               = useState<Screen>("connect");
   const [siteUrl, setSiteUrl]             = useState("");
   const [session, setSession]             = useState<StudioSession | null>(null);
-  const [playgroundState, setPlaygroundState] = useState<WebState | undefined>(undefined);
+  const [playgroundState, setPlaygroundState] = useState<PetdexState | undefined>(undefined);
 
   const [pickerDismissed, setPickerDismissed] = useState(false);
   const [includedUrls, setIncludedUrls]   = useState<Set<string>>(new Set());
@@ -855,7 +915,7 @@ export default function StudioHome() {
                     const hostname = inst.origin ? new URL(inst.origin).hostname : inst.name;
                     const showHostname = hostname !== inst.name;
                     const customCharacter = inst.character?.displayName && inst.character.displayName !== inst.name ? inst.character.displayName : null;
-                    const isApproved = inst.knowledgeVersion > 1;
+                    const isApproved = (inst.knowledgeVersion ?? 0) > 1;
                     const formattedDate = inst.updatedAt
                       ? new Date(inst.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
                       : null;
