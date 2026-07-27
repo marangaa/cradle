@@ -132,6 +132,32 @@ function getSpriteUrl(companion: CatalogCompanion | ImportedCompanion) {
   return "sourceUrl" in companion && companion.sourceUrl ? companion.sourceUrl : companion.spritesheetUrl;
 }
 
+const spriteBlobCache = new Map<string, string>();
+
+function useSpriteBlobUrl(rawUrl: string): string {
+  const [blobUrl, setBlobUrl] = useState<string>(() => spriteBlobCache.get(rawUrl) || rawUrl);
+
+  useEffect(() => {
+    if (!rawUrl || spriteBlobCache.has(rawUrl)) return;
+    let isMounted = true;
+    fetch(rawUrl, { referrerPolicy: "no-referrer" })
+      .then((res) => (res.ok ? res.blob() : null))
+      .then((blob) => {
+        if (!blob || !isMounted) return;
+        const objectUrl = URL.createObjectURL(blob);
+        spriteBlobCache.set(rawUrl, objectUrl);
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [rawUrl]);
+
+  return blobUrl;
+}
+
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
 /** Renders one real Petdex atlas cell sequence without loading a second widget runtime. */
@@ -148,6 +174,8 @@ function CompanionSprite({
   const motion = PREVIEW_STATES[state];
   const columns = "columns" in companion ? companion.columns : 8;
   const rows    = "rows"    in companion ? companion.rows    : 9;
+  const rawUrl  = getSpriteUrl(companion);
+  const spriteUrl = useSpriteBlobUrl(rawUrl);
 
   // Timer-driven frame advancement — useEffect is correct here (it manages a setInterval side-effect).
   useEffect(() => {
@@ -166,13 +194,14 @@ function CompanionSprite({
       role="img"
       aria-label={`${companion.displayName} in ${motion.label.toLowerCase()} state`}
       style={{
-        backgroundImage: `url(${getSpriteUrl(companion)})`,
+        backgroundImage: `url(${spriteUrl})`,
         backgroundSize: `${columns * 100}% ${rows * 100}%`,
         backgroundPosition: `${(activeFrame / Math.max(columns - 1, 1)) * 100}% ${(motion.row / Math.max(rows - 1, 1)) * 100}%`,
       }}
     />
   );
 }
+
 
 function CatalogCharacter({ companion, state, frame }: { companion: CatalogCompanion; state: PreviewState; frame: number }) {
   return <CompanionSprite companion={companion} state={state} frame={frame} animated={false} className="catalog-sprite" />;
