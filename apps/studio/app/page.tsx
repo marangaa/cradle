@@ -136,6 +136,25 @@ function getSpriteUrl(companion: CatalogCompanion | ImportedCompanion) {
   return url;
 }
 
+function resolveCompanionMotion(companion: CatalogCompanion | ImportedCompanion, state: PreviewState) {
+  const fallback = PREVIEW_STATES[state];
+  const codexKey = WEB_TO_CODEX_STATE_MAP[state] ?? state;
+  const states = companion.states;
+
+  if (states) {
+    const match = states[codexKey] ?? states[state] ?? states.idle;
+    if (match) {
+      return {
+        label: fallback.label,
+        row: match.row,
+        frames: match.frames,
+        durationMs: match.durationMs ?? fallback.durationMs,
+      };
+    }
+  }
+  return fallback;
+}
+
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
 /** Renders one real Petdex atlas cell sequence without loading a second widget runtime. */
@@ -149,9 +168,9 @@ function CompanionSprite({
   className?: string;
 }) {
   const [frame, setFrame] = useState(0);
-  const motion = PREVIEW_STATES[state];
-  const columns = "columns" in companion ? companion.columns : 8;
-  const rows    = "rows"    in companion ? companion.rows    : 9;
+  const motion = resolveCompanionMotion(companion, state);
+  const columns = companion.columns ?? 8;
+  const rows    = companion.rows    ?? 9;
   const spriteUrl = getSpriteUrl(companion);
 
   // Timer-driven frame advancement — useEffect is correct here (it manages a setInterval side-effect).
@@ -181,9 +200,6 @@ function CompanionSprite({
     />
   );
 }
-
-
-
 
 function CatalogCharacter({ companion, state, frame }: { companion: CatalogCompanion; state: PreviewState; frame: number }) {
   return <CompanionSprite companion={companion} state={state} frame={frame} animated={false} className="catalog-sprite" />;
