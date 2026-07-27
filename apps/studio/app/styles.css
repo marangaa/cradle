@@ -58,7 +58,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .connect-card .eyebrow { color: var(--blue); }
 .connect-card h2 { margin: 14px 0 8px; font-size: 2rem; font-weight: 780; letter-spacing: -.07em; line-height: .92; }
 .connect-card > p { margin: 0 0 28px; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+.connect-card form { display: grid; gap: 16px; margin-top: 18px; }
+.connect-card form .button { margin-top: 6px; justify-self: start; }
+.connect-card .quiet-button { display: inline-block; margin: 18px 0 0; }
 .connect-card label, .character-form label, .restore label { display: grid; gap: 7px; color: var(--ink); font-family: var(--mono); font-size: .65rem; font-weight: 700; }
+
 .url-row { display: flex; gap: 9px; }
 .connect-card input, .character-form input, .character-form textarea, .character-form select, .restore input { width: 100%; border: 2px solid var(--ink); border-radius: 0; outline: 0; background: var(--white); color: var(--ink); padding: 11px; font-size: .8rem; box-shadow: inset 2px 2px 0 rgba(17,17,17,.08); }
 .connect-card input:focus, .character-form input:focus, .character-form textarea:focus, .character-form select:focus, .restore input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--yellow), inset 2px 2px 0 rgba(17,17,17,.08); }
