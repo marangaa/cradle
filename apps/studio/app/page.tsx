@@ -164,6 +164,9 @@ function CompanionSprite({
   }, [animated, controlledFrame, motion.durationMs, motion.frames, state]);
 
   const activeFrame = controlledFrame === undefined ? frame : controlledFrame % motion.frames;
+  const numSteps = Math.max(columns - 1, 1);
+  const xPercent = (activeFrame / numSteps) * 100;
+  const yPercent = (motion.row / Math.max(rows - 1, 1)) * 100;
 
   return (
     <span
@@ -173,11 +176,12 @@ function CompanionSprite({
       style={{
         backgroundImage: `url(${spriteUrl})`,
         backgroundSize: `${columns * 100}% ${rows * 100}%`,
-        backgroundPosition: `${(activeFrame / Math.max(columns - 1, 1)) * 100}% ${(motion.row / Math.max(rows - 1, 1)) * 100}%`,
+        backgroundPosition: `${xPercent}% ${yPercent}%`,
       }}
     />
   );
 }
+
 
 
 
