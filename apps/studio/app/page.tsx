@@ -128,15 +128,20 @@ function makeCharacter(name: string): Character {
   return { displayName: name, greeting: `Welcome to ${name}. What can I help you find?` };
 }
 
-const studioRuntimeUrl = (process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL || process.env.CRADLE_RUNTIME_URL || "").replace(/\/$/, "");
+const studioRuntimeUrl = (
+  process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ||
+  process.env.CRADLE_RUNTIME_URL ||
+  "https://cradle-runtime.onrender.com"
+).replace(/\/$/, "");
 
 function getSpriteUrl(companion: CatalogCompanion | ImportedCompanion) {
   const rawUrl = "sourceUrl" in companion && companion.sourceUrl ? companion.sourceUrl : companion.spritesheetUrl;
-  if (rawUrl.includes("assets.petdex.dev") && studioRuntimeUrl) {
+  if (rawUrl.includes("assets.petdex.dev")) {
     return `${studioRuntimeUrl}/api/assets/proxy?url=${encodeURIComponent(rawUrl)}`;
   }
   return rawUrl;
 }
+
 
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
