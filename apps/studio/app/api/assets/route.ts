@@ -16,15 +16,14 @@ export async function GET(request: NextRequest) {
   }
 
   if (parsed.hostname !== "assets.petdex.dev" && !parsed.hostname.endsWith(".petdex.dev")) {
-    return new NextResponse("Forbidden domain", { status: 403 });
+    return new NextResponse("Forbidden asset domain", { status: 403 });
   }
 
   try {
     const response = await fetch(url, {
       headers: {
-        "Referer": "https://petdex.dev/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
-        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "User-Agent": "Cradle-Studio-AssetProxy/1.0",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
       },
     });
 
@@ -40,11 +39,9 @@ export async function GET(request: NextRequest) {
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "public, max-age=31536000, immutable",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
       },
     });
   } catch (error) {
-    return new NextResponse("Proxy error: " + (error instanceof Error ? error.message : "Unknown error"), { status: 500 });
+    return new NextResponse("Asset proxy error: " + (error instanceof Error ? error.message : "Unknown error"), { status: 500 });
   }
 }

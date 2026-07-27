@@ -128,21 +128,13 @@ function makeCharacter(name: string): Character {
   return { displayName: name, greeting: `Welcome to ${name}. What can I help you find?` };
 }
 
-const studioRuntimeUrl = (
-  process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL ||
-  process.env.CRADLE_RUNTIME_URL ||
-  "https://cradle-runtime.onrender.com"
-).replace(/\/$/, "");
-
 function getSpriteUrl(companion: CatalogCompanion | ImportedCompanion) {
-  const rawUrl = "sourceUrl" in companion && companion.sourceUrl ? companion.sourceUrl : companion.spritesheetUrl;
-  if (rawUrl.includes("assets.petdex.dev")) {
-    return `${studioRuntimeUrl}/api/assets/proxy?url=${encodeURIComponent(rawUrl)}`;
+  const url = "sourceUrl" in companion && companion.sourceUrl ? companion.sourceUrl : companion.spritesheetUrl;
+  if (url.includes("assets.petdex.dev")) {
+    return `/api/assets?url=${encodeURIComponent(url)}`;
   }
-  return rawUrl;
+  return url;
 }
-
-
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -160,6 +152,7 @@ function CompanionSprite({
   const motion = PREVIEW_STATES[state];
   const columns = "columns" in companion ? companion.columns : 8;
   const rows    = "rows"    in companion ? companion.rows    : 9;
+  const spriteUrl = getSpriteUrl(companion);
 
   // Timer-driven frame advancement — useEffect is correct here (it manages a setInterval side-effect).
   useEffect(() => {
@@ -178,7 +171,7 @@ function CompanionSprite({
       role="img"
       aria-label={`${companion.displayName} in ${motion.label.toLowerCase()} state`}
       style={{
-        backgroundImage: `url(${getSpriteUrl(companion)})`,
+        backgroundImage: `url(${spriteUrl})`,
         backgroundSize: `${columns * 100}% ${rows * 100}%`,
         backgroundPosition: `${(activeFrame / Math.max(columns - 1, 1)) * 100}% ${(motion.row / Math.max(rows - 1, 1)) * 100}%`,
       }}
