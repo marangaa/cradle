@@ -153,23 +153,25 @@ function getSpriteUrl(companion: CatalogCompanion | ImportedCompanion) {
   return url;
 }
 
-function resolveCompanionMotion(companion: CatalogCompanion | ImportedCompanion, state: PreviewState) {
-  const fallback = PREVIEW_STATES[state];
-  const codexKey = WEB_TO_CODEX_STATE_MAP[state] ?? state;
+function getCompanionStateSpec(companion: CatalogCompanion | ImportedCompanion, requestedState: string) {
   const states = companion.states;
-
   if (states) {
-    const match = states[codexKey] ?? states[state] ?? states.idle;
+    const codexKey = WEB_TO_CODEX_STATE_MAP[requestedState as PreviewState] ?? requestedState;
+    const match = states[codexKey] ?? states[requestedState] ?? Object.values(states)[0];
     if (match) {
       return {
-        label: fallback.label,
         row: match.row,
         frames: match.frames,
-        durationMs: match.durationMs ?? fallback.durationMs,
+        durationMs: match.durationMs || 1000,
       };
     }
   }
-  return fallback;
+  const fallback = PREVIEW_STATES[requestedState as PreviewState] ?? PREVIEW_STATES.idle;
+  return {
+    row: fallback.row,
+    frames: fallback.frames,
+    durationMs: fallback.durationMs,
+  };
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -185,34 +187,35 @@ function CompanionSprite({
   className?: string;
 }) {
   const [frame, setFrame] = useState(0);
-  const motion = resolveCompanionMotion(companion, state);
-  const columns = companion.columns ?? 8;
-  const rows    = companion.rows    ?? 9;
+  const spec = getCompanionStateSpec(companion, state);
+  const columns = companion.columns || 8;
+  const rows    = companion.rows    || 9;
   const spriteUrl = getSpriteUrl(companion);
 
-  // Timer-driven frame advancement — useEffect is correct here (it manages a setInterval side-effect).
+  // Each companion animates completely independently on its own un-synced interval timer
   useEffect(() => {
     setFrame(0);
     if (!animated || controlledFrame !== undefined) return;
-    const delay = Math.max(90, Math.floor(motion.durationMs / motion.frames));
-    const id = window.setInterval(() => setFrame((f) => (f + 1) % motion.frames), delay);
+    const intervalMs = Math.max(50, Math.floor(spec.durationMs / Math.max(spec.frames, 1)));
+    const id = window.setInterval(() => setFrame((f) => (f + 1) % spec.frames), intervalMs);
     return () => window.clearInterval(id);
-  }, [animated, controlledFrame, motion.durationMs, motion.frames, state]);
+  }, [animated, controlledFrame, spec.durationMs, spec.frames, state]);
 
-  const activeFrame = controlledFrame === undefined ? frame : controlledFrame % motion.frames;
+  const activeFrame = controlledFrame === undefined ? frame : controlledFrame % Math.max(spec.frames, 1);
   const numSteps = Math.max(columns - 1, 1);
   const xPercent = (activeFrame / numSteps) * 100;
-  const yPercent = (motion.row / Math.max(rows - 1, 1)) * 100;
+  const yPercent = (spec.row / Math.max(rows - 1, 1)) * 100;
 
   return (
     <span
       className={`pet-sprite ${className}`}
       role="img"
-      aria-label={`${companion.displayName} in ${motion.label.toLowerCase()} state`}
+      aria-label={`${companion.displayName} animation`}
       style={{
         backgroundImage: `url(${spriteUrl})`,
         backgroundSize: `${columns * 100}% ${rows * 100}%`,
         backgroundPosition: `${xPercent}% ${yPercent}%`,
+        ...(companion.cellWidth && companion.cellHeight ? { aspectRatio: `${companion.cellWidth} / ${companion.cellHeight}` } : {}),
       }}
     />
   );
