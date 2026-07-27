@@ -235,7 +235,8 @@ class CradleCharacter extends HTMLElement {
   private animateCompanions(atlas: PetAtlas, sprite: { row: number; frames: number; durationMs: number }) {
     const yPosition = (sprite.row / Math.max(atlas.rows - 1, 1)) * 100;
     const numFrames = Math.max(sprite.frames, 1);
-    const endXPosition = (numFrames / Math.max(atlas.columns, 1)) * 100;
+    const colDenom = Math.max(atlas.columns - 1, 1);
+    const endXPosition = (numFrames / colDenom) * 100;
     this.petAnimations.forEach((animation) => animation.cancel());
     this.petAnimations = [];
     this.shadow.querySelectorAll<HTMLElement>(".companion").forEach((companion) => {

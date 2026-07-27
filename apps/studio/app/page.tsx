@@ -193,7 +193,8 @@ function CompanionSprite({
   const spriteUrl = getSpriteUrl(companion);
 
   const yPercent = (spec.row / Math.max(rows - 1, 1)) * 100;
-  const endXPercent = (spec.frames / Math.max(columns, 1)) * 100;
+  const colDenom = Math.max(columns - 1, 1);
+  const endXPercent = (spec.frames / colDenom) * 100;
 
   useEffect(() => {
     const el = spriteRef.current;
