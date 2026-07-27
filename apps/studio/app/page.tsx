@@ -55,6 +55,11 @@ type CatalogCompanion = {
   submittedBy: string;
   spritesheetUrl: string;
   petJsonUrl: string;
+  columns?: number;
+  rows?: number;
+  cellWidth?: number;
+  cellHeight?: number;
+  states?: Record<string, { row: number; frames: number; durationMs?: number }>;
 };
 type ImportedCompanion = CatalogCompanion & {
   id: string;
@@ -63,12 +68,24 @@ type ImportedCompanion = CatalogCompanion & {
   sourceUrl: string;
   objectKey: string;
   checksum: string;
-  columns: 8;
+  columns: number;
   rows: number;
-  cellWidth: 192;
-  cellHeight: 208;
+  cellWidth: number;
+  cellHeight: number;
 };
+
+const WEB_TO_CODEX_STATE_MAP: Record<PreviewState, string> = {
+  idle: "idle",
+  greeting: "waving",
+  listening: "review",
+  thinking: "running",
+  responding: "waving",
+  resolved: "jumping",
+  error: "failed",
+};
+
 type HealthPayload = { ok: boolean; services: Record<string, { ok: boolean }> };
+
 type Screen = "connect" | "review" | "shape" | "live";
 type PreviewState = "idle" | "greeting" | "listening" | "thinking" | "responding" | "resolved" | "error";
 type KindFilter = "all" | "character" | "creature" | "object";
