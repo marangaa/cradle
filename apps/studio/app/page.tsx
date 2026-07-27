@@ -128,9 +128,16 @@ function makeCharacter(name: string): Character {
   return { displayName: name, greeting: `Welcome to ${name}. What can I help you find?` };
 }
 
+const studioRuntimeUrl = (process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL || process.env.CRADLE_RUNTIME_URL || "").replace(/\/$/, "");
+
 function getSpriteUrl(companion: CatalogCompanion | ImportedCompanion) {
-  return "sourceUrl" in companion && companion.sourceUrl ? companion.sourceUrl : companion.spritesheetUrl;
+  const rawUrl = "sourceUrl" in companion && companion.sourceUrl ? companion.sourceUrl : companion.spritesheetUrl;
+  if (rawUrl.includes("assets.petdex.dev") && studioRuntimeUrl) {
+    return `${studioRuntimeUrl}/api/assets/proxy?url=${encodeURIComponent(rawUrl)}`;
+  }
+  return rawUrl;
 }
+
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 

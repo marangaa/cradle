@@ -204,30 +204,23 @@ class CradleCharacter extends HTMLElement {
     }
   }
 
-  private async configureAtlas(atlas: PetAtlas) {
+  private configureAtlas(atlas: PetAtlas) {
     const baseUrl = (this.apiBase || "").replace(/\/$/, "");
-    const url = (atlas.url.startsWith("http://") || atlas.url.startsWith("https://"))
+    let url = (atlas.url.startsWith("http://") || atlas.url.startsWith("https://"))
       ? atlas.url
       : baseUrl + atlas.url;
 
-    this.atlas = { ...atlas, url };
-
-    let imageUrl = url;
-    try {
-      const res = await fetch(url, { referrerPolicy: "no-referrer" });
-      if (res.ok) {
-        const blob = await res.blob();
-        imageUrl = URL.createObjectURL(blob);
-      }
-    } catch {
-      // Fall back to original url if blob creation fails
+    if (url.includes("assets.petdex.dev")) {
+      url = baseUrl + "/api/assets/proxy?url=" + encodeURIComponent(url);
     }
 
+    this.atlas = { ...atlas, url };
     this.shadow.querySelectorAll<HTMLElement>(".companion").forEach((companion) => {
-      companion.style.backgroundImage = 'url("' + imageUrl + '")';
+      companion.style.backgroundImage = 'url("' + url + '")';
       companion.style.backgroundSize = (this.atlas?.columns ?? 8) * 100 + "% " + (this.atlas?.rows ?? 9) * 100 + "%";
     });
   }
+
 
 
 
