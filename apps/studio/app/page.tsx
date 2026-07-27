@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, type FormEvent } from "react";
+import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -186,40 +186,62 @@ function CompanionSprite({
   frame?: number;
   className?: string;
 }) {
-  const [frame, setFrame] = useState(0);
+  const spriteRef = useRef<HTMLSpanElement>(null);
   const spec = getCompanionStateSpec(companion, state);
   const columns = companion.columns || 8;
   const rows    = companion.rows    || 9;
   const spriteUrl = getSpriteUrl(companion);
 
-  // Each companion animates completely independently on its own un-synced interval timer
-  useEffect(() => {
-    setFrame(0);
-    if (!animated || controlledFrame !== undefined) return;
-    const intervalMs = Math.max(50, Math.floor(spec.durationMs / Math.max(spec.frames, 1)));
-    const id = window.setInterval(() => setFrame((f) => (f + 1) % spec.frames), intervalMs);
-    return () => window.clearInterval(id);
-  }, [animated, controlledFrame, spec.durationMs, spec.frames, state]);
-
-  const activeFrame = controlledFrame === undefined ? frame : controlledFrame % Math.max(spec.frames, 1);
-  const numSteps = Math.max(columns - 1, 1);
-  const xPercent = (activeFrame / numSteps) * 100;
   const yPercent = (spec.row / Math.max(rows - 1, 1)) * 100;
+  const endXPercent = (spec.frames / Math.max(columns, 1)) * 100;
+
+  useEffect(() => {
+    const el = spriteRef.current;
+    if (!el) return;
+
+    if (controlledFrame !== undefined) {
+      const activeFrame = controlledFrame % Math.max(spec.frames, 1);
+      const xPercent = (activeFrame / Math.max(columns - 1, 1)) * 100;
+      el.style.backgroundPosition = `${xPercent}% ${yPercent}%`;
+      return;
+    }
+
+    if (!animated || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      el.style.backgroundPosition = `0% ${yPercent}%`;
+      return;
+    }
+
+    const animation = el.animate(
+      [
+        { backgroundPosition: `0% ${yPercent}%` },
+        { backgroundPosition: `${endXPercent}% ${yPercent}%` },
+      ],
+      {
+        duration: spec.durationMs,
+        iterations: Infinity,
+        easing: `steps(${spec.frames}, end)`,
+      }
+    );
+
+    return () => animation.cancel();
+  }, [animated, columns, controlledFrame, endXPercent, spec.durationMs, spec.frames, yPercent]);
 
   return (
     <span
+      ref={spriteRef}
       className={`pet-sprite ${className}`}
       role="img"
       aria-label={`${companion.displayName} animation`}
       style={{
         backgroundImage: `url(${spriteUrl})`,
         backgroundSize: `${columns * 100}% ${rows * 100}%`,
-        backgroundPosition: `${xPercent}% ${yPercent}%`,
+        backgroundPosition: `0% ${yPercent}%`,
         ...(companion.cellWidth && companion.cellHeight ? { aspectRatio: `${companion.cellWidth} / ${companion.cellHeight}` } : {}),
       }}
     />
   );
 }
+
 
 function CatalogCharacter({ companion, state, frame }: { companion: CatalogCompanion; state: PreviewState; frame: number }) {
   return <CompanionSprite companion={companion} state={state} frame={frame} animated={false} className="catalog-sprite" />;
