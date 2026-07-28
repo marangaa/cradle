@@ -292,11 +292,11 @@ class CradleCharacter extends HTMLElement {
       ':host{all:initial;position:fixed;right:0;bottom:0;width:0;height:0;z-index:2147483647;pointer-events:none;color:#09090b;font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.4}',
       '.shell{position:fixed;right:22px;bottom:22px;z-index:2147483647;pointer-events:auto}.shell[data-placement="inline"]{position:relative;right:auto;bottom:auto;width:100%;max-width:330px}',
       '.panel{position:absolute;bottom:100%;right:12px;margin-bottom:12px;width:min(320px,calc(100vw - 32px));display:flex;flex-direction:column;align-items:flex-end;gap:8px;background:transparent;box-shadow:none;border:0;padding:0}.panel[hidden]{display:none}.panel ::slotted(*){align-self:stretch;width:100%;box-sizing:border-box}',
-      '.name-tag{display:inline-flex;align-items:center;padding:5px 14px;background:#09090b;color:#f4f4f5;border:1.5px solid #27272a;border-radius:999px;box-shadow:0 8px 20px -4px rgba(0,0,0,0.4),0 2px 6px rgba(0,0,0,0.2);transform:translateY(-2px);backdrop-filter:blur(8px)}.title{color:#f4f4f5;font-size:.7rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;font-family:ui-sans-serif,system-ui,sans-serif}',
+
       '.greeting-bubble{position:relative;width:100%;padding:14px 18px;background:#ffffff;color:#09090b;border:2.5px solid #09090b;border-radius:20px 20px 4px 20px;box-shadow:4px 4px 0px #09090b,0 10px 25px rgba(0,0,0,0.12)}.greeting-bubble::after{content:"";position:absolute;bottom:-8px;right:20px;width:14px;height:14px;background:#ffffff;border-right:2.5px solid #09090b;border-bottom:2.5px solid #09090b;transform:rotate(45deg)}.greeting{margin:0;color:#09090b;font-size:.86rem;line-height:1.5;font-weight:600}',
       '.trigger{display:grid;width:94px;height:102px;place-items:center;border:0;background:transparent;box-shadow:none;cursor:grab;touch-action:none}.trigger:active{cursor:grabbing}.trigger:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}.trigger .companion{width:88px;height:96px;background-repeat:no-repeat;background-size:800% 900%}@media (prefers-reduced-motion:reduce){.companion{animation:none!important}}',
       '</style>',
-      '<div class="shell"><section class="panel" hidden aria-label="Website character"><div class="name-tag"><span class="title">Companion</span></div><slot><div class="greeting-bubble"><p class="greeting">Hi there! \uD83D\uDC4B Ask me anything or click to interact.</p></div></slot></section><button class="trigger" type="button" aria-label="Open website character" aria-expanded="false"><span class="companion" aria-hidden="true"></span></button></div>',
+      '<div class="shell"><section class="panel" hidden aria-label="Website character"><slot><div class="greeting-bubble"><p class="greeting">Hi there! \uD83D\uDC4B Ask me anything or click to interact.</p></div></slot></section><button class="trigger" type="button" aria-label="Open website character" aria-expanded="false"><span class="companion" aria-hidden="true"></span></button></div>',
     ].join("");
     const trigger = this.shadow.querySelector(".trigger") as HTMLButtonElement;
     trigger.addEventListener("click", (event) => {
@@ -323,10 +323,8 @@ class CradleCharacter extends HTMLElement {
       if (!response.ok) throw new Error("The character manifest could not be loaded.");
       const manifest = await response.json() as { character: Character; assets: { atlas: PetAtlas | null } | null };
       const shell = this.shadow.querySelector(".shell") as HTMLElement;
-      const title = this.shadow.querySelector(".title") as HTMLElement;
       const greeting = this.shadow.querySelector(".greeting") as HTMLElement;
       shell.dataset.placement = this.placement;
-      title.textContent = manifest.character.displayName;
       greeting.textContent = manifest.character.greeting;
       if (manifest.assets?.atlas) {
         await this.configureAtlas(manifest.assets.atlas);
