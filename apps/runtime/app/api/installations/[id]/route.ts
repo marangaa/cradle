@@ -2,16 +2,6 @@ import { createDefaultCharacter, PETDEX_STATE_ROWS } from "@cradle/core";
 import { auth } from "@cradle/db";
 import { store } from "../../../lib/store";
 
-/**
- * CORS for the embedded widget itself — scoped to each installation's own site origin.
- * This is the ONLY route in this file a browser calls directly (from wherever the widget is
- * embedded); PATCH below is Studio-server-to-Runtime-server only and needs no CORS at all.
- */
-function widgetCorsHeaders(request: Request, origin: string) {
-  if (request.headers.get("origin") !== origin) return null;
-  return { "access-control-allow-origin": origin, "cache-control": "no-store", vary: "Origin" };
-}
-
 /** Returns the public manifest used by the installed website character. */
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
