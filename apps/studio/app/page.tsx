@@ -36,6 +36,7 @@ const STATE_ROWS = {
   review: 8,
 } as const;
 
+const STATE_ORDER = Object.keys(STATE_ROWS) as PetdexState[];
 type PetdexState = keyof typeof STATE_ROWS;
 
 type Page = { url: string; title: string; markdown: string };
@@ -98,8 +99,6 @@ type KindFilter = "all" | "character" | "creature" | "object";
 
 const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL || "http://localhost:3002";
 
-const CATALOG_CYCLE = Object.keys(STATE_ROWS) as PetdexState[];
-
 const KIND_LABELS: Record<KindFilter, string> = {
   all: "All", character: "Characters", creature: "Creatures", object: "Objects",
 };
@@ -159,13 +158,8 @@ const CELL_WIDTH = 192;
 const CELL_HEIGHT = 208;
 const ALPHA_THRESHOLD = 12;
 
-const atlasCache = new Map<string, Promise<DetectedAtlas>>();
-
 function detectAtlas(spriteUrl: string): Promise<DetectedAtlas> {
-  const cached = atlasCache.get(spriteUrl);
-  if (cached) return cached;
-
-  const promise = new Promise<DetectedAtlas>((resolve) => {
+  return new Promise<DetectedAtlas>((resolve) => {
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.onload = () => {
@@ -214,32 +208,52 @@ function detectAtlas(spriteUrl: string): Promise<DetectedAtlas> {
     image.onerror = () => resolve({ columns: 8, rows: 9, frameCounts: new Array(9).fill(8) });
     image.src = spriteUrl;
   });
-
-  atlasCache.set(spriteUrl, promise);
-  return promise;
 }
 
+/**
+ * TanStack Query already gives every consumer of the same spriteUrl automatic deduplication and
+ * caching — no reason to hand-roll a second cache alongside it. `staleTime: Infinity` because a
+ * given spritesheet's real frame layout never changes once decoded.
+ */
 function useCompanionAtlas(spriteUrl: string): DetectedAtlas | null {
-  const [atlas, setAtlas] = useState<DetectedAtlas | null>(null);
+  const { data } = useQuery({
+    queryKey: ["companion-atlas", spriteUrl],
+    queryFn: () => detectAtlas(spriteUrl),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: 1,
+  });
+  return data ?? null;
+}
+
+/**
+ * Rotates a card through all 9 canonical states entirely on its own clock — starting the moment
+ * *this* card's own atlas resolves, paced by *this* card's own real per-state frame durations.
+ * No shared timer, no dependency on any other card's load time or position in a rotation.
+ */
+function useAutoCyclingState(atlas: DetectedAtlas | null): PetdexState {
+  const [index, setIndex] = useState(0);
   useEffect(() => {
-    let cancelled = false;
-    setAtlas(null);
-    void detectAtlas(spriteUrl).then((result) => { if (!cancelled) setAtlas(result); });
-    return () => { cancelled = true; };
-  }, [spriteUrl]);
-  return atlas;
+    if (!atlas) return;
+    const state = STATE_ORDER[index] ?? "idle";
+    const row = Math.min(STATE_ROWS[state] ?? 0, atlas.rows - 1);
+    const frames = Math.max(atlas.frameCounts[row] ?? atlas.columns, 1);
+    const durationMs = Math.max(frames * 140, 400);
+    const timer = window.setTimeout(() => setIndex((i) => (i + 1) % STATE_ORDER.length), durationMs);
+    return () => window.clearTimeout(timer);
+  }, [atlas, index]);
+  return STATE_ORDER[index] ?? "idle";
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
 /** Renders one real Petdex atlas cell sequence without loading a second widget runtime. */
 function CompanionSprite({
-  companion, state = "idle", animated = true, frame: controlledFrame, className = "",
+  companion, state = "idle", animated = true, className = "",
 }: {
   companion: CatalogCompanion | ImportedCompanion;
   state?: PreviewState;
   animated?: boolean;
-  frame?: number;
   className?: string;
 }) {
   const spriteRef = useRef<HTMLSpanElement>(null);
@@ -260,18 +274,16 @@ function CompanionSprite({
     const el = spriteRef.current;
     if (!el) return;
 
-    if (controlledFrame !== undefined) {
-      const activeFrame = controlledFrame % Math.max(frames, 1);
-      const xPercent = (activeFrame / Math.max(columns - 1, 1)) * 100;
-      el.style.backgroundPosition = `${xPercent}% ${yPercent}%`;
-      return;
-    }
-
-    if (!animated || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    // No atlas yet (image still decoding) — hold on the first cell rather than animating with
+    // guessed dimensions; the moment `atlas` resolves this effect reruns and starts playing.
+    if (!atlas || !animated || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       el.style.backgroundPosition = `0% ${yPercent}%`;
       return;
     }
 
+    // A real WAAPI animation per card: runs on the compositor thread (no JS ticking, no shared
+    // clock to sync against), and starts immediately from this card's own frame 0 the instant
+    // its own image finishes decoding — independent of when any other card loaded.
     const animation = el.animate(
       [
         { backgroundPosition: `0% ${yPercent}%` },
@@ -285,7 +297,7 @@ function CompanionSprite({
     );
 
     return () => animation.cancel();
-  }, [animated, columns, controlledFrame, endXPercent, durationMs, frames, yPercent]);
+  }, [animated, atlas, durationMs, endXPercent, frames, yPercent]);
 
   return (
     <span
@@ -304,8 +316,10 @@ function CompanionSprite({
 }
 
 
-function CatalogCharacter({ companion, state, frame }: { companion: CatalogCompanion; state: PreviewState; frame: number }) {
-  return <CompanionSprite companion={companion} state={state} frame={frame} animated={false} className="catalog-sprite" />;
+function CatalogCharacter({ companion }: { companion: CatalogCompanion }) {
+  const atlas = useCompanionAtlas(getSpriteUrl(companion));
+  const state = useAutoCyclingState(atlas);
+  return <CompanionSprite companion={companion} state={state} className="catalog-sprite" />;
 }
 
 function CompanionSkeleton() {
@@ -355,12 +369,16 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
 }
 
 
-/** Every entry previews a real spritesheet row and ships the accurate JS call for it. */
+/** Every entry previews a real spritesheet row and ships the accurate JS call for it — all 9
+ *  canonical Petdex states, so nothing the widget can actually do is left untestable here. */
 const PLAYGROUND_ACTIONS: { previewState: PetdexState; label: string; icon: string; snippet: string }[] = [
   { previewState: "idle", label: "Idle", icon: "🟢", snippet: 'window.Cradle?.setState("idle");' },
   { previewState: "waving", label: "Waving", icon: "👋", snippet: 'window.Cradle?.setState("waving");' },
+  { previewState: "waiting", label: "Waiting", icon: "💤", snippet: 'window.Cradle?.setState("waiting");' },
   { previewState: "review", label: "Review", icon: "🔍", snippet: 'window.Cradle?.setState("review");' },
   { previewState: "running", label: "Running", icon: "⚡", snippet: 'window.Cradle?.setState("running");' },
+  { previewState: "running-right", label: "Run Right", icon: "➡️", snippet: 'window.Cradle?.setState("running-right");' },
+  { previewState: "running-left", label: "Run Left", icon: "⬅️", snippet: 'window.Cradle?.setState("running-left");' },
   { previewState: "jumping", label: "Resolved", icon: "🎉", snippet: 'window.Cradle?.resolveAction(true);' },
   { previewState: "failed", label: "Failed", icon: "❌", snippet: 'window.Cradle?.resolveAction(false);' },
 ];
@@ -441,9 +459,9 @@ function InstallCode({ installationId, copied, onCopy, onTestState }: { installa
   const [tab, setTab] = useState<"script" | "npm" | "types">("script");
   const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL || process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
 
-  const scriptSnippet = `<script src="${runtime}/widget.js"></script>\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n></cradle-character>`;
+  const scriptSnippet = `<script src="${runtime}/widget.js" data-site-id="${installationId}"></script>`;
 
-  const npmSnippet = `# 1. Install package\npnpm add @maranga/cradle\n\n# 2. Import & render in React / Next.js\nimport "@maranga/cradle";\n\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n/>`;
+  const npmSnippet = `# 1. Install package\npnpm add @maranga/cradle\n\n# 2. Import & render in React / Next.js\n# (no <script src> tag here, so the API origin can't be auto-detected — pass it explicitly)\nimport "@maranga/cradle";\n\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n/>`;
 
   const typesSnippet = `// React 19 / Next.js 15+ Custom Element TypeScript Declaration\n// Add to layout.tsx or global.d.ts if TypeScript flags <cradle-character>:\n\ndeclare module "react" {\n  namespace JSX {\n    interface IntrinsicElements {\n      "cradle-character": React.DetailedHTMLProps<\n        React.HTMLAttributes<HTMLElement> & {\n          "site-id"?: string;\n          "api-base"?: string;\n          placement?: "floating" | "inline";\n        },\n        HTMLElement\n      >;\n    }\n  }\n}`;
 
@@ -652,8 +670,6 @@ export default function StudioHome() {
   const [catalogSearch, setCatalogSearch] = useState("");
   const [catalogKind, setCatalogKind]     = useState<KindFilter>("all");
   const [catalogPage, setCatalogPage]     = useState(1);
-  const [catalogCycleIdx, setCatalogCycleIdx] = useState(0);
-  const [catalogFrame, setCatalogFrame]   = useState(0);
 
   // Transient UI state
   const [busy, setBusy]   = useState<string | null>(null);
@@ -717,20 +733,6 @@ export default function StudioHome() {
   const totalPages = Math.max(1, Math.ceil(catalogTotal / 24));
 
   // ── Timer effects (legitimate useEffects — setInterval side effects) ──────────
-
-  /** Cycle animation state across catalog cards. */
-  useEffect(() => {
-    if (screen !== "shape" || catalog.length === 0) return;
-    const id = window.setInterval(() => setCatalogCycleIdx((i) => (i + 1) % CATALOG_CYCLE.length), 2_400);
-    return () => window.clearInterval(id);
-  }, [catalog.length, screen]);
-
-  /** Advance the shared catalog frame counter (~8fps). */
-  useEffect(() => {
-    if (screen !== "shape" || catalog.length === 0) return;
-    const id = window.setInterval(() => setCatalogFrame((f) => f + 1), 120);
-    return () => window.clearInterval(id);
-  }, [catalog.length, screen]);
 
   /** Auto-dismiss success notices after 4s. */
   useEffect(() => {
@@ -1172,7 +1174,7 @@ export default function StudioHome() {
                             aria-pressed={companion?.slug === item.slug}
                             aria-label={`${companion?.slug === item.slug ? "Selected " : "Choose "}${item.displayName}`}
                           >
-                            <CatalogCharacter companion={item} state={CATALOG_CYCLE[catalogCycleIdx] ?? "idle"} frame={catalogFrame} />
+                            <CatalogCharacter companion={item} />
                           </button>
                           <span className={`kind-badge kind-badge-${item.kind}`}>{item.kind}</span>
                           <h3>{item.displayName}</h3>

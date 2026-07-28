@@ -62,6 +62,22 @@ declare global {
 }
 
 /**
+ * Captured synchronously at module-execution time, while `document.currentScript` still points
+ * at this widget's own <script src="..."> tag. Since the widget is always fetched *from* the
+ * runtime it talks to, the script's own origin already tells us the API base — no reason to
+ * make every embedder retype it. Only null for non-script-tag usage (e.g. bundled via npm),
+ * where there's no script element to read an origin from and `api-base` must be passed explicitly.
+ */
+const INFERRED_API_BASE = (() => {
+  try {
+    const src = (document.currentScript as HTMLScriptElement | null)?.src;
+    return src ? new URL(src).origin : null;
+  } catch {
+    return null;
+  }
+})();
+
+/**
  * Inspects a loaded spritesheet's alpha channel to find how many columns of each row actually
  * have drawn content, scanning from the last column inward. Petdex never declares frame counts
  * anywhere (not the manifest, not pet.json), so this is the only reliable source of truth for
@@ -126,9 +142,12 @@ class CradleCharacter extends HTMLElement {
 
   connectedCallback() {
     this.siteId = this.getAttribute("site-id") ?? this.getAttribute("installation-id") ?? "";
-    this.apiBase = this.getAttribute("api-base") ?? "";
+    this.apiBase = this.getAttribute("api-base") ?? INFERRED_API_BASE ?? "";
     if (!this.siteId || !this.apiBase) {
-      throw new Error("CradleCharacter requires site-id and api-base attributes.");
+      throw new Error(
+        "CradleCharacter requires a site-id attribute, and an api-base attribute unless the widget " +
+        "was loaded via a <script src> tag (its origin is inferred automatically in that case)."
+      );
     }
     this.visitorId = crypto.randomUUID();
     this.conversationId = crypto.randomUUID();
@@ -449,6 +468,31 @@ function getCharacter(siteId?: string) {
 }
 
 if (!customElements.get("cradle-character")) customElements.define("cradle-character", CradleCharacter);
+
+/**
+ * Matches the standard single-tag embed pattern (Intercom, Crisp, and similar all work this way):
+ * <script src="https://runtime.example.com/widget.js" data-site-id="..."></script> and nothing
+ * else. If the loading <script> tag carries a data-site-id, auto-create the element instead of
+ * requiring the developer to also hand-write a <cradle-character> tag. Explicit <cradle-character>
+ * tags (used by the npm/React path, or for multiple companions on one page) still work exactly as
+ * before and take priority — this only fills in when nothing was written by hand.
+ */
+(() => {
+  const script = document.currentScript as HTMLScriptElement | null;
+  const siteId = script?.dataset.siteId;
+  if (!siteId || document.querySelector("cradle-character")) return;
+
+  const mount = () => {
+    if (document.querySelector("cradle-character")) return;
+    const element = document.createElement("cradle-character");
+    element.setAttribute("site-id", siteId);
+    if (script?.dataset.placement) element.setAttribute("placement", script.dataset.placement);
+    document.body.appendChild(element);
+  };
+
+  if (document.body) mount();
+  else document.addEventListener("DOMContentLoaded", mount, { once: true });
+})();
 
 window.Cradle = {
   open: (siteId) => getCharacter(siteId)?.openPanel(),
