@@ -32,6 +32,21 @@ import "@maranga/cradle"; // registers <cradle-character> and window.Cradle
 `api-base` is required here (and only here) — there's no `<script src>` for the browser to
 infer an origin from when the widget arrives via a bundler instead of a script tag.
 
+For calling the controller from your own code (rather than reaching through `window`), there's
+also a named export:
+
+```ts
+import { Cradle } from "@maranga/cradle";
+
+Cradle?.setState("review");
+```
+
+Always optional-chain it. This package is safe to `import` from anywhere — including a Next.js
+Server Component's module graph, where it's genuinely never going to run in a browser — and in
+that case `Cradle` (and `window.Cradle`) are simply `undefined` rather than throwing. The one
+thing that's still on you: mark the file that actually *uses* `Cradle`/`<cradle-character>` with
+`"use client"`, same as any other component touching browser-only state.
+
 ---
 
 ## The 9 real states

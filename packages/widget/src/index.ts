@@ -54,6 +54,7 @@ type CradleController = {
   setContext(context: Record<string, unknown>, siteId?: string): void;
 };
 
+export type { PetdexState, PetAtlas, Character, CradleAction, CradleController };
 
 declare global {
   interface Window {
@@ -67,8 +68,10 @@ declare global {
  * runtime it talks to, the script's own origin already tells us the API base — no reason to
  * make every embedder retype it. Only null for non-script-tag usage (e.g. bundled via npm),
  * where there's no script element to read an origin from and `api-base` must be passed explicitly.
+ * Guarded because this module can be *imported* (not just executed in a browser) from a Next.js
+ * Server Component's module graph — `document` genuinely doesn't exist there.
  */
-const INFERRED_API_BASE = (() => {
+const INFERRED_API_BASE = typeof document === "undefined" ? null : (() => {
   try {
     const src = (document.currentScript as HTMLScriptElement | null)?.src;
     return src ? new URL(src).origin : null;
@@ -124,8 +127,19 @@ function detectRowFrameCounts(image: HTMLImageElement, columns: number, rows: nu
   return counts;
 }
 
+/**
+ * Standing in for HTMLElement when this module is evaluated outside a browser (e.g. a Next.js
+ * Server Component's module graph, or any Node-based SSR/build-time import). `class X extends
+ * HTMLElement` throws immediately at *definition* time — not just when instantiated — if
+ * HTMLElement is undefined, so the class needs a harmless real constructor to extend in that
+ * case. Nothing ever instantiates CradleCharacter server-side (customElements.define is guarded
+ * below), so the stand-in is never actually exercised — it only needs to exist.
+ */
+const HTMLElementBase: typeof HTMLElement =
+  typeof HTMLElement !== "undefined" ? HTMLElement : (class {} as unknown as typeof HTMLElement);
+
 /** Framework-free custom element for an animated, programmable website character. */
-class CradleCharacter extends HTMLElement {
+class CradleCharacter extends HTMLElementBase {
   private readonly shadow = this.attachShadow({ mode: "open" });
   private petAnimations: Animation[] = [];
   private atlas: PetAtlas | null = null;
@@ -464,6 +478,7 @@ class CradleCharacter extends HTMLElement {
 }
 
 function getCharacter(siteId?: string) {
+  if (typeof document === "undefined") return null;
   if (siteId) {
     const selector = 'cradle-character[site-id="' + CSS.escape(siteId) + '"]';
     return document.querySelector(selector) as CradleCharacter | null;
@@ -471,42 +486,57 @@ function getCharacter(siteId?: string) {
   return document.querySelector("cradle-character") as CradleCharacter | null;
 }
 
-if (!customElements.get("cradle-character")) customElements.define("cradle-character", CradleCharacter);
+/**
+ * Live-bound named export so `import { Cradle } from "@maranga/cradle"` works for bundler/npm
+ * consumers, not just the `window.Cradle` global the <script> tag path relies on. `undefined`
+ * anywhere this module is evaluated outside a browser (SSR, a Server Component's module graph) —
+ * callers should optional-chain (`Cradle?.setState(...)`), same as the window.Cradle convention
+ * used throughout this file and its README.
+ */
+export let Cradle: CradleController | undefined;
 
 /**
- * Matches the standard single-tag embed pattern (Intercom, Crisp, and similar all work this way):
- * <script src="https://runtime.example.com/widget.js" data-site-id="..."></script> and nothing
- * else. If the loading <script> tag carries a data-site-id, auto-create the element instead of
- * requiring the developer to also hand-write a <cradle-character> tag. Explicit <cradle-character>
- * tags (used by the npm/React path, or for multiple companions on one page) still work exactly as
- * before and take priority — this only fills in when nothing was written by hand.
+ * Everything below touches a real browser global (customElements, document, window) at the top
+ * level, so it's guarded as a block — this module needs to be *importable* (even if inert) from
+ * a Next.js Server Component's module graph, not just executable in an actual browser.
  */
-(() => {
+if (typeof window !== "undefined" && typeof customElements !== "undefined") {
+  if (!customElements.get("cradle-character")) customElements.define("cradle-character", CradleCharacter);
+
+  /**
+   * Matches the standard single-tag embed pattern (Intercom, Crisp, and similar all work this
+   * way): <script src="https://runtime.example.com/widget.js" data-site-id="..."></script> and
+   * nothing else. If the loading <script> tag carries a data-site-id, auto-create the element
+   * instead of requiring the developer to also hand-write a <cradle-character> tag. Explicit
+   * <cradle-character> tags (used by the npm/React path, or for multiple companions on one page)
+   * still work exactly as before and take priority — this only fills in when nothing was written
+   * by hand.
+   */
   const script = document.currentScript as HTMLScriptElement | null;
   const siteId = script?.dataset.siteId;
-  if (!siteId || document.querySelector("cradle-character")) return;
+  if (siteId && !document.querySelector("cradle-character")) {
+    const mount = () => {
+      if (document.querySelector("cradle-character")) return;
+      const element = document.createElement("cradle-character");
+      element.setAttribute("site-id", siteId);
+      if (script?.dataset.placement) element.setAttribute("placement", script.dataset.placement);
+      document.body.appendChild(element);
+    };
 
-  const mount = () => {
-    if (document.querySelector("cradle-character")) return;
-    const element = document.createElement("cradle-character");
-    element.setAttribute("site-id", siteId);
-    if (script?.dataset.placement) element.setAttribute("placement", script.dataset.placement);
-    document.body.appendChild(element);
+    if (document.body) mount();
+    else document.addEventListener("DOMContentLoaded", mount, { once: true });
+  }
+
+  Cradle = window.Cradle = {
+    open: (siteId) => getCharacter(siteId)?.openPanel(),
+    close: (siteId) => getCharacter(siteId)?.closePanel(),
+    toggle: (siteId) => getCharacter(siteId)?.togglePanel(),
+    trigger: (action, siteId) => getCharacter(siteId)?.trigger(action),
+    resolveAction: (success, siteId) => getCharacter(siteId)?.resolveAction(success),
+    setState: (state, siteId) => getCharacter(siteId)?.setVisualState(state),
+    setContext: (context, siteId) => getCharacter(siteId)?.setContext(context),
   };
-
-  if (document.body) mount();
-  else document.addEventListener("DOMContentLoaded", mount, { once: true });
-})();
-
-window.Cradle = {
-  open: (siteId) => getCharacter(siteId)?.openPanel(),
-  close: (siteId) => getCharacter(siteId)?.closePanel(),
-  toggle: (siteId) => getCharacter(siteId)?.togglePanel(),
-  trigger: (action, siteId) => getCharacter(siteId)?.trigger(action),
-  resolveAction: (success, siteId) => getCharacter(siteId)?.resolveAction(success),
-  setState: (state, siteId) => getCharacter(siteId)?.setVisualState(state),
-  setContext: (context, siteId) => getCharacter(siteId)?.setContext(context),
-};
+}
 
 type CradleCharacterElementProps = {
   "site-id"?: string;
