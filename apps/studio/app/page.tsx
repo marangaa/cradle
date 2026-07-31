@@ -467,6 +467,8 @@ function CharacterPreview({
   const isCyberpunk = theme === "cyberpunk";
   const isTerminal = theme === "terminal";
   const isMinimal = theme === "minimal";
+  const isSynthwave = theme === "synthwave";
+  const isPaper = theme === "paper";
 
   return (
     <div className={`studio-install-preview theme-${theme}`} style={{ position: "fixed", bottom: 22, right: 22, zIndex: 2147483647, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
@@ -494,13 +496,17 @@ function CharacterPreview({
                     fontSize: ".84rem",
                     lineHeight: 1.45,
                     background: isUser
-                      ? (isCyberpunk ? "#ec4899" : isTerminal ? "#15803d" : isModern ? "#4f46e5" : isMinimal ? "#0f172a" : "#09090b")
-                      : (isCyberpunk ? "#090d16" : isTerminal ? "#000000" : isModern ? "rgba(15,23,42,0.88)" : isMinimal ? "#f8fafc" : "#ffffff"),
+                      ? (isSynthwave ? "#ec4899" : isPaper ? "#2c2825" : isCyberpunk ? "#a855f7" : isTerminal ? "#15803d" : isModern ? "#4f46e5" : isMinimal ? "#0f172a" : "#09090b")
+                      : (isSynthwave ? "#1e1b4b" : isPaper ? "#fdfbf7" : isCyberpunk ? "#090d16" : isTerminal ? "#000000" : isModern ? "rgba(15,23,42,0.88)" : isMinimal ? "#f8fafc" : "#ffffff"),
                     color: isUser
-                      ? (isCyberpunk ? "#090d16" : "#ffffff")
-                      : (isCyberpunk ? "#22d3ee" : isTerminal ? "#22c55e" : isModern ? "#f8fafc" : "#0f172a"),
+                      ? (isSynthwave ? "#ffffff" : isPaper ? "#fdfbf7" : isCyberpunk ? "#090d16" : "#ffffff")
+                      : (isSynthwave ? "#fde047" : isPaper ? "#2c2825" : isCyberpunk ? "#22d3ee" : isTerminal ? "#22c55e" : isModern ? "#f8fafc" : "#0f172a"),
                     border: isNeobrutalist
                       ? "2.5px solid #09090b"
+                      : isSynthwave
+                      ? (isUser ? "2px solid #fde047" : "2px solid #ec4899")
+                      : isPaper
+                      ? (isUser ? "1px solid #736b63" : "1px solid #d6cebf")
                       : isCyberpunk
                       ? (isUser ? "2px solid #22d3ee" : "2px solid #ec4899")
                       : isTerminal
@@ -510,6 +516,10 @@ function CharacterPreview({
                       : "1px solid #cbd5e1",
                     boxShadow: isNeobrutalist
                       ? "3px 3px 0px #09090b"
+                      : isSynthwave
+                      ? "0 0 16px rgba(236,72,153,0.5)"
+                      : isPaper
+                      ? "0 2px 8px rgba(0,0,0,0.05)"
                       : isCyberpunk
                       ? "0 0 16px rgba(236,72,153,0.5)"
                       : isTerminal
@@ -518,7 +528,7 @@ function CharacterPreview({
                       ? "0 8px 24px rgba(15,23,42,0.3)"
                       : "0 4px 12px rgba(0,0,0,0.05)",
                     backdropFilter: isModern ? "blur(16px)" : "none",
-                    fontFamily: isTerminal ? "monospace" : "inherit",
+                    fontFamily: isPaper ? "Georgia, serif" : isTerminal ? "monospace" : "inherit",
                     borderRadius: isTerminal ? 4 : (isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px"),
                   }}
                 >
@@ -535,10 +545,14 @@ function CharacterPreview({
               alignItems: "center",
               gap: 8,
               padding: "6px 6px 6px 16px",
-              borderRadius: isTerminal ? 4 : 9999,
-              background: isCyberpunk ? "#090d16" : isTerminal ? "#000000" : isModern ? "rgba(15,23,42,0.9)" : isMinimal ? "#ffffff" : "#ffffff",
+              borderRadius: isTerminal ? 4 : isPaper ? 12 : 9999,
+              background: isSynthwave ? "#1e1b4b" : isPaper ? "#fdfbf7" : isCyberpunk ? "#090d16" : isTerminal ? "#000000" : isModern ? "rgba(15,23,42,0.9)" : isMinimal ? "#ffffff" : "#ffffff",
               border: isNeobrutalist
                 ? "2.5px solid #09090b"
+                : isSynthwave
+                ? "2px solid #fde047"
+                : isPaper
+                ? "1px solid #d6cebf"
                 : isCyberpunk
                 ? "2px solid #ec4899"
                 : isTerminal
@@ -548,6 +562,10 @@ function CharacterPreview({
                 : "1px solid #cbd5e1",
               boxShadow: isNeobrutalist
                 ? "3.5px 3.5px 0px #09090b"
+                : isSynthwave
+                ? "0 0 18px rgba(253,224,71,0.4)"
+                : isPaper
+                ? "0 2px 10px rgba(0,0,0,0.05)"
                 : isCyberpunk
                 ? "0 0 18px rgba(236,72,153,0.6)"
                 : isTerminal
@@ -577,8 +595,8 @@ function CharacterPreview({
                 outline: "none",
                 background: "transparent",
                 fontSize: ".84rem",
-                color: isCyberpunk ? "#22d3ee" : isTerminal ? "#22c55e" : isModern ? "#f8fafc" : "#0f172a",
-                fontFamily: isTerminal ? "monospace" : "inherit",
+                color: isSynthwave ? "#fde047" : isPaper ? "#2c2825" : isCyberpunk ? "#22d3ee" : isTerminal ? "#22c55e" : isModern ? "#f8fafc" : "#0f172a",
+                fontFamily: isPaper ? "Georgia, serif" : isTerminal ? "monospace" : "inherit",
               }}
             />
             <button
@@ -586,14 +604,14 @@ function CharacterPreview({
               disabled={isStreaming}
               style={{
                 border: 0,
-                background: isNeobrutalist ? "#09090b" : isCyberpunk ? "#ec4899" : isTerminal ? "#22c55e" : isModern ? "#6366f1" : "transparent",
-                color: isNeobrutalist ? "#ffffff" : isCyberpunk ? "#090d16" : isTerminal ? "#000000" : isModern ? "#ffffff" : "#0f172a",
-                borderRadius: isTerminal ? 2 : (isNeobrutalist || isCyberpunk || isModern ? 9999 : 0),
-                padding: isNeobrutalist || isCyberpunk || isModern ? "6px 16px" : "6px 10px",
+                background: isNeobrutalist ? "#09090b" : isSynthwave ? "#ec4899" : isPaper ? "#2c2825" : isCyberpunk ? "#ec4899" : isTerminal ? "#22c55e" : isModern ? "#6366f1" : "transparent",
+                color: isNeobrutalist ? "#ffffff" : isSynthwave ? "#ffffff" : isPaper ? "#fdfbf7" : isCyberpunk ? "#090d16" : isTerminal ? "#000000" : isModern ? "#ffffff" : "#0f172a",
+                borderRadius: isTerminal ? 2 : isPaper ? 8 : (isNeobrutalist || isCyberpunk || isSynthwave || isModern ? 9999 : 0),
+                padding: isNeobrutalist || isCyberpunk || isSynthwave || isModern ? "6px 16px" : "6px 10px",
                 fontWeight: 800,
                 fontSize: ".8rem",
                 cursor: isStreaming ? "wait" : "pointer",
-                fontFamily: isTerminal ? "monospace" : "inherit",
+                fontFamily: isPaper ? "Georgia, serif" : isTerminal ? "monospace" : "inherit",
               }}
             >
               {isStreaming ? "…" : "Send"}
