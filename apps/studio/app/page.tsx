@@ -98,7 +98,7 @@ type KindFilter = "all" | "character" | "creature" | "object";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL || process.env.CRADLE_RUNTIME_URL || "https://cradle-c2rh.onrender.com";
+const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL || process.env.CRADLE_RUNTIME_URL || "";
 const runtime = RUNTIME_URL;
 
 const KIND_LABELS: Record<KindFilter, string> = {
@@ -724,7 +724,7 @@ function CharacterStatePlayground({ onTestState }: { onTestState(state: PetdexSt
 
 function InstallCode({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: PetdexState): void }) {
   const [tab, setTab] = useState<"script" | "npm">("script");
-  const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL || process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
+  const runtime = RUNTIME_URL;
 
   const scriptSnippet = `<script src="${runtime}/widget.js" data-site-id="${installationId}"></script>`;
 

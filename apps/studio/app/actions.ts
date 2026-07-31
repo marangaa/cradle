@@ -6,7 +6,9 @@ import { headers } from "next/headers";
 type RuntimeError = { error?: string };
 
 function getRuntimeUrl() {
-  return process.env.NEXT_PUBLIC_RUNTIME_URL || process.env.CRADLE_RUNTIME_URL || "https://cradle-c2rh.onrender.com";
+  const url = process.env.NEXT_PUBLIC_RUNTIME_URL || process.env.CRADLE_RUNTIME_URL;
+  if (!url) throw new Error("NEXT_PUBLIC_RUNTIME_URL environment variable is required.");
+  return url;
 }
 
 
