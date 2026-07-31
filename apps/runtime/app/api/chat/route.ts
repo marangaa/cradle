@@ -137,6 +137,16 @@ Directives:
       },
     });
 
+    const setEmoteTool = tool({
+      description: "Express an emotion or action with your character sprite (e.g. 'waving' to greet, 'jumping' for excitement/success, 'waiting' while thinking/searching, 'failed' for apologetic/sad). Use this when your tone changes or when greeting/explaining!",
+      inputSchema: z.object({
+        emote: z.enum(["idle", "waving", "jumping", "waiting", "failed", "review"]).describe("The visual animation state to set for the character"),
+      }),
+      execute: async ({ emote }) => {
+        return { emoteSet: emote };
+      },
+    });
+
     const result = streamText({
       model: google(CRADLE_MODEL_ID),
       system: systemPrompt,
@@ -145,7 +155,9 @@ Directives:
         searchKnowledge: searchKnowledgeTool,
         rememberFact: rememberFactTool,
         forgetFact: forgetFactTool,
+        setEmote: setEmoteTool,
       },
+      ...({ maxSteps: 5 } as any),
       onFinish: async ({ responseMessages }) => {
         try {
           const updatedMessages = [...messages, ...responseMessages];

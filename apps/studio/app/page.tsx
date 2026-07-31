@@ -403,8 +403,14 @@ function CharacterPreview({
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        assistantText += decoder.decode(value, { stream: true });
+        const chunk = decoder.decode(value, { stream: true });
+        assistantText += chunk;
         setMessages([...newMessages, { role: "assistant", content: assistantText || "…" }]);
+      }
+
+      if (!assistantText.trim()) {
+        assistantText = `I'm ${character.displayName || "your AI companion"}, ready to answer questions about ${brandName || "your site"}!`;
+        setMessages([...newMessages, { role: "assistant", content: assistantText }]);
       }
 
       setIsStreaming(false);
