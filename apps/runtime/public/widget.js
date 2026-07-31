@@ -70,23 +70,37 @@
     apiBase = "";
     siteId = "";
     visitorId = "";
-    conversationId = "";
+    placement = "floating";
+    theme = "neobrutalist";
     pageContext = {};
     dragStart = null;
     dragged = false;
     ignoreNextClick = false;
+    stateTimer = null;
+    cycleTimer = null;
+    cycling = false;
+    autoCycle = true;
+    explicitState = false;
+    cycleStep = 0;
+    currentState = "idle";
+    localMessages = [];
+    isBusy = false;
+    characterName = "Assistant";
     connectedCallback() {
       this.siteId = this.getAttribute("site-id") ?? this.getAttribute("installation-id") ?? "";
       this.apiBase = this.getAttribute("api-base") ?? INFERRED_API_BASE ?? "";
       this.autoCycle = !this.hasAttribute("no-cycle");
+      this.placement = this.getAttribute("placement") ?? "floating";
+      this.theme = this.getAttribute("theme") ?? "neobrutalist";
       if (!this.siteId || !this.apiBase) {
         throw new Error(
-          "CradleCharacter requires a site-id attribute, and an api-base attribute unless the widget was loaded via a <script src> tag (its origin is inferred automatically in that case)."
+          "CradleCharacter requires a site-id attribute, and an api-base attribute unless the widget was loaded via a <script src> tag."
         );
       }
-      this.visitorId = crypto.randomUUID();
-      this.conversationId = crypto.randomUUID();
+      this.visitorId = this.getOrCreateVisitorId();
+      this.loadStoredMessages();
       this.render();
+      this.setupChatListeners();
       void this.loadManifest();
     }
     disconnectedCallback() {
@@ -94,14 +108,33 @@
       this.petAnimations = [];
       this.stopCycle();
     }
-    stateTimer = null;
-    cycleTimer = null;
-    cycling = false;
-    /** True unless the host opts out via the `no-cycle` attribute (see startCycle). */
-    autoCycle = true;
-    explicitState = false;
-    cycleStep = 0;
-    currentState = "idle";
+    getOrCreateVisitorId() {
+      try {
+        const existing = localStorage.getItem("cradle_visitor_id");
+        if (existing) return existing;
+        const id = crypto.randomUUID();
+        localStorage.setItem("cradle_visitor_id", id);
+        return id;
+      } catch {
+        return crypto.randomUUID();
+      }
+    }
+    loadStoredMessages() {
+      try {
+        const stored = localStorage.getItem(`cradle_chat_${this.siteId}`);
+        if (stored) {
+          this.localMessages = JSON.parse(stored);
+        }
+      } catch {
+        this.localMessages = [];
+      }
+    }
+    saveStoredMessages() {
+      try {
+        localStorage.setItem(`cradle_chat_${this.siteId}`, JSON.stringify(this.localMessages));
+      } catch {
+      }
+    }
     /** Opens the character and emits an activation event for the host experience. */
     openPanel() {
       this.open = true;
@@ -156,21 +189,11 @@
         this.releaseToCycle();
       }, 2200);
     }
-    /**
-     * Hands control back from an explicit, real-event-driven animation (open/trigger/resolve) to
-     * the idle showcase cycle - resuming from "idle" rather than freezing on whatever state the
-     * explicit sequence last set.
-     */
     releaseToCycle() {
       this.explicitState = false;
       this.setVisualState("idle");
       this.scheduleNextCycleFrame();
     }
-    /**
-     * Starts the default idle showcase, cycling through every declared state in turn. Skipped
-     * entirely when the host sets `no-cycle` — for embeds that already drive real state changes
-     * (e.g. wired to an actual chat), decorative cycling would fight with and mask the real signal.
-     */
     startCycle() {
       if (this.cycling || !this.autoCycle) return;
       this.cycling = true;
@@ -189,7 +212,6 @@
       const durationMs = this.setVisualState(state);
       this.cycleTimer = setTimeout(() => this.scheduleNextCycleFrame(), Math.max(durationMs, MIN_STATE_DURATION_MS));
     }
-    /** Updates the companion animation dynamically from the atlas, returning the duration used. */
     setVisualState(state) {
       this.currentState = state;
       const atlas = this.atlas;
@@ -199,21 +221,66 @@
       this.emit("cradle:state", { ...this.eventContext(), state });
       return duration;
     }
-    /** Supplies non-sensitive page context that host code can associate with character events. */
     setContext(context) {
       this.pageContext = { ...this.pageContext, ...context };
       this.emit("cradle:context", this.eventContext());
     }
     render() {
+      const accentColor = this.getAttribute("accent-color") || this.getAttribute("primary-color");
+      const bgColor = this.getAttribute("bg-color");
+      const textColor = this.getAttribute("text-color");
+      const customVars = [
+        accentColor ? `--cradle-accent:${accentColor};` : "",
+        bgColor ? `--cradle-bg:${bgColor};` : "",
+        textColor ? `--cradle-text:${textColor};` : ""
+      ].join("");
       this.shadow.innerHTML = [
         "<style>",
-        ":host{all:initial;position:fixed;right:0;bottom:0;width:0;height:0;z-index:2147483647;pointer-events:none;color:#09090b;font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.4}",
-        '.shell{position:fixed;right:22px;bottom:22px;z-index:2147483647;pointer-events:auto}.shell[data-placement="inline"]{position:relative;right:auto;bottom:auto;width:100%;max-width:330px}',
-        ".panel{position:absolute;bottom:100%;right:12px;margin-bottom:12px;width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 140px);overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-end;gap:8px;background:transparent;box-shadow:none;border:0;padding:0}.panel[hidden]{display:none}.panel ::slotted(*){align-self:stretch;width:100%;box-sizing:border-box}",
-        '.greeting-bubble{position:relative;width:100%;box-sizing:border-box;word-break:break-word;overflow-wrap:anywhere;padding:14px 18px;background:#ffffff;color:#09090b;border:2.5px solid #09090b;border-radius:20px 20px 4px 20px;box-shadow:4px 4px 0px #09090b,0 10px 25px rgba(0,0,0,0.12)}.greeting-bubble::after{content:"";position:absolute;bottom:-8px;right:20px;width:14px;height:14px;background:#ffffff;border-right:2.5px solid #09090b;border-bottom:2.5px solid #09090b;transform:rotate(45deg)}.greeting{margin:0;color:#09090b;font-size:.88rem;line-height:1.55;font-weight:600;white-space:pre-wrap}',
-        ".trigger{display:grid;width:94px;height:102px;place-items:center;border:0;background:transparent;box-shadow:none;cursor:grab;touch-action:none}.trigger:active{cursor:grabbing}.trigger:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}.trigger .companion{width:88px;height:96px;background-repeat:no-repeat;background-size:800% 900%}@media (prefers-reduced-motion:reduce){.companion{animation:none!important}}",
+        `:host{all:initial;position:fixed;right:0;bottom:0;width:0;height:0;z-index:2147483647;pointer-events:none;color:var(--cradle-text,#09090b);font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.4;${customVars}}`,
+        ".shell{position:fixed;right:22px;bottom:22px;z-index:2147483647;pointer-events:auto}",
+        '.shell[data-placement="inline"]{position:relative;right:auto;bottom:auto;width:100%;max-width:330px}',
+        ".panel{position:absolute;bottom:100%;right:12px;margin-bottom:12px;width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 140px);overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-end;gap:8px;background:transparent;box-shadow:none;border:0;padding:0}",
+        ".panel[hidden]{display:none}",
+        ".panel ::slotted(*){align-self:stretch;width:100%;box-sizing:border-box}",
+        /* Default Built-in Chat Surface (Slot Fallback) */
+        ".built-in-chat{width:100%;box-sizing:border-box;display:flex;flex-direction:column;background:var(--cradle-bg,#ffffff);color:var(--cradle-text,#09090b);overflow:hidden;transition:all 0.2s ease}",
+        /* Theme: Neobrutalist (Default) */
+        '.shell[data-theme="neobrutalist"] .built-in-chat{border:2.5px solid #09090b;border-radius:20px 20px 4px 20px;box-shadow:4px 4px 0px #09090b,0 10px 25px rgba(0,0,0,0.12)}',
+        /* Theme: Modern / Glass */
+        '.shell[data-theme="modern"] .built-in-chat,.shell[data-theme="glass"] .built-in-chat{background:rgba(255,255,255,0.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.6);border-radius:24px 24px 6px 24px;box-shadow:0 12px 32px rgba(0,0,0,0.12),0 2px 6px rgba(0,0,0,0.04)}',
+        /* Theme: Minimal */
+        '.shell[data-theme="minimal"] .built-in-chat{border:1px solid #e4e4e7;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,0.06)}',
+        /* Header */
+        ".chat-header{display:flex;align-items:center;justify-space-between;padding:12px 16px;border-bottom:1px solid rgba(0,0,0,0.08)}",
+        ".chat-title-group{display:flex;align-items:center;gap:8px}",
+        ".chat-title{font-weight:800;font-size:0.92rem;letter-spacing:-0.02em}",
+        ".status-dot{width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block}",
+        ".reset-btn{background:transparent;border:0;cursor:pointer;opacity:0.4;padding:4px;font-size:0.75rem;font-weight:600;transition:opacity 0.15s}",
+        ".reset-btn:hover{opacity:0.9}",
+        /* Messages List */
+        ".chat-messages{display:flex;flex-direction:column;gap:10px;padding:14px;max-height:calc(100vh - 240px);min-height:120px;overflow-y:auto;scrollbar-width:thin}",
+        ".msg{max-width:85%;padding:10px 14px;font-size:0.85rem;line-height:1.45;word-break:break-word;white-space:pre-wrap}",
+        ".msg.user-msg{align-self:flex-end;background:var(--cradle-accent,#09090b);color:#ffffff;border-radius:16px 16px 2px 16px}",
+        '.shell[data-theme="neobrutalist"] .msg.user-msg{border:2px solid #09090b;box-shadow:2px 2px 0px #09090b}',
+        ".msg.assistant-msg{align-self:flex-start;background:#f4f4f5;color:#09090b;border-radius:16px 16px 16px 2px;border:1px solid rgba(0,0,0,0.06)}",
+        '.shell[data-theme="neobrutalist"] .msg.assistant-msg{background:#ffffff;border:2px solid #09090b;box-shadow:2px 2px 0px #09090b}',
+        /* Form */
+        ".chat-form{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid rgba(0,0,0,0.08);background:rgba(0,0,0,0.015)}",
+        ".chat-input{flex:1;border:1px solid rgba(0,0,0,0.15);border-radius:20px;padding:8px 14px;font-size:0.84rem;outline:none;background:#ffffff;color:#09090b}",
+        '.shell[data-theme="neobrutalist"] .chat-input{border:2px solid #09090b;border-radius:12px}',
+        ".chat-input:focus{border-color:#09090b}",
+        ".send-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;border:0;background:var(--cradle-accent,#09090b);color:#ffffff;cursor:pointer;transition:transform 0.1s}",
+        '.shell[data-theme="neobrutalist"] .send-btn{border-radius:8px;border:2px solid #09090b;box-shadow:2px 2px 0px #09090b}',
+        ".send-btn:active{transform:scale(0.92)}",
+        ".send-btn:disabled{opacity:0.3;cursor:not-allowed}",
+        /* Trigger */
+        ".trigger{display:grid;width:94px;height:102px;place-items:center;border:0;background:transparent;box-shadow:none;cursor:grab;touch-action:none}",
+        ".trigger:active{cursor:grabbing}",
+        ".trigger:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}",
+        ".trigger .companion{width:88px;height:96px;background-repeat:no-repeat;background-size:800% 900%}",
+        "@media (prefers-reduced-motion:reduce){.companion{animation:none!important}}",
         "</style>",
-        '<div class="shell"><section class="panel" hidden aria-label="Website character"><slot><div class="greeting-bubble"><p class="greeting">Hi there! \u{1F44B} Ask me anything or click to interact.</p></div></slot></section><button class="trigger" type="button" aria-label="Open website character" aria-expanded="false"><span class="companion" aria-hidden="true"></span></button></div>'
+        `<div class="shell" data-theme="${this.theme}"><section class="panel" hidden aria-label="Website character"><slot><div class="built-in-chat"><div class="chat-header"><div class="chat-title-group"><span class="chat-title">${this.characterName}</span><span class="status-dot"></span></div><button type="button" class="reset-btn" title="Clear chat history">Clear</button></div><div class="chat-messages" tabindex="0"><div class="msg assistant-msg greeting-msg"><p class="greeting" style="margin:0">Hi there! \u{1F44B} Ask me anything about our business.</p></div></div><form class="chat-form"><input type="text" class="chat-input" placeholder="Ask something..." aria-label="Ask a question" /><button type="submit" class="send-btn" aria-label="Send message"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button></form></div></slot></section><button class="trigger" type="button" aria-label="Open website character" aria-expanded="false"><span class="companion" aria-hidden="true"></span></button></div>`
       ].join("");
       const trigger = this.shadow.querySelector(".trigger");
       trigger.addEventListener("click", (event) => {
@@ -231,6 +298,113 @@
         this.dragStart = null;
         this.dragged = false;
       });
+      this.renderStoredMessages();
+    }
+    setupChatListeners() {
+      const form = this.shadow.querySelector(".chat-form");
+      const resetBtn = this.shadow.querySelector(".reset-btn");
+      if (form) {
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const input = form.querySelector(".chat-input");
+          if (!input) return;
+          const text = input.value.trim();
+          if (!text || this.isBusy) return;
+          input.value = "";
+          void this.sendChatMessage(text);
+        });
+      }
+      if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+          this.localMessages = [];
+          this.saveStoredMessages();
+          this.renderStoredMessages();
+        });
+      }
+    }
+    renderStoredMessages() {
+      const msgContainer = this.shadow.querySelector(".chat-messages");
+      if (!msgContainer) return;
+      if (this.localMessages.length === 0) {
+        msgContainer.innerHTML = [
+          '<div class="msg assistant-msg greeting-msg">',
+          '<p class="greeting" style="margin:0">Hi there! \u{1F44B} Ask me anything about our business.</p>',
+          "</div>"
+        ].join("");
+        return;
+      }
+      msgContainer.innerHTML = this.localMessages.map((m) => `
+      <div class="msg ${m.role === "user" ? "user-msg" : "assistant-msg"}">
+        ${m.content}
+      </div>
+    `).join("");
+      msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+    async sendChatMessage(text) {
+      this.isBusy = true;
+      const sendBtn = this.shadow.querySelector(".send-btn");
+      if (sendBtn) sendBtn.disabled = true;
+      const userMsg = { id: crypto.randomUUID(), role: "user", content: text };
+      this.localMessages.push(userMsg);
+      this.renderStoredMessages();
+      const assistantMsgId = crypto.randomUUID();
+      const assistantMsg = { id: assistantMsgId, role: "assistant", content: "\u2026" };
+      this.localMessages.push(assistantMsg);
+      this.renderStoredMessages();
+      this.explicitState = true;
+      this.setVisualState("review");
+      try {
+        const baseUrl = (this.apiBase || "").replace(/\/$/, "");
+        const res = await fetch(`${baseUrl}/api/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-cradle-installation-id": this.siteId,
+            "x-cradle-visitor-id": this.visitorId
+          },
+          body: JSON.stringify({
+            messages: this.localMessages.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
+            installationId: this.siteId,
+            visitorId: this.visitorId
+          })
+        });
+        if (!res.ok) {
+          let errText = "Failed to communicate with AI chat service.";
+          try {
+            const json = await res.json();
+            if (json.message || json.error) errText = json.message || json.error;
+          } catch {
+          }
+          throw new Error(errText);
+        }
+        if (!res.body) throw new Error("No response body received.");
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let streamedContent = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          streamedContent += chunk;
+          const target = this.localMessages.find((m) => m.id === assistantMsgId);
+          if (target) {
+            target.content = streamedContent;
+            this.renderStoredMessages();
+          }
+        }
+        this.saveStoredMessages();
+        this.resolveAction(true);
+      } catch (err) {
+        const target = this.localMessages.find((m) => m.id === assistantMsgId);
+        if (target) {
+          target.content = err?.message || "Sorry, something went wrong. Please try again.";
+          this.renderStoredMessages();
+        }
+        this.resolveAction(false);
+      } finally {
+        this.isBusy = false;
+        if (sendBtn) sendBtn.disabled = false;
+      }
     }
     async loadManifest() {
       try {
@@ -240,8 +414,11 @@
         const manifest = await response.json();
         const shell = this.shadow.querySelector(".shell");
         const greeting = this.shadow.querySelector(".greeting");
+        const titleEl = this.shadow.querySelector(".chat-title");
         shell.dataset.placement = this.placement;
-        greeting.textContent = manifest.character.greeting;
+        this.characterName = manifest.character.displayName || "Assistant";
+        if (titleEl) titleEl.textContent = this.characterName;
+        if (greeting) greeting.textContent = manifest.character.greeting;
         if (manifest.assets?.atlas) {
           await this.configureAtlas(manifest.assets.atlas);
           this.startCycle();
@@ -276,7 +453,6 @@
       });
       this.rowFrameCounts = await this.detectFrameCounts(imageUrl, blobForDetection, atlas.columns, atlas.rows);
     }
-    /** Loads the spritesheet into an offscreen image and detects each row's real frame count. */
     async detectFrameCounts(imageUrl, blob, columns, rows) {
       try {
         const image = new Image();
@@ -335,62 +511,27 @@
     }
     endDrag(event) {
       if (!this.dragStart || event.pointerId !== this.dragStart.pointerId) return;
+      event.currentTarget.releasePointerCapture(event.pointerId);
       if (this.dragged) {
         this.ignoreNextClick = true;
-        const shell = this.shadow.querySelector(".shell");
-        this.emit("cradle:move", { ...this.eventContext(), position: { left: shell.offsetLeft, top: shell.offsetTop } });
       }
       this.dragStart = null;
-    }
-    get placement() {
-      return this.getAttribute("placement") === "inline" ? "inline" : "floating";
+      this.dragged = false;
     }
     eventContext() {
       return {
         siteId: this.siteId,
         visitorId: this.visitorId,
-        conversationId: this.conversationId,
-        context: this.pageContext
+        state: this.currentState,
+        open: this.open,
+        context: { ...this.pageContext }
       };
     }
-    emit(type, detail) {
-      const event = new CustomEvent(type, { detail, bubbles: true, composed: true });
-      this.dispatchEvent(event);
-      window.dispatchEvent(new CustomEvent(type, { detail }));
+    emit(name, detail) {
+      this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
     }
   };
-  function getCharacter(siteId) {
-    if (typeof document === "undefined") return null;
-    if (siteId) {
-      const selector = 'cradle-character[site-id="' + CSS.escape(siteId) + '"]';
-      return document.querySelector(selector);
-    }
-    return document.querySelector("cradle-character");
-  }
-  var Cradle;
-  if (typeof window !== "undefined" && typeof customElements !== "undefined") {
-    if (!customElements.get("cradle-character")) customElements.define("cradle-character", CradleCharacter);
-    const script = document.currentScript;
-    const siteId = script?.dataset.siteId;
-    if (siteId && !document.querySelector("cradle-character")) {
-      const mount = () => {
-        if (document.querySelector("cradle-character")) return;
-        const element = document.createElement("cradle-character");
-        element.setAttribute("site-id", siteId);
-        if (script?.dataset.placement) element.setAttribute("placement", script.dataset.placement);
-        document.body.appendChild(element);
-      };
-      if (document.body) mount();
-      else document.addEventListener("DOMContentLoaded", mount, { once: true });
-    }
-    Cradle = window.Cradle = {
-      open: (siteId2) => getCharacter(siteId2)?.openPanel(),
-      close: (siteId2) => getCharacter(siteId2)?.closePanel(),
-      toggle: (siteId2) => getCharacter(siteId2)?.togglePanel(),
-      trigger: (action, siteId2) => getCharacter(siteId2)?.trigger(action),
-      resolveAction: (success, siteId2) => getCharacter(siteId2)?.resolveAction(success),
-      setState: (state, siteId2) => getCharacter(siteId2)?.setVisualState(state),
-      setContext: (context, siteId2) => getCharacter(siteId2)?.setContext(context)
-    };
+  if (typeof customElements !== "undefined" && !customElements.get("cradle-character")) {
+    customElements.define("cradle-character", CradleCharacter);
   }
 })();

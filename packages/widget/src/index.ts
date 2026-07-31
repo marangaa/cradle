@@ -68,8 +68,6 @@ declare global {
  * runtime it talks to, the script's own origin already tells us the API base — no reason to
  * make every embedder retype it. Only null for non-script-tag usage (e.g. bundled via npm),
  * where there's no script element to read an origin from and `api-base` must be passed explicitly.
- * Guarded because this module can be *imported* (not just executed in a browser) from a Next.js
- * Server Component's module graph — `document` genuinely doesn't exist there.
  */
 const INFERRED_API_BASE = typeof document === "undefined" ? null : (() => {
   try {
@@ -82,9 +80,7 @@ const INFERRED_API_BASE = typeof document === "undefined" ? null : (() => {
 
 /**
  * Inspects a loaded spritesheet's alpha channel to find how many columns of each row actually
- * have drawn content, scanning from the last column inward. Petdex never declares frame counts
- * anywhere (not the manifest, not pet.json), so this is the only reliable source of truth for
- * how many frames a given state's row really has.
+ * have drawn content, scanning from the last column inward.
  */
 function detectRowFrameCounts(image: HTMLImageElement, columns: number, rows: number): number[] {
   const counts = new Array<number>(rows).fill(columns);
@@ -115,30 +111,25 @@ function detectRowFrameCounts(image: HTMLImageElement, columns: number, rows: nu
           }
         }
       } catch {
-        // Cross-origin canvas taint or similar - keep the full-row default for this row.
         hasContent = true;
       }
       if (hasContent) lastNonEmptyColumn = column;
     }
-    // A fully blank row means this pet never drew that state - fall back to a full row rather
-    // than a zero/one-frame animation that would look frozen.
     counts[row] = lastNonEmptyColumn >= 0 ? lastNonEmptyColumn + 1 : columns;
   }
   return counts;
 }
 
-/**
- * Standing in for HTMLElement when this module is evaluated outside a browser (e.g. a Next.js
- * Server Component's module graph, or any Node-based SSR/build-time import). `class X extends
- * HTMLElement` throws immediately at *definition* time — not just when instantiated — if
- * HTMLElement is undefined, so the class needs a harmless real constructor to extend in that
- * case. Nothing ever instantiates CradleCharacter server-side (customElements.define is guarded
- * below), so the stand-in is never actually exercised — it only needs to exist.
- */
 const HTMLElementBase: typeof HTMLElement =
   typeof HTMLElement !== "undefined" ? HTMLElement : (class {} as unknown as typeof HTMLElement);
 
-/** Framework-free custom element for an animated, programmable website character. */
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** Framework-free custom element for an animated, programmable website character with built-in persistent AI chat. */
 class CradleCharacter extends HTMLElementBase {
   private readonly shadow = this.attachShadow({ mode: "open" });
   private petAnimations: Animation[] = [];
@@ -148,25 +139,43 @@ class CradleCharacter extends HTMLElementBase {
   private apiBase = "";
   private siteId = "";
   private visitorId = "";
-  private conversationId = "";
+  private placement = "floating";
+  private theme = "neobrutalist";
   private pageContext: Record<string, unknown> = {};
   private dragStart: { pointerId: number; x: number; y: number; left: number; top: number } | null = null;
   private dragged = false;
   private ignoreNextClick = false;
 
+  private stateTimer: ReturnType<typeof setTimeout> | null = null;
+  private cycleTimer: ReturnType<typeof setTimeout> | null = null;
+  private cycling = false;
+  private autoCycle = true;
+  private explicitState = false;
+  private cycleStep = 0;
+  private currentState: PetdexState = "idle";
+  private localMessages: ChatMessage[] = [];
+  private isBusy = false;
+  private characterName = "Assistant";
+
   connectedCallback() {
     this.siteId = this.getAttribute("site-id") ?? this.getAttribute("installation-id") ?? "";
     this.apiBase = this.getAttribute("api-base") ?? INFERRED_API_BASE ?? "";
     this.autoCycle = !this.hasAttribute("no-cycle");
+    this.placement = this.getAttribute("placement") ?? "floating";
+    this.theme = this.getAttribute("theme") ?? "neobrutalist";
+
     if (!this.siteId || !this.apiBase) {
       throw new Error(
         "CradleCharacter requires a site-id attribute, and an api-base attribute unless the widget " +
-        "was loaded via a <script src> tag (its origin is inferred automatically in that case)."
+        "was loaded via a <script src> tag."
       );
     }
-    this.visitorId = crypto.randomUUID();
-    this.conversationId = crypto.randomUUID();
+
+    this.visitorId = this.getOrCreateVisitorId();
+    this.loadStoredMessages();
+
     this.render();
+    this.setupChatListeners();
     void this.loadManifest();
   }
 
@@ -176,14 +185,36 @@ class CradleCharacter extends HTMLElementBase {
     this.stopCycle();
   }
 
-  private stateTimer: ReturnType<typeof setTimeout> | null = null;
-  private cycleTimer: ReturnType<typeof setTimeout> | null = null;
-  private cycling = false;
-  /** True unless the host opts out via the `no-cycle` attribute (see startCycle). */
-  private autoCycle = true;
-  private explicitState = false;
-  private cycleStep = 0;
-  private currentState: PetdexState = "idle";
+  private getOrCreateVisitorId(): string {
+    try {
+      const existing = localStorage.getItem("cradle_visitor_id");
+      if (existing) return existing;
+      const id = crypto.randomUUID();
+      localStorage.setItem("cradle_visitor_id", id);
+      return id;
+    } catch {
+      return crypto.randomUUID();
+    }
+  }
+
+  private loadStoredMessages() {
+    try {
+      const stored = localStorage.getItem(`cradle_chat_${this.siteId}`);
+      if (stored) {
+        this.localMessages = JSON.parse(stored);
+      }
+    } catch {
+      this.localMessages = [];
+    }
+  }
+
+  private saveStoredMessages() {
+    try {
+      localStorage.setItem(`cradle_chat_${this.siteId}`, JSON.stringify(this.localMessages));
+    } catch {
+      // Ignore localStorage errors
+    }
+  }
 
   /** Opens the character and emits an activation event for the host experience. */
   openPanel() {
@@ -245,22 +276,12 @@ class CradleCharacter extends HTMLElementBase {
     }, 2200);
   }
 
-  /**
-   * Hands control back from an explicit, real-event-driven animation (open/trigger/resolve) to
-   * the idle showcase cycle - resuming from "idle" rather than freezing on whatever state the
-   * explicit sequence last set.
-   */
   private releaseToCycle() {
     this.explicitState = false;
     this.setVisualState("idle");
     this.scheduleNextCycleFrame();
   }
 
-  /**
-   * Starts the default idle showcase, cycling through every declared state in turn. Skipped
-   * entirely when the host sets `no-cycle` — for embeds that already drive real state changes
-   * (e.g. wired to an actual chat), decorative cycling would fight with and mask the real signal.
-   */
   private startCycle() {
     if (this.cycling || !this.autoCycle) return;
     this.cycling = true;
@@ -282,7 +303,6 @@ class CradleCharacter extends HTMLElementBase {
     this.cycleTimer = setTimeout(() => this.scheduleNextCycleFrame(), Math.max(durationMs, MIN_STATE_DURATION_MS));
   }
 
-  /** Updates the companion animation dynamically from the atlas, returning the duration used. */
   setVisualState(state: PetdexState): number {
     this.currentState = state;
     const atlas = this.atlas;
@@ -293,24 +313,107 @@ class CradleCharacter extends HTMLElementBase {
     return duration;
   }
 
-  /** Supplies non-sensitive page context that host code can associate with character events. */
   setContext(context: Record<string, unknown>) {
     this.pageContext = { ...this.pageContext, ...context };
     this.emit("cradle:context", this.eventContext());
   }
 
-
   private render() {
+    const accentColor = this.getAttribute("accent-color") || this.getAttribute("primary-color");
+    const bgColor = this.getAttribute("bg-color");
+    const textColor = this.getAttribute("text-color");
+
+    const customVars = [
+      accentColor ? `--cradle-accent:${accentColor};` : "",
+      bgColor ? `--cradle-bg:${bgColor};` : "",
+      textColor ? `--cradle-text:${textColor};` : "",
+    ].join("");
+
     this.shadow.innerHTML = [
       '<style>',
-      ':host{all:initial;position:fixed;right:0;bottom:0;width:0;height:0;z-index:2147483647;pointer-events:none;color:#09090b;font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.4}',
-      '.shell{position:fixed;right:22px;bottom:22px;z-index:2147483647;pointer-events:auto}.shell[data-placement="inline"]{position:relative;right:auto;bottom:auto;width:100%;max-width:330px}',
-      '.panel{position:absolute;bottom:100%;right:12px;margin-bottom:12px;width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 140px);overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-end;gap:8px;background:transparent;box-shadow:none;border:0;padding:0}.panel[hidden]{display:none}.panel ::slotted(*){align-self:stretch;width:100%;box-sizing:border-box}',
-      '.greeting-bubble{position:relative;width:100%;box-sizing:border-box;word-break:break-word;overflow-wrap:anywhere;padding:14px 18px;background:#ffffff;color:#09090b;border:2.5px solid #09090b;border-radius:20px 20px 4px 20px;box-shadow:4px 4px 0px #09090b,0 10px 25px rgba(0,0,0,0.12)}.greeting-bubble::after{content:"";position:absolute;bottom:-8px;right:20px;width:14px;height:14px;background:#ffffff;border-right:2.5px solid #09090b;border-bottom:2.5px solid #09090b;transform:rotate(45deg)}.greeting{margin:0;color:#09090b;font-size:.88rem;line-height:1.55;font-weight:600;white-space:pre-wrap}',
-      '.trigger{display:grid;width:94px;height:102px;place-items:center;border:0;background:transparent;box-shadow:none;cursor:grab;touch-action:none}.trigger:active{cursor:grabbing}.trigger:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}.trigger .companion{width:88px;height:96px;background-repeat:no-repeat;background-size:800% 900%}@media (prefers-reduced-motion:reduce){.companion{animation:none!important}}',
+      `:host{all:initial;position:fixed;right:0;bottom:0;width:0;height:0;z-index:2147483647;pointer-events:none;color:var(--cradle-text,#09090b);font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.4;${customVars}}`,
+      '.shell{position:fixed;right:22px;bottom:22px;z-index:2147483647;pointer-events:auto}',
+      '.shell[data-placement="inline"]{position:relative;right:auto;bottom:auto;width:100%;max-width:330px}',
+      '.panel{position:absolute;bottom:100%;right:12px;margin-bottom:12px;width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 140px);overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-end;gap:8px;background:transparent;box-shadow:none;border:0;padding:0}',
+      '.panel[hidden]{display:none}',
+      '.panel ::slotted(*){align-self:stretch;width:100%;box-sizing:border-box}',
+
+      /* Default Built-in Chat Surface (Slot Fallback) */
+      '.built-in-chat{width:100%;box-sizing:border-box;display:flex;flex-direction:column;background:var(--cradle-bg,#ffffff);color:var(--cradle-text,#09090b);overflow:hidden;transition:all 0.2s ease}',
+      
+      /* Theme: Neobrutalist (Default) */
+      '.shell[data-theme="neobrutalist"] .built-in-chat{border:2.5px solid #09090b;border-radius:20px 20px 4px 20px;box-shadow:4px 4px 0px #09090b,0 10px 25px rgba(0,0,0,0.12)}',
+      
+      /* Theme: Modern / Glass */
+      '.shell[data-theme="modern"] .built-in-chat,.shell[data-theme="glass"] .built-in-chat{background:rgba(255,255,255,0.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.6);border-radius:24px 24px 6px 24px;box-shadow:0 12px 32px rgba(0,0,0,0.12),0 2px 6px rgba(0,0,0,0.04)}',
+      
+      /* Theme: Minimal */
+      '.shell[data-theme="minimal"] .built-in-chat{border:1px solid #e4e4e7;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,0.06)}',
+
+      /* Header */
+      '.chat-header{display:flex;align-items:center;justify-space-between;padding:12px 16px;border-bottom:1px solid rgba(0,0,0,0.08)}',
+      '.chat-title-group{display:flex;align-items:center;gap:8px}',
+      '.chat-title{font-weight:800;font-size:0.92rem;letter-spacing:-0.02em}',
+      '.status-dot{width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block}',
+      '.reset-btn{background:transparent;border:0;cursor:pointer;opacity:0.4;padding:4px;font-size:0.75rem;font-weight:600;transition:opacity 0.15s}',
+      '.reset-btn:hover{opacity:0.9}',
+
+      /* Messages List */
+      '.chat-messages{display:flex;flex-direction:column;gap:10px;padding:14px;max-height:calc(100vh - 240px);min-height:120px;overflow-y:auto;scrollbar-width:thin}',
+      '.msg{max-width:85%;padding:10px 14px;font-size:0.85rem;line-height:1.45;word-break:break-word;white-space:pre-wrap}',
+      '.msg.user-msg{align-self:flex-end;background:var(--cradle-accent,#09090b);color:#ffffff;border-radius:16px 16px 2px 16px}',
+      '.shell[data-theme="neobrutalist"] .msg.user-msg{border:2px solid #09090b;box-shadow:2px 2px 0px #09090b}',
+      '.msg.assistant-msg{align-self:flex-start;background:#f4f4f5;color:#09090b;border-radius:16px 16px 16px 2px;border:1px solid rgba(0,0,0,0.06)}',
+      '.shell[data-theme="neobrutalist"] .msg.assistant-msg{background:#ffffff;border:2px solid #09090b;box-shadow:2px 2px 0px #09090b}',
+
+      /* Form */
+      '.chat-form{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid rgba(0,0,0,0.08);background:rgba(0,0,0,0.015)}',
+      '.chat-input{flex:1;border:1px solid rgba(0,0,0,0.15);border-radius:20px;padding:8px 14px;font-size:0.84rem;outline:none;background:#ffffff;color:#09090b}',
+      '.shell[data-theme="neobrutalist"] .chat-input{border:2px solid #09090b;border-radius:12px}',
+      '.chat-input:focus{border-color:#09090b}',
+      '.send-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;border:0;background:var(--cradle-accent,#09090b);color:#ffffff;cursor:pointer;transition:transform 0.1s}',
+      '.shell[data-theme="neobrutalist"] .send-btn{border-radius:8px;border:2px solid #09090b;box-shadow:2px 2px 0px #09090b}',
+      '.send-btn:active{transform:scale(0.92)}',
+      '.send-btn:disabled{opacity:0.3;cursor:not-allowed}',
+
+      /* Trigger */
+      '.trigger{display:grid;width:94px;height:102px;place-items:center;border:0;background:transparent;box-shadow:none;cursor:grab;touch-action:none}',
+      '.trigger:active{cursor:grabbing}',
+      '.trigger:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}',
+      '.trigger .companion{width:88px;height:96px;background-repeat:no-repeat;background-size:800% 900%}',
+      '@media (prefers-reduced-motion:reduce){.companion{animation:none!important}}',
       '</style>',
-      '<div class="shell"><section class="panel" hidden aria-label="Website character"><slot><div class="greeting-bubble"><p class="greeting">Hi there! \uD83D\uDC4B Ask me anything or click to interact.</p></div></slot></section><button class="trigger" type="button" aria-label="Open website character" aria-expanded="false"><span class="companion" aria-hidden="true"></span></button></div>',
+      `<div class="shell" data-theme="${this.theme}">` +
+        '<section class="panel" hidden aria-label="Website character">' +
+          '<slot>' +
+            '<div class="built-in-chat">' +
+              '<div class="chat-header">' +
+                '<div class="chat-title-group">' +
+                  `<span class="chat-title">${this.characterName}</span>` +
+                  '<span class="status-dot"></span>' +
+                '</div>' +
+                '<button type="button" class="reset-btn" title="Clear chat history">Clear</button>' +
+              '</div>' +
+              '<div class="chat-messages" tabindex="0">' +
+                '<div class="msg assistant-msg greeting-msg">' +
+                  '<p class="greeting" style="margin:0">Hi there! 👋 Ask me anything about our business.</p>' +
+                '</div>' +
+              '</div>' +
+              '<form class="chat-form">' +
+                '<input type="text" class="chat-input" placeholder="Ask something..." aria-label="Ask a question" />' +
+                '<button type="submit" class="send-btn" aria-label="Send message">' +
+                  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>' +
+                '</button>' +
+              '</form>' +
+            '</div>' +
+          '</slot>' +
+        '</section>' +
+        '<button class="trigger" type="button" aria-label="Open website character" aria-expanded="false">' +
+          '<span class="companion" aria-hidden="true"></span>' +
+        '</button>' +
+      '</div>',
     ].join("");
+
     const trigger = this.shadow.querySelector(".trigger") as HTMLButtonElement;
     trigger.addEventListener("click", (event) => {
       if (this.ignoreNextClick) {
@@ -327,6 +430,134 @@ class CradleCharacter extends HTMLElementBase {
       this.dragStart = null;
       this.dragged = false;
     });
+
+    this.renderStoredMessages();
+  }
+
+  private setupChatListeners() {
+    const form = this.shadow.querySelector(".chat-form") as HTMLFormElement | null;
+    const resetBtn = this.shadow.querySelector(".reset-btn") as HTMLButtonElement | null;
+
+    if (form) {
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const input = form.querySelector(".chat-input") as HTMLInputElement | null;
+        if (!input) return;
+        const text = input.value.trim();
+        if (!text || this.isBusy) return;
+        input.value = "";
+        void this.sendChatMessage(text);
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        this.localMessages = [];
+        this.saveStoredMessages();
+        this.renderStoredMessages();
+      });
+    }
+  }
+
+  private renderStoredMessages() {
+    const msgContainer = this.shadow.querySelector(".chat-messages") as HTMLElement | null;
+    if (!msgContainer) return;
+
+    if (this.localMessages.length === 0) {
+      msgContainer.innerHTML = [
+        '<div class="msg assistant-msg greeting-msg">',
+          '<p class="greeting" style="margin:0">Hi there! 👋 Ask me anything about our business.</p>',
+        '</div>',
+      ].join("");
+      return;
+    }
+
+    msgContainer.innerHTML = this.localMessages.map((m) => `
+      <div class="msg ${m.role === "user" ? "user-msg" : "assistant-msg"}">
+        ${m.content}
+      </div>
+    `).join("");
+
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+  }
+
+  private async sendChatMessage(text: string) {
+    this.isBusy = true;
+    const sendBtn = this.shadow.querySelector(".send-btn") as HTMLButtonElement | null;
+    if (sendBtn) sendBtn.disabled = true;
+
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: text };
+    this.localMessages.push(userMsg);
+    this.renderStoredMessages();
+
+    const assistantMsgId = crypto.randomUUID();
+    const assistantMsg: ChatMessage = { id: assistantMsgId, role: "assistant", content: "…" };
+    this.localMessages.push(assistantMsg);
+    this.renderStoredMessages();
+
+    this.explicitState = true;
+    this.setVisualState("review");
+
+    try {
+      const baseUrl = (this.apiBase || "").replace(/\/$/, "");
+      const res = await fetch(`${baseUrl}/api/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-cradle-installation-id": this.siteId,
+          "x-cradle-visitor-id": this.visitorId,
+        },
+        body: JSON.stringify({
+          messages: this.localMessages.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
+          installationId: this.siteId,
+          visitorId: this.visitorId,
+        }),
+      });
+
+      if (!res.ok) {
+        let errText = "Failed to communicate with AI chat service.";
+        try {
+          const json = await res.json();
+          if (json.message || json.error) errText = json.message || json.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(errText);
+      }
+
+      if (!res.body) throw new Error("No response body received.");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let streamedContent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        streamedContent += chunk;
+
+        // Update assistant message content
+        const target = this.localMessages.find((m) => m.id === assistantMsgId);
+        if (target) {
+          target.content = streamedContent;
+          this.renderStoredMessages();
+        }
+      }
+
+      this.saveStoredMessages();
+      this.resolveAction(true);
+    } catch (err: any) {
+      const target = this.localMessages.find((m) => m.id === assistantMsgId);
+      if (target) {
+        target.content = err?.message || "Sorry, something went wrong. Please try again.";
+        this.renderStoredMessages();
+      }
+      this.resolveAction(false);
+    } finally {
+      this.isBusy = false;
+      if (sendBtn) sendBtn.disabled = false;
+    }
   }
 
   private async loadManifest() {
@@ -337,8 +568,13 @@ class CradleCharacter extends HTMLElementBase {
       const manifest = await response.json() as { character: Character; assets: { atlas: PetAtlas | null } | null };
       const shell = this.shadow.querySelector(".shell") as HTMLElement;
       const greeting = this.shadow.querySelector(".greeting") as HTMLElement;
+      const titleEl = this.shadow.querySelector(".chat-title") as HTMLElement;
+
       shell.dataset.placement = this.placement;
-      greeting.textContent = manifest.character.greeting;
+      this.characterName = manifest.character.displayName || "Assistant";
+      if (titleEl) titleEl.textContent = this.characterName;
+      if (greeting) greeting.textContent = manifest.character.greeting;
+
       if (manifest.assets?.atlas) {
         await this.configureAtlas(manifest.assets.atlas);
         this.startCycle();
@@ -382,7 +618,6 @@ class CradleCharacter extends HTMLElementBase {
     this.rowFrameCounts = await this.detectFrameCounts(imageUrl, blobForDetection, atlas.columns, atlas.rows);
   }
 
-  /** Loads the spritesheet into an offscreen image and detects each row's real frame count. */
   private async detectFrameCounts(imageUrl: string, blob: Blob | null, columns: number, rows: number): Promise<number[]> {
     try {
       const image = new Image();
@@ -419,8 +654,6 @@ class CradleCharacter extends HTMLElementBase {
     return durationMs;
   }
 
-
-
   private startDrag(event: PointerEvent) {
     if (event.button !== 0 || this.placement === "inline") return;
     const shell = this.shadow.querySelector(".shell") as HTMLElement;
@@ -448,110 +681,29 @@ class CradleCharacter extends HTMLElementBase {
 
   private endDrag(event: PointerEvent) {
     if (!this.dragStart || event.pointerId !== this.dragStart.pointerId) return;
+    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
     if (this.dragged) {
       this.ignoreNextClick = true;
-      const shell = this.shadow.querySelector(".shell") as HTMLElement;
-      this.emit("cradle:move", { ...this.eventContext(), position: { left: shell.offsetLeft, top: shell.offsetTop } });
     }
     this.dragStart = null;
-  }
-
-  private get placement() {
-    return this.getAttribute("placement") === "inline" ? "inline" : "floating";
+    this.dragged = false;
   }
 
   private eventContext() {
     return {
       siteId: this.siteId,
       visitorId: this.visitorId,
-      conversationId: this.conversationId,
-      context: this.pageContext,
+      state: this.currentState,
+      open: this.open,
+      context: { ...this.pageContext },
     };
   }
 
-  private emit(type: string, detail: Record<string, unknown>) {
-    const event = new CustomEvent(type, { detail, bubbles: true, composed: true });
-    this.dispatchEvent(event);
-    window.dispatchEvent(new CustomEvent(type, { detail }));
-  }
-
-}
-
-function getCharacter(siteId?: string) {
-  if (typeof document === "undefined") return null;
-  if (siteId) {
-    const selector = 'cradle-character[site-id="' + CSS.escape(siteId) + '"]';
-    return document.querySelector(selector) as CradleCharacter | null;
-  }
-  return document.querySelector("cradle-character") as CradleCharacter | null;
-}
-
-/**
- * Live-bound named export so `import { Cradle } from "@maranga/cradle"` works for bundler/npm
- * consumers, not just the `window.Cradle` global the <script> tag path relies on. `undefined`
- * anywhere this module is evaluated outside a browser (SSR, a Server Component's module graph) —
- * callers should optional-chain (`Cradle?.setState(...)`), same as the window.Cradle convention
- * used throughout this file and its README.
- */
-export let Cradle: CradleController | undefined;
-
-/**
- * Everything below touches a real browser global (customElements, document, window) at the top
- * level, so it's guarded as a block — this module needs to be *importable* (even if inert) from
- * a Next.js Server Component's module graph, not just executable in an actual browser.
- */
-if (typeof window !== "undefined" && typeof customElements !== "undefined") {
-  if (!customElements.get("cradle-character")) customElements.define("cradle-character", CradleCharacter);
-
-  /**
-   * Matches the standard single-tag embed pattern (Intercom, Crisp, and similar all work this
-   * way): <script src="https://runtime.example.com/widget.js" data-site-id="..."></script> and
-   * nothing else. If the loading <script> tag carries a data-site-id, auto-create the element
-   * instead of requiring the developer to also hand-write a <cradle-character> tag. Explicit
-   * <cradle-character> tags (used by the npm/React path, or for multiple companions on one page)
-   * still work exactly as before and take priority — this only fills in when nothing was written
-   * by hand.
-   */
-  const script = document.currentScript as HTMLScriptElement | null;
-  const siteId = script?.dataset.siteId;
-  if (siteId && !document.querySelector("cradle-character")) {
-    const mount = () => {
-      if (document.querySelector("cradle-character")) return;
-      const element = document.createElement("cradle-character");
-      element.setAttribute("site-id", siteId);
-      if (script?.dataset.placement) element.setAttribute("placement", script.dataset.placement);
-      document.body.appendChild(element);
-    };
-
-    if (document.body) mount();
-    else document.addEventListener("DOMContentLoaded", mount, { once: true });
-  }
-
-  Cradle = window.Cradle = {
-    open: (siteId) => getCharacter(siteId)?.openPanel(),
-    close: (siteId) => getCharacter(siteId)?.closePanel(),
-    toggle: (siteId) => getCharacter(siteId)?.togglePanel(),
-    trigger: (action, siteId) => getCharacter(siteId)?.trigger(action),
-    resolveAction: (success, siteId) => getCharacter(siteId)?.resolveAction(success),
-    setState: (state, siteId) => getCharacter(siteId)?.setVisualState(state),
-    setContext: (context, siteId) => getCharacter(siteId)?.setContext(context),
-  };
-}
-
-type CradleCharacterElementProps = {
-  "site-id"?: string;
-  "api-base"?: string;
-  placement?: "floating" | "inline";
-  /** Boolean attribute. Present = skip the idle showcase; use when driving real state yourself. */
-  "no-cycle"?: boolean | "";
-  children?: unknown;
-};
-
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      "cradle-character": CradleCharacterElementProps & Record<string, unknown>;
-    }
+  private emit(name: string, detail: Record<string, unknown>) {
+    this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 }
 
+if (typeof customElements !== "undefined" && !customElements.get("cradle-character")) {
+  customElements.define("cradle-character", CradleCharacter);
+}
