@@ -353,6 +353,29 @@ function CharacterPreview({
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
 
+  useEffect(() => {
+    if (!installationId) return;
+    const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
+    fetch(`${runtimeUrl}/api/chat/init`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-cradle-installation-id": installationId,
+        "x-cradle-visitor-id": "00000000-0000-0000-0000-000000000001",
+      },
+      body: JSON.stringify({ installationId, visitorId: "00000000-0000-0000-0000-000000000001" }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.greeting) {
+          setMessages([{ role: "assistant", content: data.greeting }]);
+        }
+      })
+      .catch(() => {
+        // keep default fallback
+      });
+  }, [installationId]);
+
   const activeState = overrideState ?? state;
   const theme = (character as any).theme || "neobrutalist";
 
