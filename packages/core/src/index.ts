@@ -2,7 +2,8 @@ import { z } from "zod";
 
 export const characterSchema = z.object({
   displayName: z.string().min(1).max(48),
-  greeting: z.string().min(1).max(320),
+  greeting: z.string().max(320).optional(),
+  theme: z.enum(["neobrutalist", "modern", "minimal"]).optional(),
 });
 
 export type Character = z.infer<typeof characterSchema>;
@@ -22,7 +23,7 @@ export type BrandProfile = z.infer<typeof brandProfileSchema>;
 export function createDefaultCharacter(siteName: string): Character {
   return {
     displayName: siteName,
-    greeting: `Welcome to ${siteName}. What can I help you find?`,
+    theme: "neobrutalist",
   };
 }
 

@@ -41,7 +41,7 @@ type PetdexState = keyof typeof STATE_ROWS;
 
 type Page = { url: string; title: string; markdown: string };
 
-type Character = { displayName: string; greeting: string };
+type Character = { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "minimal" };
 type Installation = { id: string; name: string };
 type OwnedInstallation = {
   id: string;
@@ -335,8 +335,13 @@ function CompanionSkeleton() {
 function CharacterPreview({ character, companion, overrideState }: { character: Character; companion: ImportedCompanion; overrideState?: PetdexState }) {
   const [state, setState] = useState<PreviewState>("idle");
   const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([
+    { role: "assistant", content: `Hi there! 👋 Ask me anything about ${character.displayName || "our site"}.` },
+  ]);
+  const [input, setInput] = useState("");
 
   const activeState = overrideState ?? state;
+  const theme = (character as any).theme || "neobrutalist";
 
   function togglePreview() {
     setOpen((current) => {
@@ -346,12 +351,54 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
     });
   }
 
+  function sendMessage(e: FormEvent) {
+    e.preventDefault();
+    if (!input.trim()) return;
+    const text = input.trim();
+    setInput("");
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: text },
+      { role: "assistant", content: `(Studio Preview) Ready to help with "${text}" on your live site!` },
+    ]);
+  }
+
   return (
-    <div className="studio-install-preview">
+    <div className={`studio-install-preview theme-${theme}`}>
       {open && (
-        <section className="install-preview-copy" aria-label="Installed character preview">
-          <strong>{character.displayName}</strong>
-          <p>{character.greeting}</p>
+        <section className={`install-preview-chat theme-${theme}`} aria-label="Installed character preview">
+          <div className="preview-chat-header">
+            <strong>{character.displayName}</strong>
+            <span className="preview-status-dot" style={{ width: 8, height: 8, background: "#22c55e", borderRadius: "50%", display: "inline-block" }} />
+          </div>
+          <div className="preview-chat-messages" style={{ display: "flex", flexDirection: "column", gap: 8, padding: 10, maxHeight: 180, overflowY: "auto" }}>
+            {messages.map((m, idx) => (
+              <div
+                key={idx}
+                style={{
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  background: m.role === "user" ? "#09090b" : "#f4f4f5",
+                  color: m.role === "user" ? "#ffffff" : "#09090b",
+                  padding: "6px 10px",
+                  borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                  fontSize: ".78rem",
+                  maxWidth: "85%",
+                }}
+              >
+                {m.content}
+              </div>
+            ))}
+          </div>
+          <form onSubmit={sendMessage} style={{ display: "flex", gap: 6, padding: 8, borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+            <input
+              type="text"
+              placeholder="Test prompt…"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              style={{ flex: 1, padding: "6px 10px", border: "1px solid #d4d4d8", borderRadius: 16, fontSize: ".76rem", outline: "none" }}
+            />
+            <button type="submit" style={{ padding: "6px 12px", background: "#09090b", color: "#fff", border: 0, borderRadius: 16, fontSize: ".75rem", cursor: "pointer", fontWeight: 700 }}>Send</button>
+          </form>
         </section>
       )}
       <button
@@ -1118,12 +1165,52 @@ export default function StudioHome() {
               <div className="workflow-heading">
                 <span className="eyebrow">Make it yours</span>
                 <h1>Set it up for your site.</h1>
-                <p>Give your character a name, a welcome message, and a place to appear.</p>
+                <p>Give your character a name and select a visual theme for your site.</p>
               </div>
               <div className="shape-layout">
                 <form className="character-form" onSubmit={saveCharacter}>
-                  <label>Name<input value={character.displayName} maxLength={48} onChange={(e) => setCharacter({ ...character, displayName: e.target.value })} /></label>
-                  <label>Welcome message<textarea value={character.greeting} maxLength={320} onChange={(e) => setCharacter({ ...character, greeting: e.target.value })} /></label>
+                  <label>
+                    Character Name
+                    <input
+                      value={character.displayName}
+                      maxLength={48}
+                      onChange={(e) => setCharacter({ ...character, displayName: e.target.value })}
+                    />
+                  </label>
+
+                  <label>
+                    Widget Theme
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 8 }}>
+                      {[
+                        { id: "neobrutalist", label: "Neobrutalist", desc: "Bold solid borders & hard shadow" },
+                        { id: "modern", label: "Modern / Glass", desc: "Frosted blur & soft rounded card" },
+                        { id: "minimal", label: "Minimal", desc: "Clean 1px border & micro-shadow" },
+                      ].map((t) => {
+                        const isSelected = ((character as any).theme || "neobrutalist") === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setCharacter({ ...character, theme: t.id as any })}
+                            style={{
+                              padding: "12px 14px",
+                              textAlign: "left",
+                              border: isSelected ? "2.5px solid #09090b" : "1.5px solid #e4e4e7",
+                              background: isSelected ? "#e7ff36" : "#ffffff",
+                              borderRadius: 12,
+                              cursor: "pointer",
+                              boxShadow: isSelected ? "2px 2px 0px #09090b" : "none",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <strong style={{ display: "block", fontSize: ".84rem", color: "#09090b", fontWeight: 800 }}>{t.label}</strong>
+                            <span style={{ fontSize: ".7rem", color: "#52525b" }}>{t.desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </label>
+
                   <button className="button primary" disabled={Boolean(busy)}>{busy ?? "Save changes"}</button>
                 </form>
               </div>
