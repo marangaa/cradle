@@ -332,13 +332,26 @@ function CompanionSkeleton() {
   );
 }
 
-function CharacterPreview({ character, companion, overrideState }: { character: Character; companion: ImportedCompanion; overrideState?: PetdexState }) {
+function CharacterPreview({
+  character,
+  companion,
+  overrideState,
+  installationId,
+  brandName,
+}: {
+  character: Character;
+  companion: ImportedCompanion;
+  overrideState?: PetdexState;
+  installationId?: string;
+  brandName?: string;
+}) {
   const [state, setState] = useState<PreviewState>("idle");
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([
-    { role: "assistant", content: "Hi there! 👋 Ask me anything about our business." },
+    { role: "assistant", content: `Hi there! 👋 I'm ${character.displayName || "your AI companion"}. Ask me anything about ${brandName || "our business"}!` },
   ]);
   const [input, setInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const activeState = overrideState ?? state;
   const theme = (character as any).theme || "neobrutalist";
@@ -351,22 +364,61 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
     });
   }
 
-  function sendMessage(e: FormEvent) {
+  async function sendMessage(e: FormEvent) {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || isStreaming) return;
     const text = input.trim();
     setInput("");
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: text },
-      { role: "assistant", content: `I'm ${character.displayName || "your AI companion"}, ready to answer questions about your site!` },
-    ]);
+
+    const newMessages = [...messages, { role: "user" as const, content: text }];
+    setMessages([...newMessages, { role: "assistant" as const, content: "…" }]);
+    setIsStreaming(true);
+
+    try {
+      const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
+      const response = await fetch(`${runtimeUrl}/api/chat`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(installationId ? { "x-cradle-installation-id": installationId } : {}),
+          "x-cradle-visitor-id": "studio-preview-visitor",
+        },
+        body: JSON.stringify({
+          messages: newMessages,
+          installationId,
+          visitorId: "studio-preview-visitor",
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        setMessages([...newMessages, { role: "assistant", content: `I'm ${character.displayName || "your AI companion"}, ready to answer questions about ${brandName || "your site"}!` }]);
+        setIsStreaming(false);
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        assistantText += decoder.decode(value, { stream: true });
+        setMessages([...newMessages, { role: "assistant", content: assistantText || "…" }]);
+      }
+
+      setIsStreaming(false);
+    } catch {
+      setMessages([...newMessages, { role: "assistant", content: `I'm ${character.displayName || "your AI companion"}, ready to answer questions about ${brandName || "your site"}!` }]);
+      setIsStreaming(false);
+    }
   }
 
   const isNeobrutalist = theme === "neobrutalist";
   const isModern = theme === "modern" || theme === "glass";
   const isCyberpunk = theme === "cyberpunk";
   const isTerminal = theme === "terminal";
+  const isMinimal = theme === "minimal";
 
   return (
     <div className={`studio-install-preview theme-${theme}`} style={{ position: "fixed", bottom: 22, right: 22, zIndex: 2147483647, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
@@ -381,7 +433,7 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
             background: "transparent",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 220, overflowY: "auto", padding: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", padding: 4 }}>
             {messages.map((m, idx) => {
               const isUser = m.role === "user";
               return (
@@ -394,29 +446,29 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
                     fontSize: ".84rem",
                     lineHeight: 1.45,
                     background: isUser
-                      ? (isCyberpunk ? "#a855f7" : isTerminal ? "#15803d" : "#09090b")
-                      : (isCyberpunk ? "#0f172a" : isTerminal ? "#09090b" : isModern ? "rgba(255,255,255,0.92)" : "#ffffff"),
+                      ? (isCyberpunk ? "#ec4899" : isTerminal ? "#15803d" : isModern ? "#4f46e5" : isMinimal ? "#0f172a" : "#09090b")
+                      : (isCyberpunk ? "#090d16" : isTerminal ? "#000000" : isModern ? "rgba(15,23,42,0.88)" : isMinimal ? "#f8fafc" : "#ffffff"),
                     color: isUser
-                      ? (isCyberpunk ? "#0f172a" : "#ffffff")
-                      : (isCyberpunk ? "#38bdf8" : isTerminal ? "#22c55e" : "#09090b"),
+                      ? (isCyberpunk ? "#090d16" : "#ffffff")
+                      : (isCyberpunk ? "#22d3ee" : isTerminal ? "#22c55e" : isModern ? "#f8fafc" : "#0f172a"),
                     border: isNeobrutalist
-                      ? "2px solid #09090b"
+                      ? "2.5px solid #09090b"
                       : isCyberpunk
-                      ? (isUser ? "2px solid #06b6d4" : "2px solid #a855f7")
+                      ? (isUser ? "2px solid #22d3ee" : "2px solid #ec4899")
                       : isTerminal
-                      ? "1px solid #22c55e"
+                      ? "1.5px solid #22c55e"
                       : isModern
-                      ? "1px solid rgba(255,255,255,0.6)"
-                      : "1px solid #e4e4e7",
+                      ? "1.5px solid rgba(99,102,241,0.5)"
+                      : "1px solid #cbd5e1",
                     boxShadow: isNeobrutalist
                       ? "3px 3px 0px #09090b"
                       : isCyberpunk
-                      ? "0 0 12px rgba(168,85,247,0.5)"
+                      ? "0 0 16px rgba(236,72,153,0.5)"
                       : isTerminal
-                      ? "0 0 8px rgba(34,197,94,0.3)"
+                      ? "0 0 12px rgba(34,197,94,0.3)"
                       : isModern
-                      ? "0 8px 24px rgba(0,0,0,0.08)"
-                      : "0 2px 8px rgba(0,0,0,0.04)",
+                      ? "0 8px 24px rgba(15,23,42,0.3)"
+                      : "0 4px 12px rgba(0,0,0,0.05)",
                     backdropFilter: isModern ? "blur(16px)" : "none",
                     fontFamily: isTerminal ? "monospace" : "inherit",
                     borderRadius: isTerminal ? 4 : (isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px"),
@@ -436,24 +488,24 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
               gap: 8,
               padding: "6px 6px 6px 16px",
               borderRadius: isTerminal ? 4 : 9999,
-              background: isCyberpunk ? "#0f172a" : isTerminal ? "#09090b" : isModern ? "rgba(255,255,255,0.92)" : "#ffffff",
+              background: isCyberpunk ? "#090d16" : isTerminal ? "#000000" : isModern ? "rgba(15,23,42,0.9)" : isMinimal ? "#ffffff" : "#ffffff",
               border: isNeobrutalist
                 ? "2.5px solid #09090b"
                 : isCyberpunk
-                ? "2px solid #a855f7"
+                ? "2px solid #ec4899"
                 : isTerminal
                 ? "1.5px solid #22c55e"
                 : isModern
-                ? "1px solid rgba(0,0,0,0.1)"
-                : "1px solid #e4e4e7",
+                ? "1.5px solid rgba(99,102,241,0.5)"
+                : "1px solid #cbd5e1",
               boxShadow: isNeobrutalist
                 ? "3.5px 3.5px 0px #09090b"
                 : isCyberpunk
-                ? "0 0 16px rgba(168,85,247,0.6)"
+                ? "0 0 18px rgba(236,72,153,0.6)"
                 : isTerminal
-                ? "0 0 10px rgba(34,197,94,0.3)"
+                ? "0 0 14px rgba(34,197,94,0.4)"
                 : isModern
-                ? "0 10px 28px rgba(0,0,0,0.1)"
+                ? "0 10px 28px rgba(0,0,0,0.25)"
                 : "0 2px 10px rgba(0,0,0,0.05)",
               backdropFilter: isModern ? "blur(16px)" : "none",
             }}
@@ -469,25 +521,26 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
                 outline: "none",
                 background: "transparent",
                 fontSize: ".84rem",
-                color: isCyberpunk ? "#38bdf8" : isTerminal ? "#22c55e" : "#09090b",
+                color: isCyberpunk ? "#22d3ee" : isTerminal ? "#22c55e" : isModern ? "#f8fafc" : "#0f172a",
                 fontFamily: isTerminal ? "monospace" : "inherit",
               }}
             />
             <button
               type="submit"
+              disabled={isStreaming}
               style={{
                 border: 0,
-                background: isNeobrutalist ? "#09090b" : isCyberpunk ? "#a855f7" : isTerminal ? "#22c55e" : "transparent",
-                color: isNeobrutalist ? "#ffffff" : isCyberpunk ? "#0f172a" : isTerminal ? "#09090b" : "#09090b",
-                borderRadius: isTerminal ? 2 : (isNeobrutalist || isCyberpunk ? 9999 : 0),
-                padding: isNeobrutalist || isCyberpunk ? "6px 16px" : "6px 10px",
+                background: isNeobrutalist ? "#09090b" : isCyberpunk ? "#ec4899" : isTerminal ? "#22c55e" : isModern ? "#6366f1" : "transparent",
+                color: isNeobrutalist ? "#ffffff" : isCyberpunk ? "#090d16" : isTerminal ? "#000000" : isModern ? "#ffffff" : "#0f172a",
+                borderRadius: isTerminal ? 2 : (isNeobrutalist || isCyberpunk || isModern ? 9999 : 0),
+                padding: isNeobrutalist || isCyberpunk || isModern ? "6px 16px" : "6px 10px",
                 fontWeight: 800,
                 fontSize: ".8rem",
-                cursor: "pointer",
+                cursor: isStreaming ? "wait" : "pointer",
                 fontFamily: isTerminal ? "monospace" : "inherit",
               }}
             >
-              Send
+              {isStreaming ? "…" : "Send"}
             </button>
           </form>
         </section>
@@ -1418,7 +1471,13 @@ export default function StudioHome() {
 
           {/* Floating character preview */}
           {hasPreview && character && companion && (
-            <CharacterPreview character={character} companion={companion} overrideState={playgroundState} />
+            <CharacterPreview
+              character={character}
+              companion={companion}
+              overrideState={playgroundState}
+              installationId={session?.installation.id}
+              brandName={session?.brandProfile?.name || session?.installation.name}
+            />
           )}
 
         </>
