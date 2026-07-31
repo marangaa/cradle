@@ -9,11 +9,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   const targetOrigin = installation?.origin;
   const reqOrigin = request.headers.get("origin");
-  const corsHeaders = {
-    "access-control-allow-origin": reqOrigin || targetOrigin || "*",
-    "cache-control": "no-store",
-    vary: "Origin",
-  };
+  // Only reflect the request's Origin back if it's genuinely this installation's registered
+  // origin. Reflecting any Origin unconditionally (what this used to do) is equivalent to a
+  // wildcard for any real caller — it defeats the entire point of storing `origin` per
+  // installation. No match -> omit the header entirely; browsers block cross-origin reads
+  // without it, same-origin/non-browser callers (curl, server-to-server) are unaffected either way.
+  const corsHeaders: Record<string, string> = { "cache-control": "no-store", vary: "Origin" };
+  if (targetOrigin && reqOrigin === targetOrigin) {
+    corsHeaders["access-control-allow-origin"] = targetOrigin;
+  }
 
   const companion = installation ? await store.getCompanionPackage(id) : null;
 

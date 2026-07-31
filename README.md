@@ -1,47 +1,115 @@
 # Cradle
 
-Open infrastructure for animated, programmable web characters. Cradle turns a site crawl and a Petdex spritesheet into a `<cradle-character>` custom element that lives on any website.
+An animated character for your website that ships with a working AI chatbot out of the box — paste one script tag, get a companion that can answer questions about your site, remember things about the visitor it's talking to, and react visually to what it's doing. No backend to build, no API key to configure on your side.
 
-It is not a chatbot platform or a support widget. It gives your product a character. You decide what that character does.
+It's also a pure, programmable UI layer if you want it to be. If you build your own chat backend instead of using Cradle's, the character still works — you just drive its animation states yourself. Both modes are real, supported, and covered below.
 
-## The product
+## What Cradle is — and isn't
 
-Cradle Studio walks you through four steps:
+**Is:**
+- An animated character (`<cradle-character>`) backed by a real Petdex spritesheet, with a working default chatbot behind it — site-knowledge search over your crawled pages, plus per-visitor memory that persists across visits (facts like their name or what they asked about last time)
+- A free tier, capped at 99 conversations/installation/month
+- A composable primitive — `window.Cradle.setState(...)` / `resolveAction(...)` and a `<slot>` in the character's own panel — if you'd rather wire it to your own backend, your own chat UI, or drive it from an entirely different product
+
+**Isn't:**
+- A CRM or support ticketing platform
+- A cross-device memory system — the visible conversation thread is cached in *that visitor's own browser* (`localStorage`), not synced across devices or resumable from a different machine. What genuinely does persist server-side, across any device, is the *structured facts* the agent explicitly chose to remember about that visitor (via its memory tool) — not the raw transcript.
+- Unlimited on the free tier. Once an installation crosses 99 conversations in a rolling 30 days, the chat backend returns a 429 until the period rolls over. [Qualra](https://www.qualra.xyz) is where persistent, cross-conversation customer memory and higher limits live.
+
+## The product, end to end
+
+Cradle Studio walks you through:
 
 1. **Connect a site** — Cradle crawls the public pages and pulls brand signals through OpenBrand.
-2. **Review what it found** — you pick which pages describe the product.
-3. **Pick a character** — choose an animated companion from the Petdex catalog (~4000+ sprites) and set its name and greeting.
-4. **Go live** — paste one snippet into your site.
+2. **Review what it found** — you pick which pages the character (and its chatbot) should actually know about.
+3. **Pick a character** — choose an animated companion from the Petdex catalog (~4000+ sprites), name it, and pick one of 7 visual themes for the chat panel (neobrutalist, modern glass, cyberpunk, terminal, minimal, synthwave, paper).
+4. **Go live** — copy one script tag, paste it into your site. Done — the chatbot works immediately, answering from whatever pages you approved in step 2.
 
-The result is a visual state machine. It transitions through `idle`, `greeting`, `listening`, `thinking`, `responding`, `resolved`, and `error` states based on events you send from your own code:
+Behind that one tag: the widget generates a persistent visitor ID in that browser's `localStorage` (not a cookie — cross-origin cookies get blocked by Safari's ITP and increasingly by Chrome; a first-party-to-the-embedding-site localStorage token sidesteps that entirely), calls Cradle's own chat backend, which searches your site's crawled content via vector similarity, optionally recalls or records facts about that specific visitor, and streams a response back while driving the character's animation state to match.
 
-```js
-// Listen to widget lifecycle events
-window.addEventListener("cradle:ready",   (e) => console.log(e.detail.character));
-window.addEventListener("cradle:open",    (e) => console.log("opened", e.detail));
-window.addEventListener("cradle:close",   (e) => console.log("closed", e.detail));
-window.addEventListener("cradle:state",   (e) => console.log("state →", e.detail.state));
-window.addEventListener("cradle:action",  (e) => console.log("action →", e.detail.action));
-window.addEventListener("cradle:move",    (e) => console.log("moved to", e.detail.position));
-window.addEventListener("cradle:error",   (e) => console.error(e.detail.error));
-```
+### The real states — nothing else exists
 
-Control it from the host page with the global `window.Cradle` controller:
+Every animation state maps to one actual row of the character's spritesheet, using Petdex's own canonical convention. There is no invented vocabulary like "thinking" or "responding":
+
+| State | Purpose |
+|---|---|
+| `idle` | Neutral breathing / blinking loop |
+| `waving` | Greeting or attention gesture |
+| `review` | Focused inspecting / thinking loop |
+| `running` | Generic in-place run loop |
+| `running-right` / `running-left` | Directional locomotion |
+| `jumping` | Celebration |
+| `failed` | Readable error / apologetic reaction |
+| `waiting` | Patient idle variant |
+
+### Driving it yourself
 
 ```js
 window.Cradle?.open();                               // open the panel
-window.Cradle?.close();                              // close it
-window.Cradle?.toggle();                             // toggle
-window.Cradle?.setState("thinking");                 // drive the animation state
-window.Cradle?.trigger({ type: "open-pricing" });    // emit a typed action event
-window.Cradle?.setContext({ experiment: "v2" });     // attach page context to events
+window.Cradle?.close();
+window.Cradle?.toggle();
+window.Cradle?.setState("review");                    // one of the 9 real states
+window.Cradle?.resolveAction(true);                   // -> jumping (shortcut for setState("jumping"))
+window.Cradle?.resolveAction(false);                  // -> failed
+window.Cradle?.trigger({ type: "open-pricing" });     // emit a cradle:action event for your own code
+window.Cradle?.setContext({ experiment: "v2" });      // attach page metadata to future events
+
+window.addEventListener("cradle:ready",  (e) => console.log(e.detail.character));
+window.addEventListener("cradle:open",   (e) => console.log("opened", e.detail));
+window.addEventListener("cradle:state",  (e) => console.log("state ->", e.detail.state));
+window.addEventListener("cradle:action", (e) => console.log("action ->", e.detail.action));
+window.addEventListener("cradle:error",  (e) => console.error(e.detail.error));
 ```
 
-Each event's `detail` includes `siteId`, `visitorId`, `conversationId`, and `context`. The anonymous IDs live only for the lifetime of the element; the host application owns any persistence and authentication.
+Every event's `detail` includes `siteId`, `visitorId`, the current `state`, whether the panel is `open`, and any `context` you've set.
 
-## Quick start
+## Install on a site
 
-Requires Node.js 22+, pnpm, and a Neon (or any Postgres) database.
+This is the entire embed, generated by Studio after you finish setup:
+
+```html
+<script src="https://your-runtime.example.com/widget.js" data-site-id="YOUR_INSTALLATION_ID"></script>
+```
+
+One line. The script reads `data-site-id` off itself and auto-mounts the character — no second tag, no `api-base` to fill in (the script infers its own origin from its own `src`). Drop it before `</body>` and the chatbot works immediately, using whatever pages you approved during setup.
+
+**If you want your own chat backend instead** (Cradle's chat never sees or needs this — the two are entirely decoupled): render `<cradle-character>` explicitly with your own content as children, and set `no-cycle` so the character's idle animation reflects *your* real states instead of a decorative default rotation:
+
+```tsx
+import "@maranga/cradle";
+
+<cradle-character site-id="YOUR_INSTALLATION_ID" no-cycle="">
+  <MyOwnChatUI />  {/* renders inside the character's own panel via a native <slot> */}
+</cradle-character>
+```
+
+Then drive it inline at the point each thing actually happens — not from a `useEffect` watching status after the fact:
+
+```ts
+window.Cradle?.setState("review");        // right when a request goes out
+window.Cradle?.resolveAction(true);       // in your own onFinish
+window.Cradle?.resolveAction(false);      // in your own onError
+```
+
+If you render nothing inside `<cradle-character>`, that's exactly what leaving it as the single-line script tag does — the default chatbot fills the slot instead.
+
+For the npm/bundler path (React, Next.js, anywhere without a real `<script src>` tag for the browser to infer an origin from), `api-base` is required explicitly:
+
+```tsx
+import "@maranga/cradle";
+
+<cradle-character site-id="YOUR_INSTALLATION_ID" api-base="https://your-runtime.example.com" />
+```
+
+This package is safe to `import` from anywhere, including a Next.js Server Component's module graph — it ships a `"use client"` entry point, so you don't need your own wrapper. See `packages/widget/README.md` for the full API surface, including the named `Cradle` export for calling the controller without going through `window`.
+
+## Quick start (running Cradle itself)
+
+Requires Node.js 22+, pnpm, and a Postgres database **with the `vector` extension enabled** — the chatbot's site-knowledge search is real vector similarity search, not keyword matching. `drizzle-kit` doesn't enable Postgres extensions on its own:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
 
 ```sh
 pnpm install
@@ -53,26 +121,28 @@ pnpm install
 NEXT_PUBLIC_CRADLE_RUNTIME_URL=http://localhost:3002
 DATABASE_URL=postgres://...
 BETTER_AUTH_SECRET=<random 32-byte secret — same value in both apps>
-BETTER_AUTH_URL=http://localhost:3000
+BETTER_AUTH_URL=http://localhost:3004
 CRADLE_RUNTIME_URL=http://localhost:3002
 ```
 
 ### Runtime environment (`apps/runtime/.env`)
 
 ```text
-DATABASE_URL=postgres://...             # same DB as Studio
+DATABASE_URL=postgres://...             # same DB as Studio, vector extension enabled
 FIRECRAWL_API_KEY=fc-...
 BETTER_AUTH_SECRET=<same value as Studio>
-BETTER_AUTH_URL=http://localhost:3000
+BETTER_AUTH_URL=http://localhost:3004   # Studio's URL — Runtime validates the cookie Studio issued
 NEXT_PUBLIC_RUNTIME_URL=http://localhost:3002
+
+# Required for the chatbot itself (both the chat agent and the embedding model used for
+# site-knowledge search) — see apps/runtime/.env.example for details.
+GOOGLE_GENERATIVE_AI_API_KEY=...
+CRADLE_MODEL_ID=gemini-flash-lite-latest   # optional, this is the default
 ```
 
 ### Migrate the database
 
-Drizzle manages both Cradle domain tables and Better Auth tables:
-
 ```sh
-# Push schema directly to Neon (or your Postgres DB)
 pnpm --filter @cradle/db db:push
 ```
 
@@ -82,92 +152,52 @@ pnpm --filter @cradle/db db:push
 pnpm dev
 ```
 
-Opens Studio at `http://localhost:3000` and Runtime at `http://localhost:3002`. The widget build watcher runs in parallel.
-
-## Install on a site
-
-Studio generates this snippet after you finish setup:
-
-```html
-<script src="https://your-runtime.com/widget.js"></script>
-<cradle-character
-  site-id="YOUR_PROJECT_ID"
-  api-base="https://your-runtime.com"
-></cradle-character>
-```
-
-Drop `placement="inline"` to embed it in the page layout instead of floating:
-
-```html
-<aside class="product-guide">
-  <cradle-character
-    site-id="YOUR_PROJECT_ID"
-    api-base="https://your-runtime.com"
-    placement="inline"
-  ></cradle-character>
-</aside>
-```
-
-The site ID is public and safe to embed. The manifest is intentionally public to the installation's registered origin; it contains only the character configuration and public sprite asset URLs.
-
-The widget never writes browser storage. Its anonymous `visitorId` and `conversationId` are generated when the element connects and included in browser events for that element's lifetime.
+Opens Studio at `http://localhost:3004` and Runtime at `http://localhost:3002`. The widget build watcher runs in parallel.
 
 ## Repository structure
 
 | Package | Role |
 |---|---|
-| `apps/studio` | Four-screen character setup workflow (Next.js 16, Better Auth) |
-| `apps/runtime` | Onboarding API, knowledge management, manifest delivery, widget serving |
+| `apps/studio` | Site setup workflow — connect, review, shape, go live (Next.js 16, Better Auth) |
+| `apps/runtime` | Onboarding, knowledge crawling + embedding, chat backend, manifest delivery, widget serving |
 | `apps/video` | Remotion launch film (42s, optional ElevenLabs narration) |
-| `packages/widget` | `<cradle-character>` custom element + `window.Cradle` controller (`@maranga/cradle`) |
-| `packages/core` | Zod schemas shared across the monorepo |
+| `packages/widget` | `<cradle-character>` custom element + `window.Cradle` controller, with a built-in default chat UI (`@maranga/cradle`) |
+| `packages/core` | Zod schemas and types shared across the monorepo |
 | `packages/crawler` | Bounded Firecrawl ingestion (`crawlPublicSite`) |
-| `packages/db` | Drizzle schema, migrations, `PostgresStore` / `MemoryStore` |
+| `packages/db` | Drizzle schema, migrations, `PostgresStore` / `MemoryStore` — installations, knowledge, visitors, conversations, per-visitor memory, embedded knowledge chunks, usage counters |
 | `packages/pet` | Petdex sprite atlas validation and animation metadata |
 
 ## Runtime API reference
 
-Studio uses Next.js Server Actions. They read the Studio Better Auth session cookie and forward it to Runtime; Runtime independently validates it with the shared Better Auth configuration. The browser never calls private Runtime routes or holds a bearer token. The widget manifest route (`GET /api/installations/:id`) is public but origin-scoped.
-
 | Method | Route | Description |
 |---|---|---|
-| `GET` | `/api/health` | DB + Firecrawl connectivity probe. Returns `{ ok, services }`. |
+| `GET` | `/api/health` | DB + Firecrawl connectivity probe. |
 | `POST` | `/api/onboarding` | Crawl a site, provision an installation, extract brand profile. |
 | `GET` | `/api/installations` | List the signed-in account's owned installations. |
-| `GET` | `/api/installations/:id` | Public manifest for the embedded widget (origin-scoped). |
+| `GET` | `/api/installations/:id` | Public manifest for the embedded widget — origin-scoped to that installation's registered domain, not open to any caller. |
 | `DELETE` | `/api/installations/:id` | Delete an installation owned by the signed-in account. |
-| `PATCH` | `/api/installations/:id/settings` | Update character name, greeting, or brand profile. |
-| `GET` | `/api/installations/:id/knowledge` | Fetch the current knowledge snapshot (Studio resume). |
-| `PATCH` | `/api/installations/:id/knowledge` | Save the operator-reviewed page subset. |
-| `GET` | `/api/installations/:id/companion` | Fetch the pinned companion package. |
-| `PUT` | `/api/installations/:id/companion` | Download, validate, and pin a Petdex companion. |
-| `GET` | `/api/companions/petdex` | Browse the full Petdex catalog with kind filter and search. |
-| `GET` | `/widget.js` | The compiled `<cradle-character>` custom element. |
+| `PATCH` | `/api/installations/:id/settings` | Update character name, greeting, theme, or brand profile. |
+| `GET`/`PATCH` | `/api/installations/:id/knowledge` | Fetch or save the operator-reviewed page subset — this is what gets crawled, chunked, and embedded for chat retrieval. |
+| `GET`/`PUT` | `/api/installations/:id/companion` | Fetch, or download/validate/pin, a Petdex companion. |
+| `GET` | `/api/companions/petdex` | Browse the Petdex catalog with kind filter and search. |
+| `POST` | `/api/chat/init` | Generates a personalized greeting for a visitor (or signals they have prior history); called once per fresh visitor. |
+| `POST` | `/api/chat` | The chatbot itself — RAG search over the installation's embedded knowledge, per-visitor memory tools, streamed response. Counts against the 99/month free-tier cap. |
+| `GET` | `/widget.js` | The compiled `<cradle-character>` custom element, served as a static asset. |
 
 ## Security model
 
-- **Sessions** — Better Auth issues an HttpOnly Studio cookie. Every private Runtime route validates the forwarded cookie against the shared Postgres session table using the same `BETTER_AUTH_SECRET`.
+- **Studio sessions** — Better Auth issues an HttpOnly cookie. Every private Runtime route validates the forwarded cookie against the shared Postgres session table using the same `BETTER_AUTH_SECRET`.
 - **Ownership** — every installation is bound to the `ownerId` of the account that created it. All write operations verify ownership before proceeding.
-- **Browser boundary** — the Studio browser uses same-origin Server Actions only. The widget manifest route separately allows the installation's registered origin.
-
-## Deployment
-
-Deploy Studio and Runtime as separate Node.js services. Both need the same `DATABASE_URL` and `BETTER_AUTH_SECRET`.
-
-```sh
-# Apply schema migrations before starting
-pnpm --filter @cradle/db db:migrate
-```
-
-Sprite assets are served directly from Petdex CDN. You do not need object storage for character animations.
+- **Widget manifest** (`GET /api/installations/:id`) reflects `Access-Control-Allow-Origin` only when the request's `Origin` header matches that installation's registered origin exactly — not any origin, and not a wildcard.
+- **Chat routes** (`POST /api/chat`, `/api/chat/init`) currently allow any origin (`*`) and trust the client-supplied `visitorId` without a signature — a known, deliberate v1 tradeoff for a zero-config embed, not an oversight. Anyone who knows an installation ID can currently call its chat endpoint and consume its free-tier quota. Worth tightening (origin-scoping to match the manifest route, or signing the visitor token) before treating this as hardened against abuse.
 
 ## Development commands
 
 ```sh
-pnpm check-types   # TypeScript across all packages
-pnpm test          # vitest
-pnpm build         # full production build
-pnpm lint          # ESLint
+pnpm check-types
+pnpm test
+pnpm build
+pnpm lint
 ```
 
-Use `pnpm` for all dependency operations. See `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `NOTICE`, and `LICENSE` for contribution and security policy.
+Use `pnpm` for all dependency operations. See `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `NOTICE`, and `LICENSE`.
