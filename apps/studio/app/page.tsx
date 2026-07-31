@@ -443,7 +443,7 @@ function CharacterPreview({
   }
 
   const isNeobrutalist = theme === "neobrutalist";
-  const isModern = theme === "modern" || theme === "glass";
+  const isModern = theme === "modern";
   const isCyberpunk = theme === "cyberpunk";
   const isTerminal = theme === "terminal";
   const isMinimal = theme === "minimal";
