@@ -3,18 +3,6 @@
 import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  deleteOwnedInstallation,
-  getInstallationForStudio,
-  getInstallationUsage,
-  getPetdexCatalog,
-  getRuntimeHealth,
-  listOwnedInstallations,
-  onboardSite,
-  saveInstallationCharacter,
-  saveInstallationKnowledge,
-  selectInstallationCompanion,
-} from "./actions";
 import { AccountGate } from "./components/account-gate";
 import { authClient } from "./lib/auth-client";
 
@@ -105,14 +93,30 @@ const KIND_LABELS: Record<KindFilter, string> = {
   all: "All", character: "Characters", creature: "Creatures", object: "Objects",
 };
 
-// ─── Fetchers (pure async functions — no hooks) ────────────────────────────────
+// ─── Fetchers (Native Next.js Rewrites to /api/runtime/*) ───────────────────────
+
+async function runtimeFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`/api/runtime${path}`, {
+    ...init,
+    headers: {
+      "content-type": "application/json",
+      ...init.headers,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error ?? `Request failed with status ${response.status}`);
+  }
+  return data as T;
+}
 
 async function fetchHealth(): Promise<HealthPayload> {
-  return getRuntimeHealth();
+  return runtimeFetch<HealthPayload>("/health");
 }
 
 async function fetchOwnedInstallations(): Promise<OwnedInstallation[]> {
-  return (await listOwnedInstallations()).installations;
+  const res = await runtimeFetch<{ installations: OwnedInstallation[] }>("/installations");
+  return res.installations;
 }
 
 type CatalogResponse = {
@@ -124,14 +128,14 @@ type CatalogResponse = {
 };
 
 async function fetchCatalog(page: number, kind: KindFilter, query: string): Promise<CatalogResponse> {
-  const payload = await getPetdexCatalog({ page, limit: 24, query, kind });
-  return {
-    companions: payload.companions as CatalogCompanion[],
-    page: payload.page,
-    limit: payload.limit,
-    total: payload.total,
-    hasMore: payload.hasMore,
-  };
+  const params = new URLSearchParams();
+  if (page) params.set("page", String(page));
+  params.set("limit", "24");
+  if (query.trim()) params.set("query", query.trim());
+  if (kind !== "all") params.set("kind", kind);
+
+  const path = `/companions/petdex?${params.toString()}`;
+  return runtimeFetch<CatalogResponse>(path);
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -974,9 +978,12 @@ export default function StudioHome() {
   /**
    * Monthly usage metrics (99 conversations / 30 days).
    */
+  /**
+   * Monthly usage metrics (99 conversations / 30 days).
+   */
   const { data: usageData } = useQuery({
     queryKey: ["installation-usage", session?.installation.id],
-    queryFn: () => getInstallationUsage(session!.installation.id),
+    queryFn: () => runtimeFetch<{ installationId: string; periodStart: string; conversationCount: number; messageCount: number; limit: number }>(`/installations/${session!.installation.id}/usage`),
     enabled: Boolean(session?.installation.id),
     refetchInterval: 15_000,
   });
@@ -1023,7 +1030,7 @@ export default function StudioHome() {
     if (!window.confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) return;
     begin("Deleting site…");
     try {
-      await deleteOwnedInstallation(id);
+      await runtimeFetch(`/installations/${id}`, { method: "DELETE" });
       await queryClient.invalidateQueries({ queryKey: ["owned-installations"] });
       finish(`Deleted "${name}".`);
     } catch (cause) {
@@ -1035,12 +1042,10 @@ export default function StudioHome() {
   async function resumeInstallation(installationId: string) {
     begin("Loading your project…");
     try {
-      const payload = await getInstallationForStudio(installationId) as {
-        knowledge: { installation: Installation; knowledge: Knowledge; character: Character; brandProfile: BrandProfile | null };
-        companion: { companion: ImportedCompanion | null };
-      };
-      const kp = payload.knowledge;
-      const cp = payload.companion;
+      const [kp, cp] = await Promise.all([
+        runtimeFetch<{ installation: Installation; knowledge: Knowledge; character: Character; brandProfile: BrandProfile | null }>(`/installations/${installationId}/knowledge`),
+        runtimeFetch<{ companion: ImportedCompanion | null }>(`/installations/${installationId}/companion`),
+      ]);
       persist({ installation: kp.installation, knowledge: kp.knowledge, character: kp.character, brandProfile: kp.brandProfile });
       setIncludedUrls(new Set((kp.knowledge.pages as Page[]).map((p) => p.url)));
       setCompanion(cp.companion ?? null);
@@ -1057,7 +1062,10 @@ export default function StudioHome() {
     event.preventDefault();
     begin("Reading your public site…");
     try {
-      const payload = await onboardSite(siteUrl) as { installation: Installation; knowledge: Knowledge; brandProfile: BrandProfile | null };
+      const payload = await runtimeFetch<{ installation: Installation; knowledge: Knowledge; brandProfile: BrandProfile | null }>("/onboarding", {
+        method: "POST",
+        body: JSON.stringify({ url: siteUrl }),
+      });
       persist({ installation: payload.installation, knowledge: payload.knowledge, character: makeCharacter(payload.installation.name), brandProfile: payload.brandProfile ?? null });
       setIncludedUrls(new Set((payload.knowledge.pages as Page[]).map((p: Page) => p.url)));
       setCompanion(null);
@@ -1081,7 +1089,10 @@ export default function StudioHome() {
     if (!session) return;
     begin("Saving approved knowledge…");
     try {
-      const payload = await saveInstallationKnowledge(session.installation.id, [...includedUrls]) as { knowledge: Knowledge };
+      const payload = await runtimeFetch<{ knowledge: Knowledge }>(`/installations/${session.installation.id}/knowledge`, {
+        method: "PATCH",
+        body: JSON.stringify({ includedUrls: [...includedUrls] }),
+      });
       persist({ ...session, knowledge: payload.knowledge });
       setCompanion(null);
       setScreen("shape");
@@ -1097,7 +1108,10 @@ export default function StudioHome() {
     if (!session || !character) return;
     begin("Saving your character…");
     try {
-      const payload = await saveInstallationCharacter(session.installation.id, character) as { installation: Installation; character: Character };
+      const payload = await runtimeFetch<{ installation: Installation; character: Character }>(`/installations/${session.installation.id}/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({ character }),
+      });
       persist({ ...session, installation: { ...session.installation, name: payload.installation.name }, character: payload.character });
       finish("Character settings saved.");
     } catch (cause) {
@@ -1110,7 +1124,10 @@ export default function StudioHome() {
     if (!session) return;
     begin("Pinning this companion…");
     try {
-      const payload = await selectInstallationCompanion(session.installation.id, slug) as { companion: ImportedCompanion };
+      const payload = await runtimeFetch<{ companion: ImportedCompanion }>(`/installations/${session.installation.id}/companion`, {
+        method: "PUT",
+        body: JSON.stringify({ provider: "petdex", slug }),
+      });
       setCompanion(payload.companion);
       finish(`${payload.companion.displayName} is now pinned to this project.`);
     } catch (cause) {
