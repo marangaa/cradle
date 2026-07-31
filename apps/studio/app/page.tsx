@@ -98,7 +98,7 @@ type KindFilter = "all" | "character" | "creature" | "object";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL || process.env.CRADLE_RUNTIME_URL || "";
+const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL || "";
 const runtime = RUNTIME_URL;
 
 const KIND_LABELS: Record<KindFilter, string> = {

@@ -6,10 +6,10 @@ import { headers } from "next/headers";
 type RuntimeError = { error?: string };
 
 function getRuntimeUrl() {
-  const url = process.env.NEXT_PUBLIC_RUNTIME_URL || process.env.CRADLE_RUNTIME_URL;
+  const url = process.env.NEXT_PUBLIC_RUNTIME_URL;
   if (!url) {
-    console.error("[Studio Server Action] Missing NEXT_PUBLIC_RUNTIME_URL environment variable on Vercel!");
-    throw new Error("Missing NEXT_PUBLIC_RUNTIME_URL environment variable in Vercel Project Settings.");
+    console.error("[Studio Server Action] Missing NEXT_PUBLIC_RUNTIME_URL environment variable!");
+    throw new Error("Missing NEXT_PUBLIC_RUNTIME_URL environment variable.");
   }
   return url;
 }
