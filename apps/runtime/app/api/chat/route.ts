@@ -1,6 +1,6 @@
 import { convertToModelMessages, isStepCount, streamText, tool, type UIMessage } from "ai";
 import { z } from "zod";
-import { embedQuery } from "../../lib/embeddings";
+import { embedKnowledgePages, embedQuery } from "../../lib/embeddings";
 import { CRADLE_MODEL_ID, google } from "../../lib/google";
 import { store } from "../../lib/store";
 
@@ -108,8 +108,20 @@ Directives:
             console.log(`[Chat Tool] searchKnowledge executing query: "${query}"`);
             try {
               const queryEmbedding = await embedQuery(query);
-              const chunks = await store.searchKnowledgeChunks(installationId, queryEmbedding, 4);
+              let chunks = await store.searchKnowledgeChunks(installationId, queryEmbedding, 4);
               console.log(`[Chat Tool] searchKnowledge found ${chunks.length} chunks`);
+
+              // Auto-heal: If chunks is 0, check if raw knowledge pages exist and embed them on-the-fly
+              if (chunks.length === 0) {
+                const rawKnowledge = await store.getKnowledge(installationId);
+                if (rawKnowledge?.pages && rawKnowledge.pages.length > 0) {
+                  console.log(`[Chat Tool] Auto-embedding ${rawKnowledge.pages.length} raw pages for installationId: ${installationId}`);
+                  await embedKnowledgePages(installationId, rawKnowledge.pages);
+                  chunks = await store.searchKnowledgeChunks(installationId, queryEmbedding, 4);
+                  console.log(`[Chat Tool] Re-query found ${chunks.length} chunks after auto-embedding`);
+                }
+              }
+
               if (chunks.length === 0) {
                 return { found: false, message: "No relevant site documentation found for this query." };
               }

@@ -1,5 +1,6 @@
 import { createDefaultCharacter, installationSchema, knowledgeReviewSchema } from "@cradle/core";
 import { auth } from "@cradle/db";
+import { embedKnowledgePages } from "../../../../lib/embeddings";
 import { store } from "../../../../lib/store";
 
 /** Restores the latest reviewed source snapshot. Called only by Studio's server. */
@@ -34,6 +35,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   await Promise.all([
     store.saveKnowledge(reviewed),
     store.saveInstallation(installationSchema.parse({ ...installation, knowledgeVersion: reviewed.version })),
+    embedKnowledgePages(installationId, pages),
   ]);
   return Response.json({ knowledge: reviewed });
 }

@@ -2,6 +2,7 @@ import { crawlPublicSite } from "@cradle/crawler";
 import { brandProfileSchema, createDefaultCharacter, crawlRequestSchema, installationSchema } from "@cradle/core";
 import { auth } from "@cradle/db";
 import { extractBrandAssets } from "openbrand";
+import { embedKnowledgePages } from "../../lib/embeddings";
 import { store } from "../../lib/store";
 
 const onboardingSchema = crawlRequestSchema.extend({
@@ -61,6 +62,11 @@ export async function POST(request: Request) {
     ...(brandProfile ? { brandProfile } : (existing?.brandProfile ? { brandProfile: existing.brandProfile } : {})),
   });
 
-  await Promise.all([store.saveInstallation(installation), store.saveKnowledge(knowledge)]);
+  await Promise.all([
+    store.saveInstallation(installation),
+    store.saveKnowledge(knowledge),
+    embedKnowledgePages(installationId, knowledge.pages),
+  ]);
+
   return Response.json({ installation: { id: installation.id, name: installation.name }, knowledge, brandProfile }, { status: 201 });
 }

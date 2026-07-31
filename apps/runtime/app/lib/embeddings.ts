@@ -31,7 +31,7 @@ export async function embedKnowledgePages(
     if (!page.markdown || !page.markdown.trim()) continue;
     const docs = await markdownSplitter.createDocuments([page.markdown]);
     for (const doc of docs) {
-      if (doc.pageContent && doc.pageContent.trim().length >= 100) {
+      if (doc.pageContent && doc.pageContent.trim().length >= 20) {
         jobs.push({
           pageUrl: page.url,
           pageTitle: page.title,
