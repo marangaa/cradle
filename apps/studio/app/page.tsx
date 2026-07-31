@@ -377,7 +377,7 @@ function CharacterPreview({
   }, [installationId]);
 
   const activeState = overrideState ?? state;
-  const theme = (character as any).theme || "neobrutalist";
+  const theme = character.theme ?? "neobrutalist";
 
   function togglePreview() {
     setOpen((current) => {
@@ -407,14 +407,19 @@ function CharacterPreview({
           "x-cradle-visitor-id": "00000000-0000-0000-0000-000000000001",
         },
         body: JSON.stringify({
-          messages: newMessages,
+          messages: newMessages.map((m) => ({
+            id: crypto.randomUUID(),
+            role: m.role,
+            content: m.content,
+            parts: [{ type: "text", text: m.content }],
+          })),
           installationId,
           visitorId: "00000000-0000-0000-0000-000000000001",
         }),
       });
 
       if (!response.ok || !response.body) {
-        setMessages([...newMessages, { role: "assistant", content: `I'm ${character.displayName || "your AI companion"}, ready to answer questions about ${brandName || "your site"}!` }]);
+        setMessages([...newMessages, { role: "assistant", content: "Something went wrong. Please try again." }]);
         setIsStreaming(false);
         return;
       }
@@ -430,14 +435,9 @@ function CharacterPreview({
         setMessages([...newMessages, { role: "assistant", content: assistantText || "…" }]);
       }
 
-      if (!assistantText.trim()) {
-        assistantText = `I'm ${character.displayName || "your AI companion"}, ready to answer questions about ${brandName || "your site"}!`;
-        setMessages([...newMessages, { role: "assistant", content: assistantText }]);
-      }
-
       setIsStreaming(false);
     } catch {
-      setMessages([...newMessages, { role: "assistant", content: `I'm ${character.displayName || "your AI companion"}, ready to answer questions about ${brandName || "your site"}!` }]);
+      setMessages([...newMessages, { role: "assistant", content: "Something went wrong. Please try again." }]);
       setIsStreaming(false);
     }
   }

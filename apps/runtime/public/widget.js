@@ -387,7 +387,12 @@
             "x-cradle-visitor-id": this.visitorId
           },
           body: JSON.stringify({
-            messages: this.localMessages.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
+            messages: this.localMessages.slice(0, -1).map((m) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              parts: [{ type: "text", text: m.content }]
+            })),
             installationId: this.siteId,
             visitorId: this.visitorId
           })
@@ -421,7 +426,7 @@
       } catch (err) {
         const target = this.localMessages.find((m) => m.id === assistantMsgId);
         if (target) {
-          target.content = err?.message || "Sorry, something went wrong. Please try again.";
+          target.content = err instanceof Error ? err.message : "Sorry, something went wrong. Please try again.";
           this.renderStoredMessages();
         }
         this.resolveAction(false);
