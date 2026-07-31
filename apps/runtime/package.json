@@ -17,6 +17,7 @@
     "@cradle/crawler": "workspace:*",
     "@cradle/db": "workspace:*",
     "@cradle/pet": "workspace:*",
+    "@langchain/textsplitters": "^1.0.1",
     "@maranga/cradle": "workspace:*",
     "ai": "^7.0.31",
     "next": "16.2.0",

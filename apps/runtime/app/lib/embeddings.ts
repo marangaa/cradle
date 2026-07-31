@@ -1,4 +1,5 @@
 import { google } from "@ai-sdk/google";
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { embedMany } from "ai";
 import { store } from "./store";
 
@@ -7,45 +8,38 @@ import { store } from "./store";
  */
 const EMBEDDING_MODEL = google.textEmbeddingModel("text-embedding-004");
 
-const MAX_CHUNK_CHARS = 3_000; // ≈750 tokens — small enough for precise retrieval, large enough for real context
-const MIN_CHUNK_CHARS = 200; // avoid embedding near-empty fragments (nav labels, stray headings)
-
-/** Splits one page's markdown into paragraph-bounded chunks under MAX_CHUNK_CHARS. */
-function chunkMarkdown(markdown: string): string[] {
-  const paragraphs = markdown.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
-  const chunks: string[] = [];
-  let current = "";
-
-  for (const paragraph of paragraphs) {
-    if (current && current.length + paragraph.length + 2 > MAX_CHUNK_CHARS) {
-      if (current.length >= MIN_CHUNK_CHARS) chunks.push(current);
-      current = paragraph;
-    } else {
-      current = current ? `${current}\n\n${paragraph}` : paragraph;
-    }
-    // A single paragraph longer than the budget gets hard-split rather than embedded as one giant chunk.
-    while (current.length > MAX_CHUNK_CHARS) {
-      chunks.push(current.slice(0, MAX_CHUNK_CHARS));
-      current = current.slice(MAX_CHUNK_CHARS);
-    }
-  }
-  if (current.length >= MIN_CHUNK_CHARS) chunks.push(current);
-  return chunks;
-}
+/**
+ * LangChain RecursiveCharacterTextSplitter configured for Markdown parsing
+ * splits along headers (#, ##, ###), lists, code blocks, and double newlines with overlap.
+ */
+const markdownSplitter = RecursiveCharacterTextSplitter.fromLanguage("markdown", {
+  chunkSize: 2_000,
+  chunkOverlap: 200,
+});
 
 /**
  * Chunks and embeds every page in a freshly crawled knowledge snapshot, replacing the
- * installation's previous chunk set entirely. Called from onboarding right after a crawl
- * succeeds — synchronous with that request (crawls are already bounded to 90s and typically
- * modest marketing sites, so this is an acceptable v1 tradeoff over a background job).
+ * installation's previous chunk set entirely. Called from onboarding right after a crawl succeeds.
  */
 export async function embedKnowledgePages(
   installationId: string,
   pages: Array<{ url: string; title: string; markdown: string }>,
 ): Promise<void> {
-  const jobs = pages.flatMap((page) =>
-    chunkMarkdown(page.markdown).map((chunkText) => ({ pageUrl: page.url, pageTitle: page.title, chunkText }))
-  );
+  const jobs: Array<{ pageUrl: string; pageTitle: string; chunkText: string }> = [];
+
+  for (const page of pages) {
+    if (!page.markdown || !page.markdown.trim()) continue;
+    const docs = await markdownSplitter.createDocuments([page.markdown]);
+    for (const doc of docs) {
+      if (doc.pageContent && doc.pageContent.trim().length >= 100) {
+        jobs.push({
+          pageUrl: page.url,
+          pageTitle: page.title,
+          chunkText: doc.pageContent.trim(),
+        });
+      }
+    }
+  }
 
   if (jobs.length === 0) {
     await store.replaceKnowledgeChunks(installationId, []);
