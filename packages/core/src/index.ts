@@ -127,3 +127,46 @@ export interface KnowledgeSnapshot {
   pages: Array<{ url: string; title: string; markdown: string }>;
   createdAt: string;
 }
+
+/** A single browser-persisted identity for one visitor of one installation. Tracked via a
+ *  first-party localStorage token the widget generates, not a cookie — see chat route notes. */
+export interface Visitor {
+  id: string;
+  installationId: string;
+  createdAt: string;
+  lastSeenAt: string;
+}
+
+/** One durable, resumable conversation thread for a single visitor. */
+export interface ConversationRecord {
+  id: string;
+  installationId: string;
+  visitorId: string;
+  messages: unknown[]; // AI SDK UIMessage[] — kept unknown here to avoid a hard `ai` dependency in @cradle/core
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A durable fact the chat agent chose to remember about a specific visitor, across sessions. */
+export interface VisitorMemoryFact {
+  key: string;
+  value: string;
+  updatedAt: string;
+}
+
+/** One embedded, retrievable slice of a crawled page, used for the chat agent's site-knowledge search. */
+export interface KnowledgeChunk {
+  id: string;
+  installationId: string;
+  pageUrl: string;
+  pageTitle: string;
+  chunkText: string;
+  createdAt: string;
+}
+
+/** Free-tier usage tracking, reset on each `periodStart` rollover. */
+export interface UsageCounter {
+  installationId: string;
+  periodStart: string;
+  messageCount: number;
+}

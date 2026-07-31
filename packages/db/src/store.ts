@@ -1,11 +1,14 @@
-import type { CompanionPackage, Installation, KnowledgeSnapshot } from "@cradle/core";
-import { desc, eq, sql } from "drizzle-orm";
+import type { CompanionPackage, ConversationRecord, Installation, KnowledgeChunk, KnowledgeSnapshot, UsageCounter, Visitor, VisitorMemoryFact } from "@cradle/core";
+import { and, cosineDistance, desc, eq, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { companionPackages, installations, knowledgeSnapshots } from "#schema";
+import { companionPackages, conversations, installations, knowledgeChunks, knowledgeSnapshots, usageCounters, visitorMemories, visitors } from "#schema";
 
-const schema = { installations, knowledgeSnapshots, companionPackages };
+const schema = { installations, knowledgeSnapshots, companionPackages, visitors, conversations, visitorMemories, knowledgeChunks, usageCounters };
 type CradleDatabase = NodePgDatabase<typeof schema>;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const USAGE_PERIOD_DAYS = 30;
 
 /** Storage contract shared by self-hosted and managed Cradle runtimes. */
 export interface CradleStore {
@@ -18,6 +21,24 @@ export interface CradleStore {
   saveKnowledge(snapshot: KnowledgeSnapshot): Promise<void>;
   getCompanionPackage(installationId: string): Promise<CompanionPackage | null>;
   saveCompanionPackage(companion: CompanionPackage): Promise<void>;
+
+  /** Creates the visitor row if it doesn't exist yet (id is client-generated), else touches lastSeenAt. */
+  touchVisitor(installationId: string, visitorId: string): Promise<Visitor>;
+  getConversation(visitorId: string): Promise<ConversationRecord | null>;
+  saveConversation(record: ConversationRecord): Promise<void>;
+
+  getVisitorMemories(visitorId: string): Promise<VisitorMemoryFact[]>;
+  setVisitorMemory(visitorId: string, key: string, value: string): Promise<void>;
+  deleteVisitorMemory(visitorId: string, key: string): Promise<void>;
+
+  /** Replaces all chunks for an installation (re-crawl invalidates the previous set entirely). */
+  replaceKnowledgeChunks(installationId: string, chunks: Array<{ id: string; pageUrl: string; pageTitle: string; chunkText: string; embedding: number[] }>): Promise<void>;
+  /** Cosine-similarity search over that installation's chunks, most relevant first. */
+  searchKnowledgeChunks(installationId: string, queryEmbedding: number[], topK: number): Promise<KnowledgeChunk[]>;
+
+  /** Atomically increments the installation's message counter (rolling over stale periods), returning the post-increment state. */
+  incrementUsage(installationId: string): Promise<UsageCounter>;
+
   /** Cheap connectivity probe used by the health-check route — throws if the store is unreachable. */
   ping(): Promise<void>;
 }
@@ -27,6 +48,11 @@ export class MemoryStore implements CradleStore {
   private readonly installations = new Map<string, Installation>();
   private readonly knowledge = new Map<string, KnowledgeSnapshot>();
   private readonly companions = new Map<string, CompanionPackage>();
+  private readonly visitorsById = new Map<string, Visitor>();
+  private readonly conversationsByVisitor = new Map<string, ConversationRecord>();
+  private readonly memoriesByVisitor = new Map<string, Map<string, VisitorMemoryFact>>();
+  private readonly chunksByInstallation = new Map<string, Array<KnowledgeChunk & { embedding: number[] }>>();
+  private readonly usage = new Map<string, UsageCounter>();
 
   async getInstallation(id: string) { return this.installations.get(id) ?? null; }
   async saveInstallation(installation: Installation) { this.installations.set(installation.id, installation); }
@@ -43,6 +69,54 @@ export class MemoryStore implements CradleStore {
   async saveKnowledge(snapshot: KnowledgeSnapshot) { this.knowledge.set(snapshot.installationId, snapshot); }
   async getCompanionPackage(installationId: string) { return this.companions.get(installationId) ?? null; }
   async saveCompanionPackage(companion: CompanionPackage) { this.companions.set(companion.installationId, companion); }
+
+  async touchVisitor(installationId: string, visitorId: string) {
+    const now = new Date().toISOString();
+    const existing = this.visitorsById.get(visitorId);
+    const visitor: Visitor = existing ? { ...existing, lastSeenAt: now } : { id: visitorId, installationId, createdAt: now, lastSeenAt: now };
+    this.visitorsById.set(visitorId, visitor);
+    return visitor;
+  }
+  async getConversation(visitorId: string) { return this.conversationsByVisitor.get(visitorId) ?? null; }
+  async saveConversation(record: ConversationRecord) { this.conversationsByVisitor.set(record.visitorId, record); }
+
+  async getVisitorMemories(visitorId: string) { return [...(this.memoriesByVisitor.get(visitorId)?.values() ?? [])]; }
+  async setVisitorMemory(visitorId: string, key: string, value: string) {
+    const bucket = this.memoriesByVisitor.get(visitorId) ?? new Map<string, VisitorMemoryFact>();
+    bucket.set(key, { key, value, updatedAt: new Date().toISOString() });
+    this.memoriesByVisitor.set(visitorId, bucket);
+  }
+  async deleteVisitorMemory(visitorId: string, key: string) { this.memoriesByVisitor.get(visitorId)?.delete(key); }
+
+  async replaceKnowledgeChunks(installationId: string, chunks: Array<{ id: string; pageUrl: string; pageTitle: string; chunkText: string; embedding: number[] }>) {
+    const now = new Date().toISOString();
+    this.chunksByInstallation.set(installationId, chunks.map((c) => ({ ...c, installationId, createdAt: now })));
+  }
+  async searchKnowledgeChunks(installationId: string, queryEmbedding: number[], topK: number) {
+    const chunks = this.chunksByInstallation.get(installationId) ?? [];
+    const cosine = (a: number[], b: number[]) => {
+      let dot = 0, normA = 0, normB = 0;
+      for (let i = 0; i < a.length; i += 1) { dot += a[i]! * b[i]!; normA += a[i]! ** 2; normB += b[i]! ** 2; }
+      return dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1);
+    };
+    return chunks
+      .map((chunk) => ({ chunk, score: cosine(chunk.embedding, queryEmbedding) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topK)
+      .map(({ chunk }) => chunk);
+  }
+
+  async incrementUsage(installationId: string) {
+    const now = new Date();
+    const existing = this.usage.get(installationId);
+    const stale = !existing || now.getTime() - new Date(existing.periodStart).getTime() > USAGE_PERIOD_DAYS * MS_PER_DAY;
+    const next: UsageCounter = stale
+      ? { installationId, periodStart: now.toISOString(), messageCount: 1 }
+      : { ...existing, messageCount: existing.messageCount + 1 };
+    this.usage.set(installationId, next);
+    return next;
+  }
+
   async ping() {}
 }
 
@@ -185,6 +259,88 @@ export class PostgresStore implements CradleStore {
     await this.database.insert(companionPackages).values({ ...companion, description: companion.description ?? "", createdAt: new Date(companion.createdAt) }).onConflictDoUpdate({
       target: companionPackages.installationId,
       set: { provider: companion.provider, slug: companion.slug, displayName: companion.displayName, description: companion.description ?? "", kind: companion.kind, submittedBy: companion.submittedBy, sourceUrl: companion.sourceUrl, petJsonUrl: companion.petJsonUrl, objectKey: companion.objectKey, checksum: companion.checksum, contentType: companion.contentType, columns: companion.columns, rows: companion.rows, cellWidth: companion.cellWidth, cellHeight: companion.cellHeight, createdAt: new Date(companion.createdAt) },
+    });
+  }
+
+  async touchVisitor(installationId: string, visitorId: string): Promise<Visitor> {
+    const now = new Date();
+    const rows = await this.database.insert(visitors)
+      .values({ id: visitorId, installationId, createdAt: now, lastSeenAt: now })
+      .onConflictDoUpdate({ target: visitors.id, set: { lastSeenAt: now } })
+      .returning();
+    const row = rows[0]!;
+    return { id: row.id, installationId: row.installationId, createdAt: row.createdAt.toISOString(), lastSeenAt: row.lastSeenAt.toISOString() };
+  }
+
+  async getConversation(visitorId: string): Promise<ConversationRecord | null> {
+    const row = await this.database.query.conversations.findFirst({ where: eq(conversations.visitorId, visitorId), orderBy: [desc(conversations.updatedAt)] });
+    if (!row) return null;
+    return { id: row.id, installationId: row.installationId, visitorId: row.visitorId, messages: row.messages as unknown[], createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() };
+  }
+
+  async saveConversation(record: ConversationRecord): Promise<void> {
+    await this.database.insert(conversations).values({
+      id: record.id, installationId: record.installationId, visitorId: record.visitorId,
+      messages: record.messages, createdAt: new Date(record.createdAt), updatedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: conversations.id,
+      set: { messages: record.messages, updatedAt: new Date() },
+    });
+  }
+
+  async getVisitorMemories(visitorId: string): Promise<VisitorMemoryFact[]> {
+    const rows = await this.database.query.visitorMemories.findMany({ where: eq(visitorMemories.visitorId, visitorId) });
+    return rows.map((row) => ({ key: row.key, value: row.value, updatedAt: row.updatedAt.toISOString() }));
+  }
+
+  async setVisitorMemory(visitorId: string, key: string, value: string): Promise<void> {
+    await this.database.insert(visitorMemories).values({ visitorId, key, value, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: [visitorMemories.visitorId, visitorMemories.key], set: { value, updatedAt: new Date() } });
+  }
+
+  async deleteVisitorMemory(visitorId: string, key: string): Promise<void> {
+    await this.database.delete(visitorMemories).where(and(eq(visitorMemories.visitorId, visitorId), eq(visitorMemories.key, key)));
+  }
+
+  async replaceKnowledgeChunks(installationId: string, chunks: Array<{ id: string; pageUrl: string; pageTitle: string; chunkText: string; embedding: number[] }>): Promise<void> {
+    await this.database.transaction(async (tx) => {
+      await tx.delete(knowledgeChunks).where(eq(knowledgeChunks.installationId, installationId));
+      if (chunks.length === 0) return;
+      await tx.insert(knowledgeChunks).values(chunks.map((c) => ({
+        id: c.id, installationId, pageUrl: c.pageUrl, pageTitle: c.pageTitle, chunkText: c.chunkText, embedding: c.embedding, createdAt: new Date(),
+      })));
+    });
+  }
+
+  async searchKnowledgeChunks(installationId: string, queryEmbedding: number[], topK: number): Promise<KnowledgeChunk[]> {
+    const similarity = sql<number>`1 - (${cosineDistance(knowledgeChunks.embedding, queryEmbedding)})`;
+    const rows = await this.database.select({
+      id: knowledgeChunks.id, installationId: knowledgeChunks.installationId, pageUrl: knowledgeChunks.pageUrl,
+      pageTitle: knowledgeChunks.pageTitle, chunkText: knowledgeChunks.chunkText, createdAt: knowledgeChunks.createdAt,
+    })
+      .from(knowledgeChunks)
+      .where(eq(knowledgeChunks.installationId, installationId))
+      .orderBy(desc(similarity))
+      .limit(topK);
+    return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+  }
+
+  async incrementUsage(installationId: string): Promise<UsageCounter> {
+    return this.database.transaction(async (tx) => {
+      const existing = await tx.query.usageCounters.findFirst({ where: eq(usageCounters.installationId, installationId) });
+      const now = new Date();
+      const stale = !existing || now.getTime() - existing.periodStart.getTime() > USAGE_PERIOD_DAYS * MS_PER_DAY;
+
+      if (!existing) {
+        const [row] = await tx.insert(usageCounters).values({ installationId, periodStart: now, messageCount: 1 }).returning();
+        return { installationId, periodStart: row!.periodStart.toISOString(), messageCount: row!.messageCount };
+      }
+      if (stale) {
+        const [row] = await tx.update(usageCounters).set({ periodStart: now, messageCount: 1 }).where(eq(usageCounters.installationId, installationId)).returning();
+        return { installationId, periodStart: row!.periodStart.toISOString(), messageCount: row!.messageCount };
+      }
+      const [row] = await tx.update(usageCounters).set({ messageCount: existing.messageCount + 1 }).where(eq(usageCounters.installationId, installationId)).returning();
+      return { installationId, periodStart: row!.periodStart.toISOString(), messageCount: row!.messageCount };
     });
   }
 }
