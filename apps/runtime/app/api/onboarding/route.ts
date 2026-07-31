@@ -29,9 +29,14 @@ export async function POST(request: Request) {
   const existing = existingInstallations.find((inst) => inst.origin === origin);
   const installationId = existing ? existing.id : crypto.randomUUID();
 
+  const brandPromise = Promise.race([
+    extractBrandAssets(input.url),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000)),
+  ]);
+
   const [crawlResult, brandResult] = await Promise.allSettled([
     crawlPublicSite(input, installationId),
-    extractBrandAssets(input.url),
+    brandPromise,
   ]);
 
   if (crawlResult.status === "rejected") {

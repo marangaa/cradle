@@ -49,7 +49,8 @@ export async function embedKnowledgePages(
   const { embeddings } = await embedMany({
     model: EMBEDDING_MODEL,
     values: jobs.map((job) => job.chunkText),
-    maxParallelCalls: 4,
+    maxParallelCalls: 8,
+    maxRetries: 3,
   });
 
   await store.replaceKnowledgeChunks(
