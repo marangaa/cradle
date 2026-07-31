@@ -48,7 +48,6 @@ export async function POST(req: Request) {
     const memories = visitorId ? await store.getVisitorMemories(visitorId) : [];
     const conversation = visitorId ? await store.getConversation(visitorId) : null;
 
-    // If visitor has past messages in store, no need to regenerate init greeting
     if (conversation?.messages && (conversation.messages as any[]).length > 0) {
       return new Response(
         JSON.stringify({ greeting: null, isReturning: true }),
