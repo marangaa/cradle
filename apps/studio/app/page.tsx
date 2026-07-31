@@ -433,7 +433,7 @@ function CharacterPreview({
             background: "transparent",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", padding: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 160px)", overflowY: "auto", padding: "8px 4px", scrollbarWidth: "none", msOverflowStyle: "none" }}>
             {messages.map((m, idx) => {
               const isUser = m.role === "user";
               return (
