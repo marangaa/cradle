@@ -344,6 +344,7 @@
       msgContainer.scrollTop = msgContainer.scrollHeight;
     }
     async fetchInitialGreeting(baseUrl) {
+      console.log(`[CradleWidget] Fetching initial greeting from ${baseUrl}/api/chat/init`);
       try {
         const res = await fetch(`${baseUrl}/api/chat/init`, {
           method: "POST",
@@ -356,15 +357,20 @@
         });
         if (res.ok) {
           const data = await res.json();
+          console.log(`[CradleWidget] Initial greeting response:`, data);
           if (data.greeting) {
             const greetingEl = this.shadow.querySelector(".greeting");
             if (greetingEl) greetingEl.textContent = data.greeting;
           }
+        } else {
+          console.warn(`[CradleWidget] Initial greeting fetch failed status: ${res.status}`);
         }
-      } catch {
+      } catch (err) {
+        console.warn(`[CradleWidget] Initial greeting fetch error:`, err);
       }
     }
     async sendChatMessage(text) {
+      console.log(`[CradleWidget] Sending chat message: "${text}"`);
       this.isBusy = true;
       const sendBtn = this.shadow.querySelector(".send-btn");
       if (sendBtn) sendBtn.disabled = true;
@@ -398,12 +404,13 @@
           })
         });
         if (!res.ok) {
-          let errText = "Failed to communicate with AI chat service.";
+          let errText = `Chat request failed with status ${res.status}`;
           try {
             const json = await res.json();
             if (json.message || json.error) errText = json.message || json.error;
           } catch {
           }
+          console.error(`[CradleWidget] HTTP ${res.status} error:`, errText);
           throw new Error(errText);
         }
         if (!res.body) throw new Error("No response body received.");
@@ -421,12 +428,15 @@
             this.renderStoredMessages();
           }
         }
+        console.log(`[CradleWidget] Stream finished cleanly. Total length: ${streamedContent.length} chars`);
         this.saveStoredMessages();
         this.resolveAction(true);
       } catch (err) {
+        const errMsg = err instanceof Error ? err.message : "Sorry, something went wrong. Please try again.";
+        console.error(`[CradleWidget] sendChatMessage caught error:`, errMsg);
         const target = this.localMessages.find((m) => m.id === assistantMsgId);
         if (target) {
-          target.content = err instanceof Error ? err.message : "Sorry, something went wrong. Please try again.";
+          target.content = errMsg;
           this.renderStoredMessages();
         }
         this.resolveAction(false);

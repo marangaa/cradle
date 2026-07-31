@@ -356,6 +356,7 @@ function CharacterPreview({
   useEffect(() => {
     if (!installationId) return;
     const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
+    console.log(`[Studio Preview] Fetching initial greeting for installationId: ${installationId}`);
     fetch(`${runtimeUrl}/api/chat/init`, {
       method: "POST",
       headers: {
@@ -367,12 +368,13 @@ function CharacterPreview({
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        console.log(`[Studio Preview] Greeting received:`, data);
         if (data?.greeting) {
           setMessages([{ role: "assistant", content: data.greeting }]);
         }
       })
-      .catch(() => {
-        // keep default fallback
+      .catch((err) => {
+        console.warn(`[Studio Preview] Greeting fetch failed:`, err);
       });
   }, [installationId]);
 
@@ -393,6 +395,7 @@ function CharacterPreview({
     const text = input.trim();
     setInput("");
 
+    console.log(`[Studio Preview] Sending user message: "${text}"`);
     const newMessages = [...messages, { role: "user" as const, content: text }];
     setMessages([...newMessages, { role: "assistant" as const, content: "…" }]);
     setIsStreaming(true);
@@ -419,6 +422,7 @@ function CharacterPreview({
       });
 
       if (!response.ok || !response.body) {
+        console.error(`[Studio Preview] Chat response failed HTTP ${response.status}`);
         setMessages([...newMessages, { role: "assistant", content: "Something went wrong. Please try again." }]);
         setIsStreaming(false);
         return;
@@ -435,8 +439,10 @@ function CharacterPreview({
         setMessages([...newMessages, { role: "assistant", content: assistantText || "…" }]);
       }
 
+      console.log(`[Studio Preview] Stream finished. Total content length: ${assistantText.length} chars`);
       setIsStreaming(false);
-    } catch {
+    } catch (err) {
+      console.error(`[Studio Preview] sendMessage error:`, err);
       setMessages([...newMessages, { role: "assistant", content: "Something went wrong. Please try again." }]);
       setIsStreaming(false);
     }

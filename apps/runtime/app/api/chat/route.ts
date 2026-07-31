@@ -34,7 +34,15 @@ export async function POST(req: Request) {
     const installationId = headerInstallationId || body.installationId || url.searchParams.get("installationId");
     const visitorId = headerVisitorId || body.visitorId || url.searchParams.get("visitorId");
 
+    const lastMsg = messages[messages.length - 1];
+    const textPart = lastMsg?.parts?.find((p): p is { type: "text"; text: string } => p.type === "text");
+    const lastUserText = textPart?.text || "(no text)";
+
+    console.log(`[Chat API] POST request received -> installationId: ${installationId}, visitorId: ${visitorId}, messageCount: ${messages.length}`);
+    console.log(`[Chat API] Latest message (${lastMsg?.role || "unknown"}): "${lastUserText}"`);
+
     if (!installationId || !visitorId) {
+      console.warn(`[Chat API] Missing installationId or visitorId`);
       return new Response(
         JSON.stringify({ error: "Missing required headers: x-cradle-installation-id, x-cradle-visitor-id" }),
         { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -43,6 +51,7 @@ export async function POST(req: Request) {
 
     const installation = await store.getInstallation(installationId);
     if (!installation) {
+      console.warn(`[Chat API] Installation not found: ${installationId}`);
       return new Response(
         JSON.stringify({ error: "Installation not found" }),
         { status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -53,6 +62,7 @@ export async function POST(req: Request) {
     const usage = await store.incrementUsage(installationId);
 
     if (usage.messageCount > FREE_TIER_MONTHLY_LIMIT) {
+      console.warn(`[Chat API] Monthly quota exceeded for installation: ${installationId} (${usage.messageCount}/${FREE_TIER_MONTHLY_LIMIT})`);
       return new Response(
         JSON.stringify({ error: "Monthly quota exceeded. Upgrade to Qualra for unlimited interactions." }),
         { status: 429, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -81,6 +91,8 @@ Directives:
 3. Use the 'rememberFact' tool whenever the visitor shares meaningful information (e.g. their name, company, email, project goals, tech stack, or specific preferences).
 4. If you don't know an answer even after searching site knowledge, admit it politely and invite them to reach out via contact options.`;
 
+    console.log(`[Chat API] Invoking streamText model: ${CRADLE_MODEL_ID} for brand: ${brandName}`);
+
     const result = streamText({
       model: google(CRADLE_MODEL_ID),
       system: systemPrompt,
@@ -93,9 +105,11 @@ Directives:
             query: z.string().describe("The search query to look up in the site's knowledge base"),
           }),
           execute: async ({ query }) => {
+            console.log(`[Chat Tool] searchKnowledge executing query: "${query}"`);
             try {
               const queryEmbedding = await embedQuery(query);
               const chunks = await store.searchKnowledgeChunks(installationId, queryEmbedding, 4);
+              console.log(`[Chat Tool] searchKnowledge found ${chunks.length} chunks`);
               if (chunks.length === 0) {
                 return { found: false, message: "No relevant site documentation found for this query." };
               }
@@ -104,7 +118,9 @@ Directives:
                 results: chunks.map((c) => ({ title: c.pageTitle, url: c.pageUrl, content: c.chunkText })),
               };
             } catch (err: unknown) {
-              return { found: false, error: err instanceof Error ? err.message : "Failed to search knowledge base" };
+              const errMsg = err instanceof Error ? err.message : "Failed to search knowledge base";
+              console.error(`[Chat Tool] searchKnowledge error: ${errMsg}`);
+              return { found: false, error: errMsg };
             }
           },
         }),
@@ -116,6 +132,7 @@ Directives:
             value: z.string().describe("The value or detail to remember"),
           }),
           execute: async ({ key, value }) => {
+            console.log(`[Chat Tool] rememberFact key: "${key}", value: "${value}"`);
             await store.setVisitorMemory(visitorId, key, value);
             return { remembered: { key, value } };
           },
@@ -127,6 +144,7 @@ Directives:
             key: z.string().describe("The key of the fact to forget"),
           }),
           execute: async ({ key }) => {
+            console.log(`[Chat Tool] forgetFact key: "${key}"`);
             await store.deleteVisitorMemory(visitorId, key);
             return { forgotten: key };
           },
@@ -137,10 +155,14 @@ Directives:
           inputSchema: z.object({
             emote: z.enum(["idle", "waving", "jumping", "waiting", "failed", "review"]),
           }),
-          execute: async ({ emote }) => ({ emote }),
+          execute: async ({ emote }) => {
+            console.log(`[Chat Tool] setEmote: "${emote}"`);
+            return { emote };
+          },
         }),
       },
       onFinish: async ({ responseMessages }) => {
+        console.log(`[Chat API] Stream completed onFinish -> generated ${responseMessages.length} response messages`);
         try {
           const existingConv = await store.getConversation(visitorId);
           await store.saveConversation({
@@ -151,15 +173,16 @@ Directives:
             createdAt: existingConv?.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           });
+          console.log(`[Chat API] Conversation saved successfully for visitorId: ${visitorId}`);
         } catch (err) {
-          console.error("Failed to save conversation:", err);
+          console.error("[Chat API] Failed to save conversation:", err);
         }
       },
     });
 
     return result.toTextStreamResponse({ headers: CORS_HEADERS });
   } catch (error: unknown) {
-    console.error("Error in /api/chat:", error);
+    console.error("[Chat API] Error in /api/chat:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
       { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
