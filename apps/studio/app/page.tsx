@@ -562,7 +562,15 @@ function CharacterPreview({
               type="text"
               placeholder="Ask something…"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setInput(val);
+                if (!isStreaming && val.trim() && state === "idle") {
+                  setState("waiting");
+                } else if (!isStreaming && !val.trim() && state === "waiting") {
+                  setState("idle");
+                }
+              }}
               style={{
                 flex: 1,
                 border: 0,
@@ -1361,46 +1369,34 @@ export default function StudioHome() {
               </div>
               <div className="shape-layout">
                 <form className="character-form" onSubmit={saveCharacter}>
-                  <label>
-                    Character Name
+                  <div className="theme-grid-container">
+                    <span className="grid-label">Character Name</span>
                     <input
+                      className="theme-grid-input"
                       value={character.displayName}
                       maxLength={48}
                       onChange={(e) => setCharacter({ ...character, displayName: e.target.value })}
                     />
-                  </label>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <strong style={{ fontSize: ".86rem", fontWeight: 800 }}>Widget Theme</strong>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
+                    <span className="grid-label">Widget Theme</span>
+                    <div className="theme-grid">
                       {[
-                        { id: "neobrutalist", label: "⬛ Neobrutalist" },
-                        { id: "modern", label: "💎 Modern / Glass" },
-                        { id: "cyberpunk", label: "🌌 Cyberpunk" },
-                        { id: "terminal", label: "📟 Retro Terminal" },
-                        { id: "minimal", label: "▫️ Swiss Minimal" },
+                        { id: "neobrutalist", label: "⬛ Neobrutalist", desc: "Bold pop shadows" },
+                        { id: "modern", label: "💎 Modern Glass", desc: "Backdrop blur & smooth text" },
+                        { id: "cyberpunk", label: "🌌 Cyberpunk", desc: "Neon glow & high contrast" },
+                        { id: "terminal", label: "📟 Retro Terminal", desc: "Phosphor monospace" },
+                        { id: "minimal", label: "▫️ Swiss Minimal", desc: "Clean typography" },
                       ].map((t) => {
-                        const isSelected = ((character as any).theme || "neobrutalist") === t.id;
+                        const isSelected = (character.theme ?? "neobrutalist") === t.id;
                         return (
                           <button
                             key={t.id}
                             type="button"
+                            className={`theme-tile ${isSelected ? "is-selected" : ""}`}
                             onClick={() => setCharacter({ ...character, theme: t.id as any })}
-                            style={{
-                              padding: "10px 12px",
-                              fontSize: ".82rem",
-                              fontWeight: 800,
-                              textAlign: "center",
-                              border: isSelected ? "2.5px solid #09090b" : "1px solid #e4e4e7",
-                              background: isSelected ? "#e7ff36" : "#ffffff",
-                              color: "#09090b",
-                              borderRadius: 10,
-                              cursor: "pointer",
-                              boxShadow: isSelected ? "2.5px 2.5px 0px #09090b" : "none",
-                              transition: "all 0.12s ease",
-                            }}
                           >
-                            {t.label}
+                            <span className="theme-tile-name">{t.label}</span>
+                            <span className="theme-tile-desc">{t.desc}</span>
                           </button>
                         );
                       })}

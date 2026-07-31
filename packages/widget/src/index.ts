@@ -435,9 +435,19 @@ class CradleCharacter extends HTMLElementBase {
   private setupChatListeners() {
     const form = this.shadow.querySelector(".chat-form") as HTMLFormElement | null;
     if (form) {
+      const input = form.querySelector(".chat-input") as HTMLInputElement | null;
+      if (input) {
+        input.addEventListener("input", () => {
+          if (!this.isBusy && input.value.trim() && this.currentState === "idle") {
+            this.setVisualState("waiting");
+          } else if (!this.isBusy && !input.value.trim() && this.currentState === "waiting") {
+            this.setVisualState("idle");
+          }
+        });
+      }
+
       form.addEventListener("submit", (e) => {
         e.preventDefault();
-        const input = form.querySelector(".chat-input") as HTMLInputElement | null;
         if (!input) return;
         const text = input.value.trim();
         if (!text || this.isBusy) return;
