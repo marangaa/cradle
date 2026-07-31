@@ -550,7 +550,7 @@ class CradleCharacter extends HTMLElementBase {
 
         const target = this.localMessages.find((m) => m.id === assistantMsgId);
         if (target) {
-          target.content = streamedContent;
+          target.content = streamedContent || "…";
           this.renderStoredMessages();
         }
       }

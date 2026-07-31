@@ -1,4 +1,4 @@
-import { streamText, tool, type UIMessage } from "ai";
+import { convertToModelMessages, isStepCount, streamText, tool, type UIMessage } from "ai";
 import { z } from "zod";
 import { embedQuery } from "../../lib/embeddings";
 import { CRADLE_MODEL_ID, google } from "../../lib/google";
@@ -26,14 +26,25 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const {
-      messages = [],
+      messages: rawMessages = [],
       installationId: bodyInstallationId,
       visitorId: bodyVisitorId,
     } = body as {
-      messages?: UIMessage[];
+      messages?: Array<{ role: string; content: string | unknown } & Record<string, unknown>>;
       installationId?: string;
       visitorId?: string;
     };
+
+    // Normalise messages to AI SDK v7 UIMessage format (requires `parts` array).
+    // The widget and studio send plain { role, content: string } objects.
+    const messages: UIMessage[] = rawMessages.map((m, i) => ({
+      id: (m.id as string | undefined) || `msg-${i}`,
+      role: m.role as UIMessage["role"],
+      parts: Array.isArray(m.parts)
+        ? (m.parts as UIMessage["parts"])
+        : [{ type: "text" as const, text: typeof m.content === "string" ? m.content : JSON.stringify(m.content) }],
+      content: typeof m.content === "string" ? m.content : "",
+    }));
 
     const installationId = headerInstallationId || bodyInstallationId || url.searchParams.get("installationId");
     const visitorId = headerVisitorId || bodyVisitorId || url.searchParams.get("visitorId");
@@ -150,14 +161,14 @@ Directives:
     const result = streamText({
       model: google(CRADLE_MODEL_ID),
       system: systemPrompt,
-      messages: messages as any,
+      messages: await convertToModelMessages(messages),
       tools: {
         searchKnowledge: searchKnowledgeTool,
         rememberFact: rememberFactTool,
         forgetFact: forgetFactTool,
         setEmote: setEmoteTool,
       },
-      ...({ maxSteps: 5 } as any),
+      stopWhen: isStepCount(10),
       onFinish: async ({ responseMessages }) => {
         try {
           const updatedMessages = [...messages, ...responseMessages];

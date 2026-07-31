@@ -412,7 +412,7 @@
           streamedContent += chunk;
           const target = this.localMessages.find((m) => m.id === assistantMsgId);
           if (target) {
-            target.content = streamedContent;
+            target.content = streamedContent || "\u2026";
             this.renderStoredMessages();
           }
         }
