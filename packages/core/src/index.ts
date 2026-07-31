@@ -3,7 +3,7 @@ import { z } from "zod";
 export const characterSchema = z.object({
   displayName: z.string().min(1).max(48),
   greeting: z.string().max(320).optional(),
-  theme: z.enum(["neobrutalist", "modern", "minimal"]).optional(),
+  theme: z.enum(["neobrutalist", "modern", "cyberpunk", "terminal", "minimal"]).optional(),
 });
 
 export type Character = z.infer<typeof characterSchema>;

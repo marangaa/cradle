@@ -47,7 +47,7 @@ export async function listOwnedInstallations() {
       origin: string;
       knowledgeVersion: number;
       updatedAt?: string;
-      character?: { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "minimal" } | null;
+      character?: { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "cyberpunk" | "terminal" | "minimal" } | null;
     }>;
   }>("/api/installations");
 }
@@ -98,7 +98,7 @@ export async function saveInstallationKnowledge(installationId: string, included
 
 export async function saveInstallationCharacter(
   installationId: string,
-  character: { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "minimal" }
+  character: { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "cyberpunk" | "terminal" | "minimal" }
 ) {
   return runtimeRequest<unknown>(`/api/installations/${installationId}/settings`, {
     method: "PATCH",

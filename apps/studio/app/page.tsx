@@ -41,7 +41,7 @@ type PetdexState = keyof typeof STATE_ROWS;
 
 type Page = { url: string; title: string; markdown: string };
 
-type Character = { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "minimal" };
+type Character = { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "cyberpunk" | "terminal" | "minimal" };
 type Installation = { id: string; name: string };
 type OwnedInstallation = {
   id: string;
@@ -1221,13 +1221,15 @@ export default function StudioHome() {
                     />
                   </label>
 
-                  <label>
-                    Widget Theme
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 8 }}>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <strong>Widget Theme</strong>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 4 }}>
                       {[
-                        { id: "neobrutalist", label: "Neobrutalist", desc: "Bold solid borders & hard shadow" },
-                        { id: "modern", label: "Modern / Glass", desc: "Frosted blur & soft rounded card" },
-                        { id: "minimal", label: "Minimal", desc: "Clean 1px border & micro-shadow" },
+                        { id: "neobrutalist", label: "⬛ Neobrutalist", desc: "Bold solid 2.5px borders & 4px hard shadow", accent: "#ffffff" },
+                        { id: "modern", label: "💎 Modern / Glass", desc: "Translucent frosted blur & smooth pill cards", accent: "rgba(255,255,255,0.9)" },
+                        { id: "cyberpunk", label: "🌌 Cyberpunk", desc: "Glowing neon purple/cyan dark synthwave theme", accent: "#0f172a", color: "#38bdf8" },
+                        { id: "terminal", label: "📟 Retro Terminal", desc: "Monospaced green CRT matrix terminal theme", accent: "#09090b", color: "#22c55e" },
+                        { id: "minimal", label: "▫️ Swiss Minimal", desc: "Ultra-clean 1px border & refined micro-shadow", accent: "#ffffff" },
                       ].map((t) => {
                         const isSelected = ((character as any).theme || "neobrutalist") === t.id;
                         return (
@@ -1236,18 +1238,20 @@ export default function StudioHome() {
                             type="button"
                             onClick={() => setCharacter({ ...character, theme: t.id as any })}
                             style={{
-                              padding: "12px 14px",
+                              padding: "14px 16px",
                               textAlign: "left",
                               border: isSelected ? "2.5px solid #09090b" : "1.5px solid #e4e4e7",
-                              background: isSelected ? "#e7ff36" : "#ffffff",
-                              borderRadius: 12,
+                              background: isSelected ? "#e7ff36" : t.accent,
+                              color: isSelected ? "#09090b" : (t.color || "#09090b"),
+                              borderRadius: 14,
                               cursor: "pointer",
-                              boxShadow: isSelected ? "2px 2px 0px #09090b" : "none",
+                              boxShadow: isSelected ? "4px 4px 0px #09090b" : "0 2px 8px rgba(0,0,0,0.04)",
+                              transform: isSelected ? "translateY(-2px)" : "none",
                               transition: "all 0.15s ease",
                             }}
                           >
-                            <strong style={{ display: "block", fontSize: ".84rem", color: "#09090b", fontWeight: 800 }}>{t.label}</strong>
-                            <span style={{ fontSize: ".7rem", color: "#52525b" }}>{t.desc}</span>
+                            <strong style={{ display: "block", fontSize: ".9rem", fontWeight: 800, marginBottom: 4 }}>{t.label}</strong>
+                            <span style={{ fontSize: ".72rem", opacity: 0.85, lineHeight: 1.35, display: "block" }}>{t.desc}</span>
                           </button>
                         );
                       })}
