@@ -38,7 +38,8 @@ type PetAtlas = {
 
 type Character = {
   displayName: string;
-  greeting: string;
+  greeting?: string;
+  theme?: string;
 };
 
 type CradleAction = string | { type: string; value?: string; [key: string]: unknown };
@@ -66,8 +67,7 @@ declare global {
  * Captured synchronously at module-execution time, while `document.currentScript` still points
  * at this widget's own <script src="..."> tag. Since the widget is always fetched *from* the
  * runtime it talks to, the script's own origin already tells us the API base — no reason to
- * make every embedder retype it. Only null for non-script-tag usage (e.g. bundled via npm),
- * where there's no script element to read an origin from and `api-base` must be passed explicitly.
+ * make every embedder retype it.
  */
 const INFERRED_API_BASE = typeof document === "undefined" ? null : (() => {
   try {
@@ -78,10 +78,6 @@ const INFERRED_API_BASE = typeof document === "undefined" ? null : (() => {
   }
 })();
 
-/**
- * Inspects a loaded spritesheet's alpha channel to find how many columns of each row actually
- * have drawn content, scanning from the last column inward.
- */
 function detectRowFrameCounts(image: HTMLImageElement, columns: number, rows: number): number[] {
   const counts = new Array<number>(rows).fill(columns);
   const canvas = document.createElement("canvas");
@@ -156,6 +152,7 @@ class CradleCharacter extends HTMLElementBase {
   private localMessages: ChatMessage[] = [];
   private isBusy = false;
   private characterName = "Assistant";
+  private isLoaded = false;
 
   connectedCallback() {
     this.siteId = this.getAttribute("site-id") ?? this.getAttribute("installation-id") ?? "";
@@ -218,6 +215,7 @@ class CradleCharacter extends HTMLElementBase {
 
   /** Opens the character and emits an activation event for the host experience. */
   openPanel() {
+    if (!this.isLoaded) return;
     this.open = true;
     const panel = this.shadow.querySelector(".panel") as HTMLElement | null;
     const trigger = this.shadow.querySelector(".trigger") as HTMLButtonElement | null;
@@ -332,52 +330,48 @@ class CradleCharacter extends HTMLElementBase {
     this.shadow.innerHTML = [
       '<style>',
       `:host{all:initial;position:fixed;right:0;bottom:0;width:0;height:0;z-index:2147483647;pointer-events:none;color:var(--cradle-text,#09090b);font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.4;${customVars}}`,
-      '.shell{position:fixed;right:22px;bottom:22px;z-index:2147483647;pointer-events:auto}',
-      '.shell[data-placement="inline"]{position:relative;right:auto;bottom:auto;width:100%;max-width:330px}',
-      '.panel{position:absolute;bottom:100%;right:12px;margin-bottom:12px;width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 140px);overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-end;gap:8px;background:transparent;box-shadow:none;border:0;padding:0}',
+      '.shell{position:fixed;right:22px;bottom:22px;z-index:2147483647;pointer-events:auto;opacity:0.2;transition:opacity 0.3s ease}',
+      '.shell.is-ready{opacity:1}',
+      '.shell[data-placement="inline"]{position:relative;right:auto;bottom:auto;width:100%;max-width:380px}',
+      '.panel{position:absolute;bottom:100%;right:0;margin-bottom:12px;width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 140px);overflow:visible;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-end;gap:10px;background:transparent;box-shadow:none;border:0;padding:0}',
       '.panel[hidden]{display:none}',
       '.panel ::slotted(*){align-self:stretch;width:100%;box-sizing:border-box}',
 
-      /* Default Built-in Chat Surface (Slot Fallback) */
-      '.built-in-chat{width:100%;box-sizing:border-box;display:flex;flex-direction:column;background:var(--cradle-bg,#ffffff);color:var(--cradle-text,#09090b);overflow:hidden;transition:all 0.2s ease}',
-      
-      /* Theme: Neobrutalist (Default) */
-      '.shell[data-theme="neobrutalist"] .built-in-chat{border:2.5px solid #09090b;border-radius:20px 20px 4px 20px;box-shadow:4px 4px 0px #09090b,0 10px 25px rgba(0,0,0,0.12)}',
-      
-      /* Theme: Modern / Glass */
-      '.shell[data-theme="modern"] .built-in-chat,.shell[data-theme="glass"] .built-in-chat{background:rgba(255,255,255,0.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.6);border-radius:24px 24px 6px 24px;box-shadow:0 12px 32px rgba(0,0,0,0.12),0 2px 6px rgba(0,0,0,0.04)}',
-      
-      /* Theme: Minimal */
-      '.shell[data-theme="minimal"] .built-in-chat{border:1px solid #e4e4e7;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,0.06)}',
+      /* Floating Unbound Chat Surface */
+      '.built-in-chat{width:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;background:transparent;overflow:hidden}',
 
-      /* Header */
-      '.chat-header{display:flex;align-items:center;justify-space-between;padding:12px 16px;border-bottom:1px solid rgba(0,0,0,0.08)}',
-      '.chat-title-group{display:flex;align-items:center;gap:8px}',
-      '.chat-title{font-weight:800;font-size:0.92rem;letter-spacing:-0.02em}',
-      '.status-dot{width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block}',
-      '.reset-btn{background:transparent;border:0;cursor:pointer;opacity:0.4;padding:4px;font-size:0.75rem;font-weight:600;transition:opacity 0.15s}',
-      '.reset-btn:hover{opacity:0.9}',
+      /* Messages Stream */
+      '.chat-messages{display:flex;flex-direction:column;gap:10px;padding:4px;max-height:calc(100vh - 210px);min-height:80px;overflow-y:auto;scrollbar-width:thin}',
+      '.msg{max-width:85%;padding:10px 14px;font-size:0.86rem;line-height:1.45;word-break:break-word;white-space:pre-wrap;box-sizing:border-box}',
+      
+      /* User Message Bubble */
+      '.msg.user-msg{align-self:flex-end;background:var(--cradle-accent,#09090b);color:#ffffff}',
+      '.shell[data-theme="neobrutalist"] .msg.user-msg{border:2px solid #09090b;box-shadow:3px 3px 0px #09090b;border-radius:18px 18px 4px 18px}',
+      '.shell[data-theme="modern"] .msg.user-msg,.shell[data-theme="glass"] .msg.user-msg{border-radius:20px 20px 4px 20px;box-shadow:0 8px 24px rgba(0,0,0,0.1)}',
+      '.shell[data-theme="minimal"] .msg.user-msg{border-radius:16px 16px 2px 16px;border:1px solid #09090b}',
 
-      /* Messages List */
-      '.chat-messages{display:flex;flex-direction:column;gap:10px;padding:14px;max-height:calc(100vh - 240px);min-height:120px;overflow-y:auto;scrollbar-width:thin}',
-      '.msg{max-width:85%;padding:10px 14px;font-size:0.85rem;line-height:1.45;word-break:break-word;white-space:pre-wrap}',
-      '.msg.user-msg{align-self:flex-end;background:var(--cradle-accent,#09090b);color:#ffffff;border-radius:16px 16px 2px 16px}',
-      '.shell[data-theme="neobrutalist"] .msg.user-msg{border:2px solid #09090b;box-shadow:2px 2px 0px #09090b}',
-      '.msg.assistant-msg{align-self:flex-start;background:#f4f4f5;color:#09090b;border-radius:16px 16px 16px 2px;border:1px solid rgba(0,0,0,0.06)}',
-      '.shell[data-theme="neobrutalist"] .msg.assistant-msg{background:#ffffff;border:2px solid #09090b;box-shadow:2px 2px 0px #09090b}',
+      /* Assistant Message Bubble */
+      '.msg.assistant-msg{align-self:flex-start;background:var(--cradle-bg,#ffffff);color:var(--cradle-text,#09090b)}',
+      '.shell[data-theme="neobrutalist"] .msg.assistant-msg{border:2px solid #09090b;box-shadow:3px 3px 0px #09090b;border-radius:18px 18px 18px 4px}',
+      '.shell[data-theme="modern"] .msg.assistant-msg,.shell[data-theme="glass"] .msg.assistant-msg{background:rgba(255,255,255,0.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.6);box-shadow:0 8px 24px rgba(0,0,0,0.08);border-radius:20px 20px 20px 4px}',
+      '.shell[data-theme="minimal"] .msg.assistant-msg{border-radius:16px 16px 16px 2px;border:1px solid #e4e4e7;background:#ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.04)}',
 
-      /* Form */
-      '.chat-form{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid rgba(0,0,0,0.08);background:rgba(0,0,0,0.015)}',
-      '.chat-input{flex:1;border:1px solid rgba(0,0,0,0.15);border-radius:20px;padding:8px 14px;font-size:0.84rem;outline:none;background:#ffffff;color:#09090b}',
-      '.shell[data-theme="neobrutalist"] .chat-input{border:2px solid #09090b;border-radius:12px}',
-      '.chat-input:focus{border-color:#09090b}',
-      '.send-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;border:0;background:var(--cradle-accent,#09090b);color:#ffffff;cursor:pointer;transition:transform 0.1s}',
-      '.shell[data-theme="neobrutalist"] .send-btn{border-radius:8px;border:2px solid #09090b;box-shadow:2px 2px 0px #09090b}',
-      '.send-btn:active{transform:scale(0.92)}',
+      /* Floating Input Pill Bar */
+      '.chat-form{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;padding:6px 6px 6px 16px;background:var(--cradle-bg,#ffffff);border-radius:9999px;transition:all 0.15s ease}',
+      '.shell[data-theme="neobrutalist"] .chat-form{border:2.5px solid #09090b;box-shadow:3.5px 3.5px 0px #09090b}',
+      '.shell[data-theme="modern"] .chat-form,.shell[data-theme="glass"] .chat-form{background:rgba(255,255,255,0.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.7);box-shadow:0 10px 28px rgba(0,0,0,0.1)}',
+      '.shell[data-theme="minimal"] .chat-form{border:1px solid #e4e4e7;box-shadow:0 2px 10px rgba(0,0,0,0.05)}',
+
+      '.chat-input{flex:1;border:0;outline:none;background:transparent;font-size:0.86rem;color:var(--cradle-text,#09090b);padding:4px 0}',
+      '.chat-input::placeholder{color:rgba(9,9,11,0.4)}',
+      
+      '.send-btn{display:flex;align-items:center;justify-content:center;padding:6px 14px;border:0;background:transparent;color:var(--cradle-accent,#09090b);font-weight:800;font-size:0.84rem;cursor:pointer;transition:transform 0.1s, opacity 0.15s}',
+      '.shell[data-theme="neobrutalist"] .send-btn{background:#09090b;color:#ffffff;border-radius:9999px;padding:6px 16px;font-size:0.78rem}',
+      '.send-btn:active{transform:scale(0.94)}',
       '.send-btn:disabled{opacity:0.3;cursor:not-allowed}',
 
-      /* Trigger */
-      '.trigger{display:grid;width:94px;height:102px;place-items:center;border:0;background:transparent;box-shadow:none;cursor:grab;touch-action:none}',
+      /* Trigger Companion */
+      '.trigger{display:grid;width:94px;height:102px;place-items:center;border:0;background:transparent;box-shadow:none;cursor:grab;touch-action:none;margin-left:auto}',
       '.trigger:active{cursor:grabbing}',
       '.trigger:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}',
       '.trigger .companion{width:88px;height:96px;background-repeat:no-repeat;background-size:800% 900%}',
@@ -387,23 +381,14 @@ class CradleCharacter extends HTMLElementBase {
         '<section class="panel" hidden aria-label="Website character">' +
           '<slot>' +
             '<div class="built-in-chat">' +
-              '<div class="chat-header">' +
-                '<div class="chat-title-group">' +
-                  `<span class="chat-title">${this.characterName}</span>` +
-                  '<span class="status-dot"></span>' +
-                '</div>' +
-                '<button type="button" class="reset-btn" title="Clear chat history">Clear</button>' +
-              '</div>' +
               '<div class="chat-messages" tabindex="0">' +
                 '<div class="msg assistant-msg greeting-msg">' +
-                  '<p class="greeting" style="margin:0">Hi there! 👋 Ask me anything about our business.</p>' +
+                  '<p class="greeting" style="margin:0">Hi there! 👋 Ask me anything.</p>' +
                 '</div>' +
               '</div>' +
               '<form class="chat-form">' +
                 '<input type="text" class="chat-input" placeholder="Ask something..." aria-label="Ask a question" />' +
-                '<button type="submit" class="send-btn" aria-label="Send message">' +
-                  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>' +
-                '</button>' +
+                '<button type="submit" class="send-btn" aria-label="Send message">Send</button>' +
               '</form>' +
             '</div>' +
           '</slot>' +
@@ -436,8 +421,6 @@ class CradleCharacter extends HTMLElementBase {
 
   private setupChatListeners() {
     const form = this.shadow.querySelector(".chat-form") as HTMLFormElement | null;
-    const resetBtn = this.shadow.querySelector(".reset-btn") as HTMLButtonElement | null;
-
     if (form) {
       form.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -449,14 +432,6 @@ class CradleCharacter extends HTMLElementBase {
         void this.sendChatMessage(text);
       });
     }
-
-    if (resetBtn) {
-      resetBtn.addEventListener("click", () => {
-        this.localMessages = [];
-        this.saveStoredMessages();
-        this.renderStoredMessages();
-      });
-    }
   }
 
   private renderStoredMessages() {
@@ -466,7 +441,7 @@ class CradleCharacter extends HTMLElementBase {
     if (this.localMessages.length === 0) {
       msgContainer.innerHTML = [
         '<div class="msg assistant-msg greeting-msg">',
-          '<p class="greeting" style="margin:0">Hi there! 👋 Ask me anything about our business.</p>',
+          '<p class="greeting" style="margin:0">Hi there! 👋 Ask me anything.</p>',
         '</div>',
       ].join("");
       return;
@@ -479,6 +454,29 @@ class CradleCharacter extends HTMLElementBase {
     `).join("");
 
     msgContainer.scrollTop = msgContainer.scrollHeight;
+  }
+
+  private async fetchInitialGreeting(baseUrl: string) {
+    try {
+      const res = await fetch(`${baseUrl}/api/chat/init`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-cradle-installation-id": this.siteId,
+          "x-cradle-visitor-id": this.visitorId,
+        },
+        body: JSON.stringify({ installationId: this.siteId, visitorId: this.visitorId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.greeting) {
+          const greetingEl = this.shadow.querySelector(".greeting") as HTMLElement | null;
+          if (greetingEl) greetingEl.textContent = data.greeting;
+        }
+      }
+    } catch {
+      // Keep default
+    }
   }
 
   private async sendChatMessage(text: string) {
@@ -537,7 +535,6 @@ class CradleCharacter extends HTMLElementBase {
         const chunk = decoder.decode(value, { stream: true });
         streamedContent += chunk;
 
-        // Update assistant message content
         const target = this.localMessages.find((m) => m.id === assistantMsgId);
         if (target) {
           target.content = streamedContent;
@@ -568,20 +565,33 @@ class CradleCharacter extends HTMLElementBase {
       const manifest = await response.json() as { character: Character; assets: { atlas: PetAtlas | null } | null };
       const shell = this.shadow.querySelector(".shell") as HTMLElement;
       const greeting = this.shadow.querySelector(".greeting") as HTMLElement;
-      const titleEl = this.shadow.querySelector(".chat-title") as HTMLElement;
 
       shell.dataset.placement = this.placement;
       this.characterName = manifest.character.displayName || "Assistant";
-      if (titleEl) titleEl.textContent = this.characterName;
-      if (greeting) greeting.textContent = manifest.character.greeting;
+      const resolvedTheme = this.getAttribute("theme") || manifest.character.theme || "neobrutalist";
+      this.theme = resolvedTheme;
+      shell.dataset.theme = resolvedTheme;
+
+      if (greeting && manifest.character.greeting) {
+        greeting.textContent = manifest.character.greeting;
+      }
+
+      if (this.localMessages.length === 0) {
+        void this.fetchInitialGreeting(baseUrl);
+      }
 
       if (manifest.assets?.atlas) {
         await this.configureAtlas(manifest.assets.atlas);
         this.startCycle();
       } else {
+        this.isLoaded = true;
+        shell.classList.add("is-ready");
         this.emit("cradle:ready", { ...this.eventContext(), character: manifest.character });
         return;
       }
+
+      this.isLoaded = true;
+      shell.classList.add("is-ready");
       this.emit("cradle:ready", { ...this.eventContext(), character: manifest.character });
     } catch (error) {
       this.setVisualState("failed");
@@ -607,7 +617,7 @@ class CradleCharacter extends HTMLElementBase {
         imageUrl = URL.createObjectURL(blob);
       }
     } catch {
-      // Fall back to original url if blob creation fails
+      // Fall back
     }
 
     this.shadow.querySelectorAll<HTMLElement>(".companion").forEach((companion) => {

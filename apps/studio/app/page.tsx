@@ -363,41 +363,84 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
     ]);
   }
 
+  const isNeobrutalist = theme === "neobrutalist";
+  const isModern = theme === "modern" || theme === "glass";
+
   return (
-    <div className={`studio-install-preview theme-${theme}`}>
+    <div className={`studio-install-preview theme-${theme}`} style={{ position: "fixed", bottom: 22, right: 22, zIndex: 2147483647, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
       {open && (
-        <section className={`install-preview-chat theme-${theme}`} aria-label="Installed character preview">
-          <div className="preview-chat-header">
-            <strong>{character.displayName}</strong>
-            <span className="preview-status-dot" style={{ width: 8, height: 8, background: "#22c55e", borderRadius: "50%", display: "inline-block" }} />
+        <section
+          aria-label="Installed character preview"
+          style={{
+            width: 320,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            background: "transparent",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 220, overflowY: "auto", padding: 4 }}>
+            {messages.map((m, idx) => {
+              const isUser = m.role === "user";
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    alignSelf: isUser ? "flex-end" : "flex-start",
+                    maxWidth: "85%",
+                    padding: "10px 14px",
+                    fontSize: ".84rem",
+                    lineHeight: 1.45,
+                    background: isUser ? "#09090b" : isModern ? "rgba(255,255,255,0.92)" : "#ffffff",
+                    color: isUser ? "#ffffff" : "#09090b",
+                    border: isNeobrutalist ? "2px solid #09090b" : isModern ? "1px solid rgba(255,255,255,0.6)" : "1px solid #e4e4e7",
+                    boxShadow: isNeobrutalist ? "3px 3px 0px #09090b" : isModern ? "0 8px 24px rgba(0,0,0,0.08)" : "0 2px 8px rgba(0,0,0,0.04)",
+                    backdropFilter: isModern ? "blur(16px)" : "none",
+                    borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                  }}
+                >
+                  {m.content}
+                </div>
+              );
+            })}
           </div>
-          <div className="preview-chat-messages" style={{ display: "flex", flexDirection: "column", gap: 8, padding: 10, maxHeight: 180, overflowY: "auto" }}>
-            {messages.map((m, idx) => (
-              <div
-                key={idx}
-                style={{
-                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                  background: m.role === "user" ? "#09090b" : "#f4f4f5",
-                  color: m.role === "user" ? "#ffffff" : "#09090b",
-                  padding: "6px 10px",
-                  borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
-                  fontSize: ".78rem",
-                  maxWidth: "85%",
-                }}
-              >
-                {m.content}
-              </div>
-            ))}
-          </div>
-          <form onSubmit={sendMessage} style={{ display: "flex", gap: 6, padding: 8, borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+
+          <form
+            onSubmit={sendMessage}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 6px 6px 16px",
+              borderRadius: 9999,
+              background: isModern ? "rgba(255,255,255,0.92)" : "#ffffff",
+              border: isNeobrutalist ? "2.5px solid #09090b" : isModern ? "1px solid rgba(0,0,0,0.1)" : "1px solid #e4e4e7",
+              boxShadow: isNeobrutalist ? "3.5px 3.5px 0px #09090b" : isModern ? "0 10px 28px rgba(0,0,0,0.1)" : "0 2px 10px rgba(0,0,0,0.05)",
+              backdropFilter: isModern ? "blur(16px)" : "none",
+            }}
+          >
             <input
               type="text"
-              placeholder="Test prompt…"
+              placeholder="Ask something…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              style={{ flex: 1, padding: "6px 10px", border: "1px solid #d4d4d8", borderRadius: 16, fontSize: ".76rem", outline: "none" }}
+              style={{ flex: 1, border: 0, outline: "none", background: "transparent", fontSize: ".84rem", color: "#09090b" }}
             />
-            <button type="submit" style={{ padding: "6px 12px", background: "#09090b", color: "#fff", border: 0, borderRadius: 16, fontSize: ".75rem", cursor: "pointer", fontWeight: 700 }}>Send</button>
+            <button
+              type="submit"
+              style={{
+                border: 0,
+                background: isNeobrutalist ? "#09090b" : "transparent",
+                color: isNeobrutalist ? "#ffffff" : "#09090b",
+                borderRadius: isNeobrutalist ? 9999 : 0,
+                padding: isNeobrutalist ? "6px 16px" : "6px 10px",
+                fontWeight: 800,
+                fontSize: ".8rem",
+                cursor: "pointer",
+              }}
+            >
+              Send
+            </button>
           </form>
         </section>
       )}
