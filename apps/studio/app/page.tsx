@@ -381,12 +381,12 @@ function CharacterPreview({
         headers: {
           "content-type": "application/json",
           ...(installationId ? { "x-cradle-installation-id": installationId } : {}),
-          "x-cradle-visitor-id": "studio-preview-visitor",
+          "x-cradle-visitor-id": "00000000-0000-0000-0000-000000000001",
         },
         body: JSON.stringify({
           messages: newMessages,
           installationId,
-          visitorId: "studio-preview-visitor",
+          visitorId: "00000000-0000-0000-0000-000000000001",
         }),
       });
 
@@ -1322,15 +1322,15 @@ export default function StudioHome() {
                     />
                   </label>
 
-                  <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <strong>Widget Theme</strong>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 4 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <strong style={{ fontSize: ".86rem", fontWeight: 800 }}>Widget Theme</strong>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
                       {[
-                        { id: "neobrutalist", label: "⬛ Neobrutalist", desc: "Bold solid 2.5px borders & 4px hard shadow", accent: "#ffffff" },
-                        { id: "modern", label: "💎 Modern / Glass", desc: "Translucent frosted blur & smooth pill cards", accent: "rgba(255,255,255,0.9)" },
-                        { id: "cyberpunk", label: "🌌 Cyberpunk", desc: "Glowing neon purple/cyan dark synthwave theme", accent: "#0f172a", color: "#38bdf8" },
-                        { id: "terminal", label: "📟 Retro Terminal", desc: "Monospaced green CRT matrix terminal theme", accent: "#09090b", color: "#22c55e" },
-                        { id: "minimal", label: "▫️ Swiss Minimal", desc: "Ultra-clean 1px border & refined micro-shadow", accent: "#ffffff" },
+                        { id: "neobrutalist", label: "⬛ Neobrutalist" },
+                        { id: "modern", label: "💎 Modern / Glass" },
+                        { id: "cyberpunk", label: "🌌 Cyberpunk" },
+                        { id: "terminal", label: "📟 Retro Terminal" },
+                        { id: "minimal", label: "▫️ Swiss Minimal" },
                       ].map((t) => {
                         const isSelected = ((character as any).theme || "neobrutalist") === t.id;
                         return (
@@ -1339,25 +1339,25 @@ export default function StudioHome() {
                             type="button"
                             onClick={() => setCharacter({ ...character, theme: t.id as any })}
                             style={{
-                              padding: "14px 16px",
-                              textAlign: "left",
-                              border: isSelected ? "2.5px solid #09090b" : "1.5px solid #e4e4e7",
-                              background: isSelected ? "#e7ff36" : t.accent,
-                              color: isSelected ? "#09090b" : (t.color || "#09090b"),
-                              borderRadius: 14,
+                              padding: "10px 12px",
+                              fontSize: ".82rem",
+                              fontWeight: 800,
+                              textAlign: "center",
+                              border: isSelected ? "2.5px solid #09090b" : "1px solid #e4e4e7",
+                              background: isSelected ? "#e7ff36" : "#ffffff",
+                              color: "#09090b",
+                              borderRadius: 10,
                               cursor: "pointer",
-                              boxShadow: isSelected ? "4px 4px 0px #09090b" : "0 2px 8px rgba(0,0,0,0.04)",
-                              transform: isSelected ? "translateY(-2px)" : "none",
-                              transition: "all 0.15s ease",
+                              boxShadow: isSelected ? "2.5px 2.5px 0px #09090b" : "none",
+                              transition: "all 0.12s ease",
                             }}
                           >
-                            <strong style={{ display: "block", fontSize: ".9rem", fontWeight: 800, marginBottom: 4 }}>{t.label}</strong>
-                            <span style={{ fontSize: ".72rem", opacity: 0.85, lineHeight: 1.35, display: "block" }}>{t.desc}</span>
+                            {t.label}
                           </button>
                         );
                       })}
                     </div>
-                  </label>
+                  </div>
 
                   <button className="button primary" disabled={Boolean(busy)}>{busy ?? "Save changes"}</button>
                 </form>
