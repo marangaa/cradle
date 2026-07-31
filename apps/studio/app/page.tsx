@@ -336,7 +336,7 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
   const [state, setState] = useState<PreviewState>("idle");
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([
-    { role: "assistant", content: `Hi there! 👋 Ask me anything about ${character.displayName || "our site"}.` },
+    { role: "assistant", content: "Hi there! 👋 Ask me anything about our business." },
   ]);
   const [input, setInput] = useState("");
 
@@ -359,12 +359,14 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
     setMessages((prev) => [
       ...prev,
       { role: "user", content: text },
-      { role: "assistant", content: `I'll be ready to answer questions about ${character.displayName || "your business"} live on your site!` },
+      { role: "assistant", content: `I'm ${character.displayName || "your AI companion"}, ready to answer questions about your site!` },
     ]);
   }
 
   const isNeobrutalist = theme === "neobrutalist";
   const isModern = theme === "modern" || theme === "glass";
+  const isCyberpunk = theme === "cyberpunk";
+  const isTerminal = theme === "terminal";
 
   return (
     <div className={`studio-install-preview theme-${theme}`} style={{ position: "fixed", bottom: 22, right: 22, zIndex: 2147483647, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
@@ -391,12 +393,33 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
                     padding: "10px 14px",
                     fontSize: ".84rem",
                     lineHeight: 1.45,
-                    background: isUser ? "#09090b" : isModern ? "rgba(255,255,255,0.92)" : "#ffffff",
-                    color: isUser ? "#ffffff" : "#09090b",
-                    border: isNeobrutalist ? "2px solid #09090b" : isModern ? "1px solid rgba(255,255,255,0.6)" : "1px solid #e4e4e7",
-                    boxShadow: isNeobrutalist ? "3px 3px 0px #09090b" : isModern ? "0 8px 24px rgba(0,0,0,0.08)" : "0 2px 8px rgba(0,0,0,0.04)",
+                    background: isUser
+                      ? (isCyberpunk ? "#a855f7" : isTerminal ? "#15803d" : "#09090b")
+                      : (isCyberpunk ? "#0f172a" : isTerminal ? "#09090b" : isModern ? "rgba(255,255,255,0.92)" : "#ffffff"),
+                    color: isUser
+                      ? (isCyberpunk ? "#0f172a" : "#ffffff")
+                      : (isCyberpunk ? "#38bdf8" : isTerminal ? "#22c55e" : "#09090b"),
+                    border: isNeobrutalist
+                      ? "2px solid #09090b"
+                      : isCyberpunk
+                      ? (isUser ? "2px solid #06b6d4" : "2px solid #a855f7")
+                      : isTerminal
+                      ? "1px solid #22c55e"
+                      : isModern
+                      ? "1px solid rgba(255,255,255,0.6)"
+                      : "1px solid #e4e4e7",
+                    boxShadow: isNeobrutalist
+                      ? "3px 3px 0px #09090b"
+                      : isCyberpunk
+                      ? "0 0 12px rgba(168,85,247,0.5)"
+                      : isTerminal
+                      ? "0 0 8px rgba(34,197,94,0.3)"
+                      : isModern
+                      ? "0 8px 24px rgba(0,0,0,0.08)"
+                      : "0 2px 8px rgba(0,0,0,0.04)",
                     backdropFilter: isModern ? "blur(16px)" : "none",
-                    borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                    fontFamily: isTerminal ? "monospace" : "inherit",
+                    borderRadius: isTerminal ? 4 : (isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px"),
                   }}
                 >
                   {m.content}
@@ -412,10 +435,26 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
               alignItems: "center",
               gap: 8,
               padding: "6px 6px 6px 16px",
-              borderRadius: 9999,
-              background: isModern ? "rgba(255,255,255,0.92)" : "#ffffff",
-              border: isNeobrutalist ? "2.5px solid #09090b" : isModern ? "1px solid rgba(0,0,0,0.1)" : "1px solid #e4e4e7",
-              boxShadow: isNeobrutalist ? "3.5px 3.5px 0px #09090b" : isModern ? "0 10px 28px rgba(0,0,0,0.1)" : "0 2px 10px rgba(0,0,0,0.05)",
+              borderRadius: isTerminal ? 4 : 9999,
+              background: isCyberpunk ? "#0f172a" : isTerminal ? "#09090b" : isModern ? "rgba(255,255,255,0.92)" : "#ffffff",
+              border: isNeobrutalist
+                ? "2.5px solid #09090b"
+                : isCyberpunk
+                ? "2px solid #a855f7"
+                : isTerminal
+                ? "1.5px solid #22c55e"
+                : isModern
+                ? "1px solid rgba(0,0,0,0.1)"
+                : "1px solid #e4e4e7",
+              boxShadow: isNeobrutalist
+                ? "3.5px 3.5px 0px #09090b"
+                : isCyberpunk
+                ? "0 0 16px rgba(168,85,247,0.6)"
+                : isTerminal
+                ? "0 0 10px rgba(34,197,94,0.3)"
+                : isModern
+                ? "0 10px 28px rgba(0,0,0,0.1)"
+                : "0 2px 10px rgba(0,0,0,0.05)",
               backdropFilter: isModern ? "blur(16px)" : "none",
             }}
           >
@@ -424,19 +463,28 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
               placeholder="Ask something…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              style={{ flex: 1, border: 0, outline: "none", background: "transparent", fontSize: ".84rem", color: "#09090b" }}
+              style={{
+                flex: 1,
+                border: 0,
+                outline: "none",
+                background: "transparent",
+                fontSize: ".84rem",
+                color: isCyberpunk ? "#38bdf8" : isTerminal ? "#22c55e" : "#09090b",
+                fontFamily: isTerminal ? "monospace" : "inherit",
+              }}
             />
             <button
               type="submit"
               style={{
                 border: 0,
-                background: isNeobrutalist ? "#09090b" : "transparent",
-                color: isNeobrutalist ? "#ffffff" : "#09090b",
-                borderRadius: isNeobrutalist ? 9999 : 0,
-                padding: isNeobrutalist ? "6px 16px" : "6px 10px",
+                background: isNeobrutalist ? "#09090b" : isCyberpunk ? "#a855f7" : isTerminal ? "#22c55e" : "transparent",
+                color: isNeobrutalist ? "#ffffff" : isCyberpunk ? "#0f172a" : isTerminal ? "#09090b" : "#09090b",
+                borderRadius: isTerminal ? 2 : (isNeobrutalist || isCyberpunk ? 9999 : 0),
+                padding: isNeobrutalist || isCyberpunk ? "6px 16px" : "6px 10px",
                 fontWeight: 800,
                 fontSize: ".8rem",
                 cursor: "pointer",
+                fontFamily: isTerminal ? "monospace" : "inherit",
               }}
             >
               Send
