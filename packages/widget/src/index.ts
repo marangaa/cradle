@@ -338,10 +338,10 @@ class CradleCharacter extends HTMLElementBase {
       '.panel ::slotted(*){align-self:stretch;width:100%;box-sizing:border-box}',
 
       /* Floating Unbound Chat Surface */
-      '.built-in-chat{width:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;background:transparent;overflow:hidden}',
+      '.built-in-chat{width:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;background:transparent;overflow:visible}',
 
       /* Messages Stream */
-      '.chat-messages{display:flex;flex-direction:column;gap:10px;padding:4px;max-height:calc(100vh - 210px);min-height:80px;overflow-y:auto;scrollbar-width:thin}',
+      '.chat-messages{display:flex;flex-direction:column;gap:10px;padding:4px;max-height:calc(100vh - 210px);min-height:40px;overflow-y:auto;scrollbar-width:thin}',
       '.msg{max-width:85%;padding:10px 14px;font-size:0.86rem;line-height:1.45;word-break:break-word;white-space:pre-wrap;box-sizing:border-box}',
       
       /* User Message Bubble */

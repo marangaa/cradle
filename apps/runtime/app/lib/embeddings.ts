@@ -1,6 +1,6 @@
-import { google } from "@ai-sdk/google";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { embedMany } from "ai";
+import { google } from "./google";
 import { store } from "./store";
 
 /**

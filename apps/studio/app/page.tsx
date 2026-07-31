@@ -359,7 +359,7 @@ function CharacterPreview({ character, companion, overrideState }: { character: 
     setMessages((prev) => [
       ...prev,
       { role: "user", content: text },
-      { role: "assistant", content: `(Studio Preview) Ready to help with "${text}" on your live site!` },
+      { role: "assistant", content: `I'll be ready to answer questions about ${character.displayName || "your business"} live on your site!` },
     ]);
   }
 

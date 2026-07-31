@@ -1,5 +1,5 @@
-import { google } from "@ai-sdk/google";
 import { generateText } from "ai";
+import { google } from "../../../lib/google";
 import { store } from "../../../lib/store";
 
 export const maxDuration = 30;
