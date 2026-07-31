@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 type RuntimeError = { error?: string };
 
 function getRuntimeUrl() {
-  return process.env.CRADLE_RUNTIME_URL || "http://localhost:3002";
+  return process.env.NEXT_PUBLIC_RUNTIME_URL || process.env.CRADLE_RUNTIME_URL || "https://cradle-c2rh.onrender.com";
 }
 
 
@@ -114,4 +114,8 @@ export async function selectInstallationCompanion(installationId: string, slug: 
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ provider: "petdex", slug }),
   });
+}
+
+export async function getInstallationUsage(installationId: string) {
+  return runtimeRequest<{ installationId: string; periodStart: string; conversationCount: number; messageCount: number; limit: number }>(`/api/installations/${installationId}/usage`);
 }

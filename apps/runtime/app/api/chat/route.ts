@@ -6,7 +6,7 @@ import { store } from "../../lib/store";
 
 export const maxDuration = 60;
 
-const FREE_TIER_MONTHLY_LIMIT = 500;
+const FREE_TIER_MONTHLY_LIMIT = 99;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -58,13 +58,16 @@ export async function POST(req: Request) {
       );
     }
 
-    await store.touchVisitor(installationId, visitorId);
-    const usage = await store.incrementUsage(installationId);
+    const existingConversation = await store.getConversation(visitorId);
+    const isNewConversation = !existingConversation || existingConversation.messages.length === 0;
 
-    if (usage.messageCount > FREE_TIER_MONTHLY_LIMIT) {
-      console.warn(`[Chat API] Monthly quota exceeded for installation: ${installationId} (${usage.messageCount}/${FREE_TIER_MONTHLY_LIMIT})`);
+    await store.touchVisitor(installationId, visitorId);
+    const usage = await store.incrementUsage(installationId, isNewConversation);
+
+    if (usage.conversationCount > FREE_TIER_MONTHLY_LIMIT) {
+      console.warn(`[Chat API] Monthly conversation quota exceeded for installation: ${installationId} (${usage.conversationCount}/${FREE_TIER_MONTHLY_LIMIT})`);
       return new Response(
-        JSON.stringify({ error: "Monthly quota exceeded. Upgrade to Qualra for unlimited interactions." }),
+        JSON.stringify({ error: "Monthly conversation limit reached (99/99 conversations). Upgrade to Qualra for unlimited interactions." }),
         { status: 429, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }

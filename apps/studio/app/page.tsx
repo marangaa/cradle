@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteOwnedInstallation,
   getInstallationForStudio,
+  getInstallationUsage,
   getPetdexCatalog,
   getRuntimeHealth,
   listOwnedInstallations,
@@ -97,7 +98,8 @@ type KindFilter = "all" | "character" | "creature" | "object";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL || "http://localhost:3002";
+const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL || process.env.CRADLE_RUNTIME_URL || "https://cradle-c2rh.onrender.com";
+const runtime = RUNTIME_URL;
 
 const KIND_LABELS: Record<KindFilter, string> = {
   all: "All", character: "Characters", creature: "Creatures", object: "Objects",
@@ -364,7 +366,7 @@ function CharacterPreview({
 
   useEffect(() => {
     if (!installationId) return;
-    const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
+    const runtimeUrl = RUNTIME_URL;
     console.log(`[Studio Preview] Fetching initial greeting for installationId: ${installationId}, visitorId: ${visitorId}`);
     fetch(`${runtimeUrl}/api/chat/init`, {
       method: "POST",
@@ -415,7 +417,7 @@ function CharacterPreview({
     setIsStreaming(true);
 
     try {
-      const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
+    const runtimeUrl = RUNTIME_URL;
       const response = await fetch(`${runtimeUrl}/api/chat`, {
         method: "POST",
         headers: {
@@ -970,6 +972,16 @@ export default function StudioHome() {
   });
 
   /**
+   * Monthly usage metrics (99 conversations / 30 days).
+   */
+  const { data: usageData } = useQuery({
+    queryKey: ["installation-usage", session?.installation.id],
+    queryFn: () => getInstallationUsage(session!.installation.id),
+    enabled: Boolean(session?.installation.id),
+    refetchInterval: 15_000,
+  });
+
+  /**
    * Paginated Petdex catalog — server-side filtering & pagination (24 per page).
    */
   const {
@@ -1376,6 +1388,46 @@ export default function StudioHome() {
                 <p>Give your character a name and select a visual theme for your site.</p>
               </div>
               <div className="shape-layout">
+                {/* ── Monthly Conversations Meter ── */}
+                <div className="usage-meter-card" style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  padding: "16px 20px",
+                  border: "2px solid var(--ink)",
+                  background: "var(--white)",
+                  boxShadow: "3.5px 3.5px 0px var(--ink)",
+                  marginBottom: 16,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: "1.1rem" }}>⚡</span>
+                      <strong style={{ fontSize: ".85rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: ".04em", fontFamily: "var(--mono)" }}>
+                        Monthly Conversations
+                      </strong>
+                    </div>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: ".88rem", fontWeight: 800 }}>
+                      {usageData?.conversationCount ?? 0} / {usageData?.limit ?? 99} used
+                    </span>
+                  </div>
+
+                  <div style={{ height: 12, width: "100%", background: "#f4f4f0", border: "2px solid var(--ink)", overflow: "hidden", position: "relative" }}>
+                    <div style={{
+                      height: "100%",
+                      width: `${Math.min(((usageData?.conversationCount ?? 0) / (usageData?.limit ?? 99)) * 100, 100)}%`,
+                      background: (usageData?.conversationCount ?? 0) >= (usageData?.limit ?? 99) ? "#ef4444" : (usageData?.conversationCount ?? 0) > 80 ? "#f59e0b" : "var(--yellow)",
+                      transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                    }} />
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".72rem", color: "var(--muted)", fontWeight: 600 }}>
+                    <span>Resets automatically every 30 days</span>
+                    <span style={{ fontFamily: "var(--mono)", fontWeight: 700, color: (usageData?.conversationCount ?? 0) >= 99 ? "#ef4444" : "var(--ink)" }}>
+                      {Math.max((usageData?.limit ?? 99) - (usageData?.conversationCount ?? 0), 0)} conversations remaining
+                    </span>
+                  </div>
+                </div>
+
                 <form className="character-form" onSubmit={saveCharacter}>
                   <div className="theme-grid-container">
                     <span className="grid-label">Character Name</span>

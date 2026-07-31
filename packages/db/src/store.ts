@@ -36,8 +36,10 @@ export interface CradleStore {
   /** Cosine-similarity search over that installation's chunks, most relevant first. */
   searchKnowledgeChunks(installationId: string, queryEmbedding: number[], topK: number): Promise<KnowledgeChunk[]>;
 
-  /** Atomically increments the installation's message counter (rolling over stale periods), returning the post-increment state. */
-  incrementUsage(installationId: string): Promise<UsageCounter>;
+  /** Retrieves the installation's current usage counter for the active 30-day billing cycle. */
+  getUsage(installationId: string): Promise<UsageCounter>;
+  /** Atomically increments the installation's counter (rolling over stale periods), returning the post-increment state. */
+  incrementUsage(installationId: string, isNewConversation?: boolean): Promise<UsageCounter>;
 
   /** Cheap connectivity probe used by the health-check route — throws if the store is unreachable. */
   ping(): Promise<void>;
@@ -106,13 +108,26 @@ export class MemoryStore implements CradleStore {
       .map(({ chunk }) => chunk);
   }
 
-  async incrementUsage(installationId: string) {
+  async getUsage(installationId: string): Promise<UsageCounter> {
+    const now = new Date();
+    const existing = this.usage.get(installationId);
+    if (!existing || now.getTime() - new Date(existing.periodStart).getTime() > USAGE_PERIOD_DAYS * MS_PER_DAY) {
+      return { installationId, periodStart: now.toISOString(), conversationCount: 0, messageCount: 0 };
+    }
+    return existing;
+  }
+
+  async incrementUsage(installationId: string, isNewConversation = false): Promise<UsageCounter> {
     const now = new Date();
     const existing = this.usage.get(installationId);
     const stale = !existing || now.getTime() - new Date(existing.periodStart).getTime() > USAGE_PERIOD_DAYS * MS_PER_DAY;
     const next: UsageCounter = stale
-      ? { installationId, periodStart: now.toISOString(), messageCount: 1 }
-      : { ...existing, messageCount: existing.messageCount + 1 };
+      ? { installationId, periodStart: now.toISOString(), conversationCount: isNewConversation ? 1 : 0, messageCount: 1 }
+      : {
+          ...existing,
+          conversationCount: (existing.conversationCount ?? 0) + (isNewConversation ? 1 : 0),
+          messageCount: existing.messageCount + 1,
+        };
     this.usage.set(installationId, next);
     return next;
   }
@@ -325,22 +340,63 @@ export class PostgresStore implements CradleStore {
     return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
   }
 
-  async incrementUsage(installationId: string): Promise<UsageCounter> {
+  async getUsage(installationId: string): Promise<UsageCounter> {
+    const existing = await this.database.query.usageCounters.findFirst({ where: eq(usageCounters.installationId, installationId) });
+    const now = new Date();
+    if (!existing || now.getTime() - existing.periodStart.getTime() > USAGE_PERIOD_DAYS * MS_PER_DAY) {
+      return { installationId, periodStart: now.toISOString(), conversationCount: 0, messageCount: 0 };
+    }
+    return {
+      installationId,
+      periodStart: existing.periodStart.toISOString(),
+      conversationCount: existing.conversationCount ?? 0,
+      messageCount: existing.messageCount ?? 0,
+    };
+  }
+
+  async incrementUsage(installationId: string, isNewConversation = false): Promise<UsageCounter> {
     return this.database.transaction(async (tx) => {
       const existing = await tx.query.usageCounters.findFirst({ where: eq(usageCounters.installationId, installationId) });
       const now = new Date();
       const stale = !existing || now.getTime() - existing.periodStart.getTime() > USAGE_PERIOD_DAYS * MS_PER_DAY;
 
       if (!existing) {
-        const [row] = await tx.insert(usageCounters).values({ installationId, periodStart: now, messageCount: 1 }).returning();
-        return { installationId, periodStart: row!.periodStart.toISOString(), messageCount: row!.messageCount };
+        const [row] = await tx.insert(usageCounters).values({
+          installationId,
+          periodStart: now,
+          conversationCount: isNewConversation ? 1 : 0,
+          messageCount: 1,
+        }).returning();
+        return {
+          installationId,
+          periodStart: row!.periodStart.toISOString(),
+          conversationCount: row!.conversationCount,
+          messageCount: row!.messageCount,
+        };
       }
       if (stale) {
-        const [row] = await tx.update(usageCounters).set({ periodStart: now, messageCount: 1 }).where(eq(usageCounters.installationId, installationId)).returning();
-        return { installationId, periodStart: row!.periodStart.toISOString(), messageCount: row!.messageCount };
+        const [row] = await tx.update(usageCounters).set({
+          periodStart: now,
+          conversationCount: isNewConversation ? 1 : 0,
+          messageCount: 1,
+        }).where(eq(usageCounters.installationId, installationId)).returning();
+        return {
+          installationId,
+          periodStart: row!.periodStart.toISOString(),
+          conversationCount: row!.conversationCount,
+          messageCount: row!.messageCount,
+        };
       }
-      const [row] = await tx.update(usageCounters).set({ messageCount: existing.messageCount + 1 }).where(eq(usageCounters.installationId, installationId)).returning();
-      return { installationId, periodStart: row!.periodStart.toISOString(), messageCount: row!.messageCount };
+      const [row] = await tx.update(usageCounters).set({
+        conversationCount: (existing.conversationCount ?? 0) + (isNewConversation ? 1 : 0),
+        messageCount: existing.messageCount + 1,
+      }).where(eq(usageCounters.installationId, installationId)).returning();
+      return {
+        installationId,
+        periodStart: row!.periodStart.toISOString(),
+        conversationCount: row!.conversationCount,
+        messageCount: row!.messageCount,
+      };
     });
   }
 }

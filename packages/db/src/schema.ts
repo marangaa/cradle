@@ -124,5 +124,6 @@ export const knowledgeChunks = pgTable("knowledge_chunks", {
 export const usageCounters = pgTable("usage_counters", {
   installationId: uuid("installation_id").primaryKey().references(() => installations.id, { onDelete: "cascade" }),
   periodStart: timestamp("period_start", { withTimezone: true }).defaultNow().notNull(),
+  conversationCount: integer("conversation_count").default(0).notNull(),
   messageCount: integer("message_count").default(0).notNull(),
 });

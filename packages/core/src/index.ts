@@ -165,9 +165,10 @@ export interface KnowledgeChunk {
   createdAt: string;
 }
 
-/** Free-tier usage tracking, reset on each `periodStart` rollover. */
+/** Free-tier usage tracking, reset on each `periodStart` rollover (99 conversations / 30 days). */
 export interface UsageCounter {
   installationId: string;
   periodStart: string;
+  conversationCount: number;
   messageCount: number;
 }
