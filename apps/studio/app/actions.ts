@@ -25,6 +25,7 @@ async function runtimeRequest<T>(path: string, init: RequestInit = {}, authentic
   const response = await fetch(new URL(path, getRuntimeUrl()), {
     ...init,
     cache: "no-store",
+    signal: init.signal ?? AbortSignal.timeout(45_000),
     headers: {
       ...init.headers,
       ...(cookie ? { cookie } : {}),
