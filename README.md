@@ -118,11 +118,10 @@ pnpm install
 ### Studio environment (`apps/studio/.env`)
 
 ```text
-NEXT_PUBLIC_CRADLE_RUNTIME_URL=http://localhost:3002
+NEXT_PUBLIC_RUNTIME_URL=http://localhost:3002
 DATABASE_URL=postgres://...
 BETTER_AUTH_SECRET=<random 32-byte secret — same value in both apps>
 BETTER_AUTH_URL=http://localhost:3004
-CRADLE_RUNTIME_URL=http://localhost:3002
 ```
 
 ### Runtime environment (`apps/runtime/.env`)
