@@ -721,16 +721,14 @@ function CharacterStatePlayground({ onTestState }: { onTestState(state: PetdexSt
 }
 
 function InstallCode({ installationId, copied, onCopy, onTestState }: { installationId: string; copied: boolean; onCopy(v: string): Promise<void>; onTestState(state: PetdexState): void }) {
-  const [tab, setTab] = useState<"script" | "npm" | "types">("script");
+  const [tab, setTab] = useState<"script" | "npm">("script");
   const runtime = process.env.NEXT_PUBLIC_CRADLE_RUNTIME_URL || process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
 
   const scriptSnippet = `<script src="${runtime}/widget.js" data-site-id="${installationId}"></script>`;
 
-  const npmSnippet = `# 1. Install package\npnpm add @maranga/cradle\n\n# 2. Import & render in React / Next.js\n# (no <script src> tag here, so the API origin can't be auto-detected — pass it explicitly)\nimport "@maranga/cradle";\n\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n/>`;
+  const npmSnippet = `# 1. Install package\npnpm add @maranga/cradle\n\n# 2. Import & render in React / Next.js / HTML\nimport "@maranga/cradle";\n\n<cradle-character\n  site-id="${installationId}"\n  api-base="${runtime}"\n/>`;
 
-  const typesSnippet = `// React 19 / Next.js 15+ Custom Element TypeScript Declaration\n// Add to layout.tsx or global.d.ts if TypeScript flags <cradle-character>:\n\ndeclare module "react" {\n  namespace JSX {\n    interface IntrinsicElements {\n      "cradle-character": React.DetailedHTMLProps<\n        React.HTMLAttributes<HTMLElement> & {\n          "site-id"?: string;\n          "api-base"?: string;\n          placement?: "floating" | "inline";\n        },\n        HTMLElement\n      >;\n    }\n  }\n}`;
-
-  const activeSnippet = tab === "script" ? scriptSnippet : tab === "npm" ? npmSnippet : typesSnippet;
+  const activeSnippet = tab === "script" ? scriptSnippet : npmSnippet;
 
   return (
     <section className="install-code">
@@ -757,19 +755,11 @@ function InstallCode({ installationId, copied, onCopy, onTestState }: { installa
         >
           NPM Package (@maranga/cradle)
         </button>
-        <button
-          type="button"
-          className={`button${tab === "types" ? " primary" : ""}`}
-          onClick={() => setTab("types")}
-          style={{ fontSize: ".75rem", padding: "6px 12px" }}
-        >
-          React 19 / TS Declaration
-        </button>
       </div>
 
       <pre><code>{activeSnippet}</code></pre>
       <button className="button primary" style={{ marginTop: 14 }} onClick={() => void onCopy(activeSnippet)}>
-        {copied ? "Copied to clipboard" : `Copy ${tab === "script" ? "script tag" : tab === "npm" ? "NPM snippet" : "TS declaration"}`}
+        {copied ? "Copied to clipboard" : `Copy ${tab === "script" ? "script tag" : "NPM snippet"}`}
       </button>
 
       <CharacterStatePlayground onTestState={onTestState} />
