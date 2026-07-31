@@ -317,7 +317,22 @@ export class PostgresStore implements CradleStore {
     await this.database.delete(visitorMemories).where(and(eq(visitorMemories.visitorId, visitorId), eq(visitorMemories.key, key)));
   }
 
+  private vectorDimEnsured = 0;
+
+  private async ensureVectorDimension(dim: number) {
+    if (this.vectorDimEnsured === dim) return;
+    try {
+      await this.database.execute(sql`ALTER TABLE knowledge_chunks ALTER COLUMN embedding TYPE vector(${sql.raw(String(dim))});`);
+      this.vectorDimEnsured = dim;
+    } catch (err) {
+      console.warn(`[PostgresStore] Could not alter vector dimension to ${dim}:`, err);
+    }
+  }
+
   async replaceKnowledgeChunks(installationId: string, chunks: Array<{ id: string; pageUrl: string; pageTitle: string; chunkText: string; embedding: number[] }>): Promise<void> {
+    if (chunks.length > 0 && chunks[0]?.embedding) {
+      await this.ensureVectorDimension(chunks[0].embedding.length);
+    }
     await this.database.transaction(async (tx) => {
       await tx.delete(knowledgeChunks).where(eq(knowledgeChunks.installationId, installationId));
       if (chunks.length === 0) return;

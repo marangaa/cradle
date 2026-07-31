@@ -114,7 +114,7 @@ export const knowledgeChunks = pgTable("knowledge_chunks", {
   pageUrl: text("page_url").notNull(),
   pageTitle: text("page_title").notNull(),
   chunkText: text("chunk_text").notNull(),
-  embedding: vector("embedding", { dimensions: 768 }),
+  embedding: vector("embedding", { dimensions: 3072 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("knowledge_chunks_installation_idx").on(table.installationId),
