@@ -36,9 +36,18 @@ async function runtimeRequest<T>(path: string, init: RequestInit = {}, authentic
       ...(cookie ? { cookie } : {}),
     },
   });
-  const payload = await response.json() as T & RuntimeError;
-  if (!response.ok) throw new Error(payload.error ?? "Runtime request failed.");
-  return payload;
+
+  const text = await response.text();
+  let payload: (T & RuntimeError) | null = null;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    console.error(`[Studio Action] Non-JSON response from Runtime (${response.status} ${response.statusText}):`, text.slice(0, 300));
+    throw new Error(`Runtime returned non-JSON response (${response.status} ${response.statusText}). Check Runtime server logs.`);
+  }
+
+  if (!response.ok) throw new Error(payload?.error ?? `Runtime request failed with status ${response.status}`);
+  return payload!;
 }
 
 export async function getRuntimeHealth() {

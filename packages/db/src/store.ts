@@ -317,22 +317,7 @@ export class PostgresStore implements CradleStore {
     await this.database.delete(visitorMemories).where(and(eq(visitorMemories.visitorId, visitorId), eq(visitorMemories.key, key)));
   }
 
-  private vectorDimEnsured = 0;
-
-  private async ensureVectorDimension(dim: number) {
-    if (this.vectorDimEnsured === dim) return;
-    try {
-      await this.database.execute(sql`ALTER TABLE knowledge_chunks ALTER COLUMN embedding TYPE vector(${sql.raw(String(dim))});`);
-      this.vectorDimEnsured = dim;
-    } catch (err) {
-      console.warn(`[PostgresStore] Could not alter vector dimension to ${dim}:`, err);
-    }
-  }
-
   async replaceKnowledgeChunks(installationId: string, chunks: Array<{ id: string; pageUrl: string; pageTitle: string; chunkText: string; embedding: number[] }>): Promise<void> {
-    if (chunks.length > 0 && chunks[0]?.embedding) {
-      await this.ensureVectorDimension(chunks[0].embedding.length);
-    }
     await this.database.transaction(async (tx) => {
       await tx.delete(knowledgeChunks).where(eq(knowledgeChunks.installationId, installationId));
       if (chunks.length === 0) return;
@@ -355,88 +340,64 @@ export class PostgresStore implements CradleStore {
     return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
   }
 
-  private conversationColumnEnsured = false;
-
-  private async ensureConversationCountColumn() {
-    if (this.conversationColumnEnsured) return;
-    try {
-      await this.database.execute(sql`ALTER TABLE usage_counters ADD COLUMN IF NOT EXISTS conversation_count INTEGER DEFAULT 0 NOT NULL;`);
-      this.conversationColumnEnsured = true;
-    } catch (err) {
-      console.warn("[PostgresStore] Could not auto-add conversation_count column:", err);
-    }
-  }
-
   async getUsage(installationId: string): Promise<UsageCounter> {
-    await this.ensureConversationCountColumn();
-    try {
-      const existing = await this.database.query.usageCounters.findFirst({ where: eq(usageCounters.installationId, installationId) });
-      const now = new Date();
-      if (!existing || now.getTime() - existing.periodStart.getTime() > USAGE_PERIOD_DAYS * MS_PER_DAY) {
-        return { installationId, periodStart: now.toISOString(), conversationCount: 0, messageCount: 0 };
-      }
-      return {
-        installationId,
-        periodStart: existing.periodStart.toISOString(),
-        conversationCount: existing.conversationCount ?? 0,
-        messageCount: existing.messageCount ?? 0,
-      };
-    } catch (err) {
-      console.warn("[PostgresStore] getUsage error fallback:", err);
-      return { installationId, periodStart: new Date().toISOString(), conversationCount: 0, messageCount: 0 };
+    const existing = await this.database.query.usageCounters.findFirst({ where: eq(usageCounters.installationId, installationId) });
+    const now = new Date();
+    if (!existing || now.getTime() - existing.periodStart.getTime() > USAGE_PERIOD_DAYS * MS_PER_DAY) {
+      return { installationId, periodStart: now.toISOString(), conversationCount: 0, messageCount: 0 };
     }
+    return {
+      installationId,
+      periodStart: existing.periodStart.toISOString(),
+      conversationCount: existing.conversationCount,
+      messageCount: existing.messageCount,
+    };
   }
 
   async incrementUsage(installationId: string, isNewConversation = false): Promise<UsageCounter> {
-    await this.ensureConversationCountColumn();
-    try {
-      return await this.database.transaction(async (tx) => {
-        const existing = await tx.query.usageCounters.findFirst({ where: eq(usageCounters.installationId, installationId) });
-        const now = new Date();
-        const stale = !existing || now.getTime() - existing.periodStart.getTime() > USAGE_PERIOD_DAYS * MS_PER_DAY;
+    return this.database.transaction(async (tx) => {
+      const existing = await tx.query.usageCounters.findFirst({ where: eq(usageCounters.installationId, installationId) });
+      const now = new Date();
+      const stale = !existing || now.getTime() - existing.periodStart.getTime() > USAGE_PERIOD_DAYS * MS_PER_DAY;
 
-        if (!existing) {
-          const [row] = await tx.insert(usageCounters).values({
-            installationId,
-            periodStart: now,
-            conversationCount: isNewConversation ? 1 : 0,
-            messageCount: 1,
-          }).returning();
-          return {
-            installationId,
-            periodStart: row!.periodStart.toISOString(),
-            conversationCount: row!.conversationCount ?? (isNewConversation ? 1 : 0),
-            messageCount: row!.messageCount ?? 1,
-          };
-        }
-        if (stale) {
-          const [row] = await tx.update(usageCounters).set({
-            periodStart: now,
-            conversationCount: isNewConversation ? 1 : 0,
-            messageCount: 1,
-          }).where(eq(usageCounters.installationId, installationId)).returning();
-          return {
-            installationId,
-            periodStart: row!.periodStart.toISOString(),
-            conversationCount: row!.conversationCount ?? (isNewConversation ? 1 : 0),
-            messageCount: row!.messageCount ?? 1,
-          };
-        }
+      if (!existing) {
+        const [row] = await tx.insert(usageCounters).values({
+          installationId,
+          periodStart: now,
+          conversationCount: isNewConversation ? 1 : 0,
+          messageCount: 1,
+        }).returning();
+        return {
+          installationId,
+          periodStart: row!.periodStart.toISOString(),
+          conversationCount: row!.conversationCount,
+          messageCount: row!.messageCount,
+        };
+      }
+      if (stale) {
         const [row] = await tx.update(usageCounters).set({
-          conversationCount: (existing.conversationCount ?? 0) + (isNewConversation ? 1 : 0),
-          messageCount: existing.messageCount + 1,
+          periodStart: now,
+          conversationCount: isNewConversation ? 1 : 0,
+          messageCount: 1,
         }).where(eq(usageCounters.installationId, installationId)).returning();
         return {
           installationId,
           periodStart: row!.periodStart.toISOString(),
-          conversationCount: row!.conversationCount ?? 0,
-          messageCount: row!.messageCount ?? 0,
+          conversationCount: row!.conversationCount,
+          messageCount: row!.messageCount,
         };
-      });
-    } catch (err) {
-      console.warn("[PostgresStore] incrementUsage error fallback:", err);
-      return { installationId, periodStart: new Date().toISOString(), conversationCount: 1, messageCount: 1 };
-    }
+      }
+      const [row] = await tx.update(usageCounters).set({
+        conversationCount: existing.conversationCount + (isNewConversation ? 1 : 0),
+        messageCount: existing.messageCount + 1,
+      }).where(eq(usageCounters.installationId, installationId)).returning();
+      return {
+        installationId,
+        periodStart: row!.periodStart.toISOString(),
+        conversationCount: row!.conversationCount,
+        messageCount: row!.messageCount,
+      };
+    });
   }
 }
 
