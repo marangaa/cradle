@@ -345,38 +345,52 @@ function CharacterPreview({
   installationId?: string;
   brandName?: string;
 }) {
+  const visitorId = useMemo(() => {
+    if (typeof window === "undefined") return "preview-visitor";
+    const key = `cradle_studio_visitor_${installationId || "default"}`;
+    let id = sessionStorage.getItem(key);
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem(key, id);
+    }
+    return id;
+  }, [installationId]);
+
   const [state, setState] = useState<PreviewState>("idle");
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([
-    { role: "assistant", content: `Hi there! 👋 I'm ${character.displayName || "your AI companion"}. Ask me anything about ${brandName || "our business"}!` },
-  ]);
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
 
   useEffect(() => {
     if (!installationId) return;
     const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
-    console.log(`[Studio Preview] Fetching initial greeting for installationId: ${installationId}`);
+    console.log(`[Studio Preview] Fetching initial greeting for installationId: ${installationId}, visitorId: ${visitorId}`);
     fetch(`${runtimeUrl}/api/chat/init`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         "x-cradle-installation-id": installationId,
-        "x-cradle-visitor-id": "00000000-0000-0000-0000-000000000001",
+        "x-cradle-visitor-id": visitorId,
       },
-      body: JSON.stringify({ installationId, visitorId: "00000000-0000-0000-0000-000000000001" }),
+      body: JSON.stringify({ installationId, visitorId }),
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         console.log(`[Studio Preview] Greeting received:`, data);
         if (data?.greeting) {
           setMessages([{ role: "assistant", content: data.greeting }]);
+        } else if (data?.isReturning) {
+          setMessages([{ role: "assistant", content: `Welcome back! 👋 How can I help you today?` }]);
+        } else {
+          setMessages([{ role: "assistant", content: `Hi there! 👋 Ask me anything about ${brandName || "our site"}.` }]);
         }
       })
       .catch((err) => {
         console.warn(`[Studio Preview] Greeting fetch failed:`, err);
+        setMessages([{ role: "assistant", content: `Hi there! 👋 Ask me anything about ${brandName || "our site"}.` }]);
       });
-  }, [installationId]);
+  }, [installationId, visitorId, brandName]);
 
   const activeState = overrideState ?? state;
   const theme = character.theme ?? "neobrutalist";
@@ -407,7 +421,7 @@ function CharacterPreview({
         headers: {
           "content-type": "application/json",
           ...(installationId ? { "x-cradle-installation-id": installationId } : {}),
-          "x-cradle-visitor-id": "00000000-0000-0000-0000-000000000001",
+          "x-cradle-visitor-id": visitorId,
         },
         body: JSON.stringify({
           messages: newMessages.map((m) => ({
@@ -417,7 +431,7 @@ function CharacterPreview({
             parts: [{ type: "text", text: m.content }],
           })),
           installationId,
-          visitorId: "00000000-0000-0000-0000-000000000001",
+          visitorId,
         }),
       });
 

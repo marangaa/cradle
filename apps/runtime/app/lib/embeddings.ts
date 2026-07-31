@@ -4,9 +4,9 @@ import { google } from "./google";
 import { store } from "./store";
 
 /**
- * Google's embedding model, per AI SDK @ai-sdk/google documentation.
+ * Google's embedding model, using gemini-embedding-001 per Google API v1beta support.
  */
-const EMBEDDING_MODEL = google.textEmbeddingModel("text-embedding-004");
+const EMBEDDING_MODEL = google.textEmbeddingModel("gemini-embedding-001");
 
 /**
  * LangChain RecursiveCharacterTextSplitter configured for Markdown parsing
