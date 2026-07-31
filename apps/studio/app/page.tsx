@@ -41,7 +41,7 @@ type PetdexState = keyof typeof STATE_ROWS;
 
 type Page = { url: string; title: string; markdown: string };
 
-type Character = { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "cyberpunk" | "terminal" | "minimal" };
+type Character = { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "cyberpunk" | "terminal" | "minimal" | "synthwave" | "paper" };
 type Installation = { id: string; name: string };
 type OwnedInstallation = {
   id: string;
@@ -1386,6 +1386,8 @@ export default function StudioHome() {
                         { id: "cyberpunk", label: "🌌 Cyberpunk", desc: "Neon glow & high contrast" },
                         { id: "terminal", label: "📟 Retro Terminal", desc: "Phosphor monospace" },
                         { id: "minimal", label: "▫️ Swiss Minimal", desc: "Clean typography" },
+                        { id: "synthwave", label: "🌆 80s Synthwave", desc: "Hot pink & neon sunset" },
+                        { id: "paper", label: "📜 E-Ink Paper", desc: "Warm parchment & serif" },
                       ].map((t) => {
                         const isSelected = (character.theme ?? "neobrutalist") === t.id;
                         return (

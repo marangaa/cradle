@@ -99,7 +99,7 @@ export async function saveInstallationKnowledge(installationId: string, included
 
 export async function saveInstallationCharacter(
   installationId: string,
-  character: { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "cyberpunk" | "terminal" | "minimal" }
+  character: { displayName: string; greeting?: string; theme?: "neobrutalist" | "modern" | "cyberpunk" | "terminal" | "minimal" | "synthwave" | "paper" }
 ) {
   return runtimeRequest<unknown>(`/api/installations/${installationId}/settings`, {
     method: "PATCH",
