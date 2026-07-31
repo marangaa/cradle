@@ -1,7 +1,7 @@
 import { streamText, tool, type UIMessage } from "ai";
 import { z } from "zod";
 import { embedQuery } from "../../lib/embeddings";
-import { google } from "../../lib/google";
+import { CRADLE_MODEL_ID, google } from "../../lib/google";
 import { store } from "../../lib/store";
 
 export const maxDuration = 60; // 60s timeout for multi-step tool calls
@@ -138,7 +138,7 @@ Directives:
     });
 
     const result = streamText({
-      model: google("gemini-2.5-flash"),
+      model: google(CRADLE_MODEL_ID),
       system: systemPrompt,
       messages: messages as any,
       tools: {

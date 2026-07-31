@@ -8,3 +8,5 @@ const apiKey =
 export const google = apiKey
   ? createGoogleGenerativeAI({ apiKey })
   : defaultGoogle;
+
+export const CRADLE_MODEL_ID = process.env.CRADLE_MODEL_ID || "gemini-flash-lite-latest";

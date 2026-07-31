@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { google } from "../../../lib/google";
+import { CRADLE_MODEL_ID, google } from "../../../lib/google";
 import { store } from "../../../lib/store";
 
 export const maxDuration = 30;
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       : "First time visiting.";
 
     const { text } = await generateText({
-      model: google("gemini-2.5-flash"),
+      model: google(CRADLE_MODEL_ID),
       system: `You are the official representative for ${brandName}.
 Generate a single, warm, personalized 1-sentence greeting for a website visitor.
 Do not use generic template text. Be energetic, natural, and welcoming.
