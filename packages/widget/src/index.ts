@@ -847,4 +847,9 @@ declare global {
       "cradle-character": CradleCharacterElementProps & Record<string, unknown>;
     }
   }
+  namespace React.JSX {
+    interface IntrinsicElements {
+      "cradle-character": CradleCharacterElementProps & Record<string, unknown>;
+    }
+  }
 }
