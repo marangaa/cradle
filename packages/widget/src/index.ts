@@ -295,10 +295,12 @@ class CradleCharacter extends HTMLElementBase {
   private scheduleNextCycleFrame() {
     if (this.cycleTimer) clearTimeout(this.cycleTimer);
     if (!this.cycling || this.explicitState || !this.atlas) return;
-    const state = STATE_ORDER[this.cycleStep % STATE_ORDER.length] ?? "idle";
+    const ambientSequence: PetdexState[] = ["idle", "waving", "idle", "jumping", "idle", "running-right", "idle", "running-left", "idle"];
+    const state = ambientSequence[this.cycleStep % ambientSequence.length] ?? "idle";
     this.cycleStep += 1;
     const durationMs = this.setVisualState(state);
-    this.cycleTimer = setTimeout(() => this.scheduleNextCycleFrame(), Math.max(durationMs, MIN_STATE_DURATION_MS));
+    const pauseMs = state === "idle" ? 3500 : Math.max(durationMs, 2000);
+    this.cycleTimer = setTimeout(() => this.scheduleNextCycleFrame(), pauseMs);
   }
 
   setVisualState(state: PetdexState): number {
@@ -573,22 +575,35 @@ class CradleCharacter extends HTMLElementBase {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let streamedContent = "";
+      let streamedRaw = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
-        streamedContent += chunk;
+        streamedRaw += chunk;
+
+        // Check for emote tag [cradle:emote:<emote>]
+        const emoteMatch = chunk.match(/\[cradle:emote:([a-z-]+)\]/i);
+        if (emoteMatch?.[1] && STATE_ORDER.includes(emoteMatch[1] as PetdexState)) {
+          const emote = emoteMatch[1] as PetdexState;
+          console.log(`[CradleWidget] setEmote triggered from stream: "${emote}"`);
+          this.explicitState = true;
+          this.setVisualState(emote);
+        }
+
+        // Clean out emote tags from visible chat text
+        const cleanedText = streamedRaw.replace(/\[cradle:emote:[a-z-]+\]/gi, "");
 
         const target = this.localMessages.find((m) => m.id === assistantMsgId);
         if (target) {
-          target.content = streamedContent || "…";
+          target.content = cleanedText || "…";
           this.renderStoredMessages();
         }
       }
 
-      console.log(`[CradleWidget] Stream finished cleanly. Total length: ${streamedContent.length} chars`);
+      const finalCleanText = streamedRaw.replace(/\[cradle:emote:[a-z-]+\]/gi, "");
+      console.log(`[CradleWidget] Stream finished cleanly. Total length: ${finalCleanText.length} chars`);
       this.saveStoredMessages();
       this.resolveAction(true);
     } catch (err: unknown) {

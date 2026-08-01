@@ -209,10 +209,12 @@
     scheduleNextCycleFrame() {
       if (this.cycleTimer) clearTimeout(this.cycleTimer);
       if (!this.cycling || this.explicitState || !this.atlas) return;
-      const state = STATE_ORDER[this.cycleStep % STATE_ORDER.length] ?? "idle";
+      const ambientSequence = ["idle", "waving", "idle", "jumping", "idle", "running-right", "idle", "running-left", "idle"];
+      const state = ambientSequence[this.cycleStep % ambientSequence.length] ?? "idle";
       this.cycleStep += 1;
       const durationMs = this.setVisualState(state);
-      this.cycleTimer = setTimeout(() => this.scheduleNextCycleFrame(), Math.max(durationMs, MIN_STATE_DURATION_MS));
+      const pauseMs = state === "idle" ? 3500 : Math.max(durationMs, 2e3);
+      this.cycleTimer = setTimeout(() => this.scheduleNextCycleFrame(), pauseMs);
     }
     setVisualState(state) {
       this.currentState = state;
@@ -437,19 +439,28 @@
         if (!res.body) throw new Error("No response body received.");
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
-        let streamedContent = "";
+        let streamedRaw = "";
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
-          streamedContent += chunk;
+          streamedRaw += chunk;
+          const emoteMatch = chunk.match(/\[cradle:emote:([a-z-]+)\]/i);
+          if (emoteMatch?.[1] && STATE_ORDER.includes(emoteMatch[1])) {
+            const emote = emoteMatch[1];
+            console.log(`[CradleWidget] setEmote triggered from stream: "${emote}"`);
+            this.explicitState = true;
+            this.setVisualState(emote);
+          }
+          const cleanedText = streamedRaw.replace(/\[cradle:emote:[a-z-]+\]/gi, "");
           const target = this.localMessages.find((m) => m.id === assistantMsgId);
           if (target) {
-            target.content = streamedContent || "\u2026";
+            target.content = cleanedText || "\u2026";
             this.renderStoredMessages();
           }
         }
-        console.log(`[CradleWidget] Stream finished cleanly. Total length: ${streamedContent.length} chars`);
+        const finalCleanText = streamedRaw.replace(/\[cradle:emote:[a-z-]+\]/gi, "");
+        console.log(`[CradleWidget] Stream finished cleanly. Total length: ${finalCleanText.length} chars`);
         this.saveStoredMessages();
         this.resolveAction(true);
       } catch (err) {

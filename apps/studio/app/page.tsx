@@ -8,6 +8,8 @@ import { authClient } from "./lib/auth-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+const ROOT_CRADLE_SITE_ID = "819f999b-fa84-4b53-81d9-b08fc707b315";
+
 /**
  * Canonical Petdex row -> state map, mirroring @cradle/widget. Duplicated here (rather than a
  * shared import) to avoid wiring a new cross-package dependency for this fix; keep both in sync
@@ -394,18 +396,19 @@ function CharacterPreview({
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
 
+  const activeInstallationId = installationId || ROOT_CRADLE_SITE_ID;
+
   useEffect(() => {
-    if (!installationId) return;
     const runtimeUrl = RUNTIME_URL;
-    console.log(`[Studio Preview] Fetching initial greeting for installationId: ${installationId}, visitorId: ${visitorId}`);
+    console.log(`[Studio Preview] Fetching initial greeting for installationId: ${activeInstallationId}, visitorId: ${visitorId}`);
     fetch(`${runtimeUrl}/api/chat/init`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-cradle-installation-id": installationId,
+        "x-cradle-installation-id": activeInstallationId,
         "x-cradle-visitor-id": visitorId,
       },
-      body: JSON.stringify({ installationId, visitorId }),
+      body: JSON.stringify({ installationId: activeInstallationId, visitorId }),
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -414,15 +417,39 @@ function CharacterPreview({
           setMessages([{ role: "assistant", content: data.greeting }]);
         } else if (data?.isReturning) {
           setMessages([{ role: "assistant", content: `Welcome back! 👋 How can I help you today?` }]);
-        } else {
+        } else if (installationId) {
           setMessages([{ role: "assistant", content: `Hi there! 👋 Ask me anything about ${brandName || "our site"}.` }]);
+        } else {
+          setMessages([{ role: "assistant", content: `Hi! I'm Cradle. 👋 Ask me anything about how to install @maranga/cradle or set up your character!` }]);
         }
       })
       .catch((err) => {
         console.warn(`[Studio Preview] Greeting fetch failed:`, err);
-        setMessages([{ role: "assistant", content: `Hi there! 👋 Ask me anything about ${brandName || "our site"}.` }]);
+        setMessages([
+          {
+            role: "assistant",
+            content: installationId
+              ? `Hi there! 👋 Ask me anything about ${brandName || "our site"}.`
+              : `Hi! I'm Cradle. 👋 Ask me anything about how to install @maranga/cradle or set up your character!`,
+          },
+        ]);
       });
-  }, [installationId, visitorId, brandName]);
+  }, [activeInstallationId, installationId, visitorId, brandName]);
+
+  // Autonomous ambient idle animation cycle when sitting idle
+  useEffect(() => {
+    if (overrideState || isStreaming) return;
+    const AMBIENT_IDLE_SEQUENCE: PetdexState[] = ["idle", "waving", "idle", "jumping", "idle", "running-right", "idle", "running-left", "idle"];
+    let step = 0;
+
+    const interval = setInterval(() => {
+      step++;
+      const nextState = AMBIENT_IDLE_SEQUENCE[step % AMBIENT_IDLE_SEQUENCE.length]!;
+      setState(nextState);
+    }, 6000);
+
+    return () => clearInterval(interval);
+  }, [overrideState, isStreaming]);
 
   const activeState = overrideState ?? state;
   const theme = character.theme ?? "neobrutalist";
@@ -443,16 +470,18 @@ function CharacterPreview({
 
     console.log(`[Studio Preview] Sending user message: "${text}"`);
     const newMessages = [...messages, { role: "user" as const, content: text }];
+    const targetInstallationId = activeInstallationId;
+
     setMessages([...newMessages, { role: "assistant" as const, content: "…" }]);
     setIsStreaming(true);
 
     try {
-    const runtimeUrl = RUNTIME_URL;
+      const runtimeUrl = RUNTIME_URL;
       const response = await fetch(`${runtimeUrl}/api/chat`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          ...(installationId ? { "x-cradle-installation-id": installationId } : {}),
+          "x-cradle-installation-id": targetInstallationId,
           "x-cradle-visitor-id": visitorId,
         },
         body: JSON.stringify({
@@ -462,7 +491,7 @@ function CharacterPreview({
             content: m.content,
             parts: [{ type: "text", text: m.content }],
           })),
-          installationId,
+          installationId: targetInstallationId,
           visitorId,
         }),
       });
@@ -476,16 +505,29 @@ function CharacterPreview({
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let assistantText = "";
+      let rawStreamed = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        assistantText += decoder.decode(value, { stream: true });
-        setMessages([...newMessages, { role: "assistant", content: assistantText || "…" }]);
+        const chunk = decoder.decode(value, { stream: true });
+        rawStreamed += chunk;
+
+        // Check for emote tag [cradle:emote:<emote>]
+        const emoteMatch = chunk.match(/\[cradle:emote:([a-z-]+)\]/i);
+        if (emoteMatch?.[1] && STATE_ORDER.includes(emoteMatch[1] as PetdexState)) {
+          const emote = emoteMatch[1] as PetdexState;
+          console.log(`[Studio Preview] setEmote triggered from stream: "${emote}"`);
+          setState(emote);
+        }
+
+        // Clean out emote tags from visible chat text
+        const cleanedText = rawStreamed.replace(/\[cradle:emote:[a-z-]+\]/gi, "");
+        setMessages([...newMessages, { role: "assistant", content: cleanedText || "…" }]);
       }
 
-      console.log(`[Studio Preview] Stream finished. Total content length: ${assistantText.length} chars`);
+      const finalCleanText = rawStreamed.replace(/\[cradle:emote:[a-z-]+\]/gi, "");
+      console.log(`[Studio Preview] Stream finished. Total content length: ${finalCleanText.length} chars`);
       setIsStreaming(false);
     } catch (err) {
       console.error(`[Studio Preview] sendMessage error:`, err);
@@ -945,6 +987,7 @@ export default function StudioHome() {
   // Workflow state
   const [screen, setScreen]               = useState<Screen>("connect");
   const [siteUrl, setSiteUrl]             = useState("");
+  const [additionalContext, setAdditionalContext] = useState("");
   const [session, setSession]             = useState<StudioSession | null>(null);
   const [playgroundState, setPlaygroundState] = useState<PetdexState | undefined>(undefined);
 
@@ -964,6 +1007,7 @@ export default function StudioHome() {
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
   const [claimModalOpen, setClaimModalOpen] = useState(false);
+  const [notesModalOpen, setNotesModalOpen] = useState(false);
 
   // ── Derived booleans & defaults ─────────────────────────────────────────────
   const reviewed   = (session?.knowledge.version ?? 0) > 1;
@@ -1090,11 +1134,12 @@ export default function StudioHome() {
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const cleanUrl = siteUrl.trim();
     begin("Reading your public site…");
     try {
       const payload = await runtimeFetch<{ installation: Installation; knowledge: Knowledge; brandProfile: BrandProfile | null }>("/onboarding", {
         method: "POST",
-        body: JSON.stringify({ url: siteUrl }),
+        body: JSON.stringify({ url: cleanUrl, additionalContext: additionalContext.trim() || undefined }),
       });
       persist({ installation: payload.installation, knowledge: payload.knowledge, character: makeCharacter(payload.installation.name), brandProfile: payload.brandProfile ?? null });
       setIncludedUrls(new Set((payload.knowledge.pages as Page[]).map((p: Page) => p.url)));
@@ -1385,12 +1430,12 @@ export default function StudioHome() {
             <section className="connect-screen">
               <div className="connect-copy">
                 <h1>Give your website a <em>character.</em></h1>
-                <p>An animated companion for your site. Connect your pages, pick a body from the catalog, and bring your site to life with one script tag.</p>
+                <p>An animated character for your site that learns your content and talks to your visitors.</p>
               </div>
               <div className="connect-card">
-                <span className="eyebrow">Start here / 01</span>
+                <span className="eyebrow">Start here</span>
                 <h2>Bring your site in.</h2>
-                <p>We map its public pages. You decide what the character should know about your company.</p>
+                <p>Enter your website URL so your character learns what your site is about.</p>
                 <form onSubmit={connect}>
                   <label htmlFor="site-url">Website URL</label>
                   <div className="url-row">
@@ -1400,10 +1445,24 @@ export default function StudioHome() {
                       required
                       value={siteUrl}
                       onChange={(e) => setSiteUrl(e.target.value)}
-                      placeholder="https://yourcompany.com"
+                      placeholder="https://yourwebsite.com"
                     />
-                    <button className="button primary" disabled={Boolean(busy)}>{busy ?? "Map site"}</button>
                   </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <button
+                      type="button"
+                      className="quiet-button"
+                      style={{ fontSize: ".76rem", fontWeight: 700, margin: 0, color: "var(--blue)" }}
+                      onClick={() => setNotesModalOpen(true)}
+                    >
+                      {additionalContext.trim() ? "✓ Edit Extra Details" : "+ Add Extra Details (Optional)"}
+                    </button>
+                  </div>
+
+                  <button className="button primary" style={{ marginTop: 16, width: "100%" }} disabled={Boolean(busy)}>
+                    {busy ?? "Map site →"}
+                  </button>
                 </form>
               </div>
             </section>
@@ -1676,6 +1735,89 @@ export default function StudioHome() {
 
       {/* Claim Account Modal for anonymous users */}
       <ClaimAccountModal open={claimModalOpen} onClose={() => setClaimModalOpen(false)} />
+
+      {/* Extra Notes Modal */}
+      <ExtraNotesModal
+        open={notesModalOpen}
+        value={additionalContext}
+        onChange={setAdditionalContext}
+        onClose={() => setNotesModalOpen(false)}
+      />
     </main>
+  );
+}
+
+function ExtraNotesModal({
+  open,
+  value,
+  onChange,
+  onClose,
+}: {
+  open: boolean;
+  value: string;
+  onChange: (val: string) => void;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.65)",
+      zIndex: 2147483646,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20
+    }}>
+      <div className="connect-card" style={{ width: "min(65vw, 860px)", minWidth: "320px", padding: 32, position: "relative" }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: "absolute",
+            top: 18,
+            right: 18,
+            background: "none",
+            border: "none",
+            fontSize: "1.3rem",
+            cursor: "pointer",
+            fontWeight: 800
+          }}
+        >
+          ✕
+        </button>
+        <span className="eyebrow">Extra Details</span>
+        <h2 style={{ fontSize: "1.8rem", margin: "10px 0 6px" }}>Add Custom Info & Notes</h2>
+        <p style={{ margin: "0 0 18px", fontSize: ".85rem", color: "var(--muted)" }}>
+          Paste FAQs, product overview, or extra context your website doesn't have. Your character will learn this info too.
+        </p>
+
+        <textarea
+          rows={10}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="e.g. Customer support is open Mon-Fri 9am-5pm. We ship worldwide..."
+          style={{
+            width: "100%",
+            padding: "14px",
+            border: "2px solid var(--ink)",
+            outline: "none",
+            fontFamily: "var(--sans)",
+            fontSize: ".9rem",
+            lineHeight: 1.5,
+            resize: "vertical",
+            boxSizing: "border-box",
+            boxShadow: "inset 2px 2px 0 rgba(17,17,17,.08)"
+          }}
+        />
+
+        <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
+          <button type="button" className="button primary" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { convertToModelMessages, isStepCount, streamText, tool, type UIMessage } from "ai";
+import { convertToModelMessages, createTextStreamResponse, isStepCount, streamText, toTextStream, tool, type UIMessage } from "ai";
 import { z } from "zod";
 import { embedKnowledgePages, embedQuery } from "../../lib/embeddings";
 import { CRADLE_MODEL_ID, google } from "../../lib/google";
@@ -224,7 +224,40 @@ Directives:
       },
     });
 
-    return result.toTextStreamResponse({ headers: CORS_HEADERS });
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        try {
+          for await (const chunk of result.stream) {
+            const rawChunk = chunk as Record<string, unknown>;
+            if (rawChunk.type === "tool-call" && rawChunk.toolName === "setEmote") {
+              const inputObj = (rawChunk.input || rawChunk.args) as { emote?: string } | undefined;
+              const emote = inputObj?.emote;
+              if (emote) {
+                console.log(`[Chat API] setEmote tool-call emitted to stream: "${emote}"`);
+                controller.enqueue(encoder.encode(`[cradle:emote:${emote}]`));
+              }
+            } else if (rawChunk.type === "text-delta") {
+              const text = (rawChunk.textDelta || rawChunk.text) as string | undefined;
+              if (text) {
+                controller.enqueue(encoder.encode(text));
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[Chat API] Stream error:", err);
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        ...CORS_HEADERS,
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+    });
   } catch (error: unknown) {
     console.error("[Chat API] Error in /api/chat:", error);
     return new Response(

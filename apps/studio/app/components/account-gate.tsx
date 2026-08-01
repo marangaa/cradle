@@ -95,8 +95,7 @@ export function ClaimAccountModal({ open, onClose }: { open: boolean; onClose: (
     <div style={{
       position: "fixed",
       inset: 0,
-      background: "rgba(0,0,0,0.6)",
-      backdropFilter: "blur(4px)",
+      background: "rgba(0,0,0,0.65)",
       zIndex: 2147483646,
       display: "flex",
       alignItems: "center",
