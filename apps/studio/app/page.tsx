@@ -1662,19 +1662,20 @@ export default function StudioHome() {
             </section>
           )}
 
-          {/* Floating character preview — sits in the bottom-right corner */}
-          <CharacterPreview
-            character={activeCharacter}
-            companion={activeCompanion}
-            overrideState={playgroundState}
-            installationId={session?.installation.id}
-            brandName={session?.brandProfile?.name || session?.installation.name}
-          />
-
-          {/* Claim Account Modal for anonymous users */}
-          <ClaimAccountModal open={claimModalOpen} onClose={() => setClaimModalOpen(false)} />
         </>
       )}
+
+      {/* Floating character preview — sits in the bottom-right corner for all visitors */}
+      <CharacterPreview
+        character={activeCharacter}
+        companion={activeCompanion}
+        overrideState={playgroundState}
+        installationId={session?.installation.id}
+        brandName={session?.brandProfile?.name || session?.installation.name}
+      />
+
+      {/* Claim Account Modal for anonymous users */}
+      <ClaimAccountModal open={claimModalOpen} onClose={() => setClaimModalOpen(false)} />
     </main>
   );
 }
