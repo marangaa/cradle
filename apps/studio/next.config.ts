@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
-const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL || "http://localhost:3002";
+const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL;
+
+if (!RUNTIME_URL) {
+  throw new Error("NEXT_PUBLIC_RUNTIME_URL is required in environment variables.");
+}
 
 const nextConfig: NextConfig = {
   output: "standalone",
