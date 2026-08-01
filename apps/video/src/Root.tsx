@@ -1,6 +1,6 @@
 import { Composition, Still } from "remotion";
-import { CradleLaunch, type CradleLaunchProps } from "./compositions/CradleLaunch.js";
-import { LaunchThumbnail } from "./compositions/LaunchThumbnail.js";
+import { CradleLaunch, type CradleLaunchProps } from "./compositions/CradleLaunch";
+import { LaunchThumbnail } from "./compositions/LaunchThumbnail";
 
 const fps = 30;
 
@@ -8,7 +8,6 @@ const defaultProps = {
   siteName: "Qualra",
   siteUrl: "qualra.xyz",
   characterName: "Byte Bunny",
-  narrationSrc: "video/audio/cradle-narration.mp3",
   screenshots: {},
 } satisfies CradleLaunchProps;
 
