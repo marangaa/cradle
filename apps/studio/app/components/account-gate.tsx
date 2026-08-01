@@ -34,8 +34,8 @@ function StudioSessionGate({ children }: { children: ReactNode }) {
   return <main className="studio-shell">
     <section className="connect-screen">
       <div className="connect-copy">
-        <h1>Pick up where your site left off.</h1>
-        <p>Sign in to create and manage your website character.</p>
+        <h1>Give your website a <em>character.</em></h1>
+        <p>An animated companion for your site. Connect your pages, pick a body from the catalog, and bring your site to life with one script tag.</p>
       </div>
       <div className="connect-card">
         <span className="eyebrow">Account</span>

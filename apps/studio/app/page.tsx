@@ -1208,6 +1208,19 @@ export default function StudioHome() {
                 <span className="eyebrow">Welcome back</span>
                 <h1>Pick up where you left off.</h1>
                 <p>{ownedLoading ? "Checking for your existing sites…" : "These sites are already set up on this account."}</p>
+                <div className="principles">
+                  <span>01. Map your site</span>
+                  <span>02. Pick a Petdex body</span>
+                  <span>03. Paste 1 script tag</span>
+                  <a
+                    href="https://github.com/marangaa/cradle"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ textDecoration: "none", color: "inherit" }}
+                  >
+                    <span>⭐ Open Source on GitHub</span>
+                  </a>
+                </div>
               </div>
               <div className="connect-card">
                 <span className="eyebrow">Your sites</span>
@@ -1331,22 +1344,8 @@ export default function StudioHome() {
             /* New user — show connect form */
             <section className="connect-screen">
               <div className="connect-copy">
-                <span className="eyebrow">Open-Source Web Companion</span>
-                <h1>Websites used to have <em>personality.</em></h1>
-                <p>Cradle gives your site an animated companion with a working AI chatbot out of the box—or a pure, programmable UI layer driven by standard JavaScript.</p>
-                <div className="principles">
-                  <span>01. Map your site</span>
-                  <span>02. Pick a Petdex body</span>
-                  <span>03. Paste 1 script tag</span>
-                  <a
-                    href="https://github.com/marangaa/cradle"
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ textDecoration: "none", color: "inherit" }}
-                  >
-                    <span>⭐ Open Source on GitHub</span>
-                  </a>
-                </div>
+                <h1>Give your website a <em>character.</em></h1>
+                <p>An animated companion for your site. Connect your pages, pick a body from the catalog, and bring your site to life with one script tag.</p>
               </div>
               <div className="connect-card">
                 <span className="eyebrow">Start here / 01</span>
