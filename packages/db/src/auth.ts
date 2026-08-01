@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import { anonymous } from "better-auth/plugins";
 import { db } from "#db";
 
 const secret = process.env.BETTER_AUTH_SECRET;
@@ -16,5 +17,5 @@ export const auth = betterAuth({
   secret,
   database: drizzleAdapter(db, { provider: "pg" }),
   emailAndPassword: { enabled: true },
-  plugins: [nextCookies()],
+  plugins: [nextCookies(), anonymous()],
 });

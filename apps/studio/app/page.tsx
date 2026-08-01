@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AccountGate } from "./components/account-gate";
+import { AccountGate, ClaimAccountModal } from "./components/account-gate";
 import { authClient } from "./lib/auth-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -937,6 +937,7 @@ export default function StudioHome() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
+  const [claimModalOpen, setClaimModalOpen] = useState(false);
 
   // ── Derived booleans ─────────────────────────────────────────────────────────
   const reviewed   = (session?.knowledge.version ?? 0) > 1;
@@ -1188,8 +1189,18 @@ export default function StudioHome() {
             </svg>
             <span>GitHub</span>
           </a>
+          {authSession?.user?.isAnonymous && (
+            <button
+              type="button"
+              className="button primary"
+              style={{ height: 32, minHeight: 32, padding: "0 10px", fontSize: ".68rem" }}
+              onClick={() => setClaimModalOpen(true)}
+            >
+              Save Account
+            </button>
+          )}
           {session && <button className="quiet-button" onClick={reset}>New project</button>}
-          {authSession && (
+          {authSession && !authSession.user.isAnonymous && (
             <button className="quiet-button" onClick={() => void authClient.signOut()}>
               Sign out
             </button>
@@ -1346,6 +1357,24 @@ export default function StudioHome() {
               <div className="connect-copy">
                 <h1>Give your website a <em>character.</em></h1>
                 <p>An animated companion for your site. Connect your pages, pick a body from the catalog, and bring your site to life with one script tag.</p>
+
+                <div style={{ marginTop: 24, display: "flex", alignItems: "center", gap: 14, border: "2px solid var(--ink)", background: "rgba(255,255,255,0.15)", backdropFilter: "blur(4px)", padding: "12px 16px", boxShadow: "4px 4px 0 var(--ink)", width: "max-content" }}>
+                  <CatalogCharacter
+                    companion={{
+                      slug: "boba",
+                      displayName: "Boba",
+                      description: "Default companion",
+                      kind: "character",
+                      submittedBy: "Petdex",
+                      spritesheetUrl: "https://assets.petdex.dev/pets/boba/spritesheet.png",
+                      petJsonUrl: "https://assets.petdex.dev/pets/boba/pet.json"
+                    }}
+                  />
+                  <div>
+                    <strong style={{ display: "block", color: "var(--white)", fontSize: ".88rem", fontWeight: 800 }}>Meet Boba 👋</strong>
+                    <span style={{ color: "var(--yellow)", fontSize: ".72rem", fontFamily: "var(--mono)", fontWeight: 700 }}>Live interactive mascot</span>
+                  </div>
+                </div>
               </div>
               <div className="connect-card">
                 <span className="eyebrow">Start here / 01</span>
@@ -1633,6 +1662,8 @@ export default function StudioHome() {
             />
           )}
 
+          {/* Claim Account Modal for anonymous users */}
+          <ClaimAccountModal open={claimModalOpen} onClose={() => setClaimModalOpen(false)} />
         </>
       )}
     </main>
