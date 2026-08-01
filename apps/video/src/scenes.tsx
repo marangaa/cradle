@@ -45,6 +45,7 @@ export const Wordmark = ({ dark = true }: { dark?: boolean }) => (
       letterSpacing: "-0.04em",
       color: dark ? colors.paper : colors.ink,
       zIndex: 50,
+      textShadow: dark ? `2px 2px 0 ${colors.ink}` : "none",
     }}
   >
     <span
@@ -85,6 +86,7 @@ const NeoText = ({ text, delay = 0, size = 84, color = colors.ink, highlight = f
           letterSpacing: "-0.04em",
           lineHeight: 1.1,
           fontFamily,
+          textShadow: (!highlight && color === colors.paper) ? `3px 3px 0 ${colors.ink}` : "none",
         }}
       >
         {text}
@@ -93,71 +95,109 @@ const NeoText = ({ text, delay = 0, size = 84, color = colors.ink, highlight = f
   );
 };
 
-const NeobrutalistBrowser = ({ children, title = "cradlestudio.vercel.app", dark = false, width = 1180, height = 680 }: { children: React.ReactNode; title?: string; dark?: boolean; width?: number; height?: number }) => (
-  <div
-    style={{
+// ─── Annotation Components ────────────────────────────────────────────────────────
+
+const NeoPointer = ({ delay, startX, startY, endX, endY }: { delay: number, startX: number, startY: number, endX: number, endY: number }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const progress = spring({ frame: frame - delay, fps, config: { damping: 14, stiffness: 80 } });
+  
+  const x = interpolate(progress, [0, 1], [startX, endX]);
+  const y = interpolate(progress, [0, 1], [startY, endY]);
+  const scale = interpolate(progress, [0, 0.8, 1], [0.5, 1.2, 1]);
+
+  return (
+    <div style={{
+      position: "absolute",
+      left: x,
+      top: y,
+      transform: `scale(${scale})`,
+      zIndex: 100,
+      opacity: progress > 0 ? 1 : 0
+    }}>
+      <svg width="64" height="64" viewBox="0 0 24 24" fill={colors.coral} stroke={colors.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: `drop-shadow(4px 4px 0 ${colors.ink})` }}>
+        <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+        <path d="M13 13l6 6" />
+      </svg>
+    </div>
+  );
+};
+
+const NeoHighlight = ({ delay, left, top, width, height }: { delay: number, left: number, top: number, width: number, height: number }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const progress = spring({ frame: frame - delay, fps, config: { damping: 12, stiffness: 100 } });
+  
+  return (
+    <div style={{
+      position: "absolute",
+      left,
+      top,
       width,
       height,
-      overflow: "hidden",
+      border: `6px solid ${colors.coral}`,
       borderRadius: 16,
+      boxShadow: `12px 12px 0 ${colors.acid}`,
+      zIndex: 80,
+      opacity: progress,
+      transform: `scale(${interpolate(progress, [0, 1], [1.1, 1])})`,
+      pointerEvents: "none"
+    }} />
+  );
+};
+
+const NeoTooltip = ({ delay, text, left, top, rotate = -2 }: { delay: number, text: string, left: number, top: number, rotate?: number }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const progress = spring({ frame: frame - delay, fps, config: { damping: 14, stiffness: 90 } });
+  
+  return (
+    <div style={{
+      position: "absolute",
+      left,
+      top,
+      padding: "16px 24px",
+      background: colors.paper,
       border: `4px solid ${colors.ink}`,
-      background: dark ? colors.darkSlate : colors.paper,
-      boxShadow: `24px 24px 0 ${colors.ink}`,
-      position: "relative",
-    }}
-  >
-    <div
-      style={{
-        height: 56,
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "0 22px",
-        borderBottom: `4px solid ${colors.ink}`,
-        background: dark ? "#11130e" : "#e6e3d5",
-      }}
-    >
-      <div style={{ display: "flex", gap: 8 }}>
-        <i style={{ display: "block", width: 14, height: 14, borderRadius: "50%", background: colors.coral, border: `2px solid ${colors.ink}` }} />
-        <i style={{ display: "block", width: 14, height: 14, borderRadius: "50%", background: colors.acid, border: `2px solid ${colors.ink}` }} />
-        <i style={{ display: "block", width: 14, height: 14, borderRadius: "50%", background: colors.cobalt, border: `2px solid ${colors.ink}` }} />
-      </div>
-      <div
-        style={{
-          marginLeft: 20,
-          flex: 1,
-          maxWidth: 580,
-          height: 32,
-          borderRadius: 8,
-          background: dark ? "#22251d" : "#ffffff",
-          color: dark ? colors.paper : colors.ink,
-          border: `2px solid ${colors.ink}`,
-          font: "800 14px monospace",
-          display: "flex",
-          alignItems: "center",
-          padding: "0 16px",
-        }}
-      >
-        https://{title}
-      </div>
+      boxShadow: `12px 12px 0 ${colors.ink}`,
+      borderRadius: 12,
+      fontFamily,
+      fontSize: 36,
+      fontWeight: 800,
+      color: colors.ink,
+      zIndex: 90,
+      transform: `scale(${progress}) rotate(${rotate}deg)`,
+      transformOrigin: "bottom left"
+    }}>
+      {text}
     </div>
-    <div style={{ height: height - 56, position: "relative", overflow: "hidden" }}>{children}</div>
-  </div>
-);
+  );
+};
 
 // ─── Scene 1: The Hook ──────────────────────────────────────────────────────────
 
 export const OpeningScene = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const zoom = interpolate(frame, [0, 300], [1.1, 1], { extrapolateRight: "clamp" });
+
   return (
-    <AbsoluteFill style={{ background: colors.paper, color: colors.ink, fontFamily }}>
-      <Wordmark dark={false} />
+    <AbsoluteFill style={{ background: colors.ink, color: colors.paper, fontFamily }}>
+      <Wordmark dark={true} />
       <Grain />
       
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "100%", gap: 16 }}>
-        <NeoText text="Websites used to" delay={10} size={96} color={colors.ink} />
+      {/* Fullscreen Asset */}
+      <div style={{ position: "absolute", inset: 24, borderRadius: 24, overflow: "hidden", border: `6px solid ${colors.ink}`, boxShadow: `0 0 0 4px ${colors.paper}` }}>
+        <div style={{ width: "100%", height: "100%", transform: `scale(${zoom})`, transformOrigin: "center" }}>
+          <OffthreadVideo src={staticFile("shots/characters.mp4")} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </div>
+      </div>
+
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", zIndex: 30, gap: 16 }}>
+        <NeoText text="Websites used to" delay={10} size={96} color={colors.paper} />
         <NeoText text="have personality." delay={20} size={96} color={colors.ink} highlight />
         <div style={{ height: 40 }} />
-        <NeoText text="Let's bring that back." delay={80} size={64} color={colors.cobalt} />
+        <NeoText text="Let's bring that back." delay={80} size={64} color={colors.acid} />
       </div>
     </AbsoluteFill>
   );
@@ -168,41 +208,27 @@ export const OpeningScene = () => {
 export const ConnectScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-
-  const videoProgress = spring({ frame: frame - 15, fps, config: { damping: 16, stiffness: 100 } });
+  const panY = interpolate(frame, [0, 300], [0, -60], { extrapolateRight: "clamp" });
 
   return (
     <AbsoluteFill style={{ background: colors.ink, color: colors.paper, fontFamily }}>
-      <Wordmark dark={true} />
+      <Wordmark dark={false} />
       <Grain />
 
-      <div style={{ position: "absolute", top: 120, width: "100%", textAlign: "center", zIndex: 20, display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <NeoText text="An open-source programmable" delay={5} size={72} color={colors.paper} />
-        <NeoText text="web companion." delay={10} size={72} color={colors.paper} />
+      {/* Fullscreen Asset */}
+      <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: colors.paper }}>
+        <div style={{ width: "100%", height: "100%", transform: `scale(1.2) translateY(${panY}px)`, transformOrigin: "top center" }}>
+          <Img src={staticFile("shots/connect.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center" }} />
+        </div>
       </div>
 
-      <div
-        style={{
-          position: "absolute",
-          top: 320,
-          left: "50%",
-          marginLeft: -380,
-          width: 760,
-          height: 520,
-          borderRadius: 24,
-          overflow: "hidden",
-          border: `6px solid ${colors.ink}`,
-          boxShadow: `24px 24px 0 ${colors.acid}`,
-          opacity: videoProgress,
-          background: colors.paper,
-          transform: `scale(${interpolate(videoProgress, [0, 1], [0.8, 1])}) translateY(${interpolate(videoProgress, [0, 1], [80, 0])}px) rotate(-2deg)`,
-          zIndex: 10,
-        }}
-      >
-        <OffthreadVideo
-          src={staticFile("shots/characters.mp4")}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.2)", zIndex: 10 }} />
+
+      <NeoTooltip delay={15} text="1. Give it knowledge." left={120} top={200} rotate={-3} />
+      <NeoPointer delay={30} startX={800} startY={800} endX={540} endY={420} />
+      
+      <div style={{ position: "absolute", bottom: 100, width: "100%", textAlign: "center", zIndex: 20 }}>
+        <NeoText text="Connect any URL." delay={45} size={56} color={colors.paper} />
       </div>
     </AbsoluteFill>
   );
@@ -213,35 +239,25 @@ export const ConnectScene = () => {
 export const ReviewScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-
-  const browserProgress = spring({ frame: frame - 15, fps, config: { damping: 16, stiffness: 90 } });
-  
-  // Cinematic slow zoom out and pan
-  const scale = interpolate(frame, [0, 300], [1.05, 0.95], { extrapolateRight: "clamp" });
-  const panY = interpolate(frame, [0, 300], [0, -40], { extrapolateRight: "clamp" });
+  const panX = interpolate(frame, [0, 300], [0, -40], { extrapolateRight: "clamp" });
 
   return (
-    <AbsoluteFill style={{ background: colors.paper, color: colors.ink, fontFamily }}>
-      <Wordmark dark={false} />
+    <AbsoluteFill style={{ background: colors.ink, color: colors.paper, fontFamily }}>
+      <Wordmark dark={true} />
       <Grain />
       
-      <div style={{ position: "absolute", left: 100, top: 220, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12 }}>
-        <NeoText text="1. Give it knowledge." delay={10} size={72} color={colors.ink} highlight />
-        <div style={{ opacity: spring({ frame: frame - 30, fps }), fontSize: 32, fontWeight: 700, width: 400, marginTop: 16, color: colors.line, lineHeight: 1.3 }}>
-          Connect any URL.<br/>The engine extracts your brand's essence instantly.
+      {/* Fullscreen Asset */}
+      <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: colors.darkSlate }}>
+        <div style={{ width: "100%", height: "100%", transform: `scale(1.15) translateX(${panX}px)`, transformOrigin: "center left" }}>
+          <Img src={staticFile("shots/review.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center left" }} />
         </div>
       </div>
 
-      <div style={{ position: "absolute", right: -50, top: 120, zIndex: 10, transform: `scale(${scale}) translateY(${panY}px)` }}>
-        <div style={{
-          opacity: browserProgress,
-          transform: `translateY(${interpolate(browserProgress, [0, 1], [100, 0])}px) rotate(2deg)`,
-        }}>
-          <NeobrutalistBrowser title="cradlestudio.vercel.app" width={1000} height={700}>
-            <Img src={staticFile("shots/connect.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top left" }} />
-          </NeobrutalistBrowser>
-        </div>
-      </div>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 10 }} />
+
+      <NeoTooltip delay={15} text="2. It learns your brand's essence." left={450} top={180} rotate={2} />
+      <NeoHighlight delay={35} left={150} top={280} width={900} height={360} />
+      
     </AbsoluteFill>
   );
 };
@@ -251,31 +267,27 @@ export const ReviewScene = () => {
 export const ShapeScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-
-  const browserProgress = spring({ frame: frame - 10, fps, config: { damping: 16, stiffness: 90 } });
-  const panY = interpolate(frame, [0, 300], [0, -30], { extrapolateRight: "clamp" });
+  const zoom = interpolate(frame, [0, 300], [1, 1.1], { extrapolateRight: "clamp" });
 
   return (
     <AbsoluteFill style={{ background: colors.ink, color: colors.paper, fontFamily }}>
       <Wordmark dark={true} />
       <Grain />
       
-      <div style={{ position: "absolute", right: 100, top: 250, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12, textAlign: "right" }}>
-        <NeoText text="2. Pick a character." delay={10} size={72} color={colors.ink} highlight />
-        <div style={{ opacity: spring({ frame: frame - 30, fps }), fontSize: 32, fontWeight: 700, width: 400, marginTop: 16, color: colors.paper, lineHeight: 1.3 }}>
-          Browse the Petdex. Select the perfect companion.
+      {/* Fullscreen Asset */}
+      <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: colors.darkSlate }}>
+        <div style={{ width: "100%", height: "100%", transform: `scale(${zoom})`, transformOrigin: "center right" }}>
+          <Img src={staticFile("shots/shape.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center right" }} />
         </div>
       </div>
 
-      <div style={{ position: "absolute", left: 60, top: 160, zIndex: 10, transform: `translateY(${panY}px)` }}>
-        <div style={{
-          opacity: browserProgress,
-          transform: `translateY(${interpolate(browserProgress, [0, 1], [100, 0])}px) rotate(-2deg)`,
-        }}>
-          <NeobrutalistBrowser title="cradlestudio.vercel.app/shape" width={900} height={660} dark>
-            <Img src={staticFile("shots/shape.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top left" }} />
-          </NeobrutalistBrowser>
-        </div>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.2)", zIndex: 10 }} />
+
+      <NeoTooltip delay={15} text="3. Pick a character." left={120} top={250} rotate={-2} />
+      <NeoPointer delay={30} startX={400} startY={800} endX={750} endY={450} />
+
+      <div style={{ position: "absolute", bottom: 100, width: "100%", textAlign: "center", zIndex: 20 }}>
+        <NeoText text="Browse the Petdex." delay={45} size={56} color={colors.paper} />
       </div>
     </AbsoluteFill>
   );
@@ -286,34 +298,25 @@ export const ShapeScene = () => {
 export const LiveSiteScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-
-  const browserProgress = spring({ frame: frame - 15, fps, config: { damping: 16, stiffness: 90 } });
-  const zoom = interpolate(frame, [0, 300], [0.95, 1], { extrapolateRight: "clamp" });
+  const panY = interpolate(frame, [0, 300], [0, 40], { extrapolateRight: "clamp" });
 
   return (
-    <AbsoluteFill style={{ background: colors.paper, color: colors.ink, fontFamily }}>
-      <Wordmark dark={false} />
+    <AbsoluteFill style={{ background: colors.ink, color: colors.paper, fontFamily }}>
+      <Wordmark dark={true} />
       <Grain />
       
-      <div style={{ position: "absolute", top: 100, width: "100%", textAlign: "center", zIndex: 30, display: "flex", justifyContent: "center" }}>
-        <NeoText text="3. Drop it on any site." delay={10} size={84} color={colors.ink} highlight />
+      {/* Fullscreen Asset */}
+      <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: colors.darkSlate }}>
+        <div style={{ width: "100%", height: "100%", transform: `scale(1.1) translateY(${panY}px)`, transformOrigin: "bottom center" }}>
+          <Img src={staticFile("shots/site.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "bottom right" }} />
+        </div>
       </div>
 
-      <div style={{ 
-        position: "absolute", 
-        top: 260, 
-        left: "50%", 
-        marginLeft: -560,
-        width: 1120, 
-        height: 680, 
-        zIndex: 10,
-        opacity: browserProgress,
-        transform: `translateY(${interpolate(browserProgress, [0, 1], [60, 0])}px) scale(${zoom})`,
-      }}>
-        <NeobrutalistBrowser title="qualra.xyz" width={1120} height={680} dark>
-          <Img src={staticFile("shots/site.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top left" }} />
-        </NeobrutalistBrowser>
-      </div>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.1)", zIndex: 10 }} />
+
+      <NeoTooltip delay={15} text="Ready for any site." left={380} top={320} rotate={3} />
+      <NeoPointer delay={25} startX={100} startY={600} endX={950} endY={550} />
+      
     </AbsoluteFill>
   );
 };
