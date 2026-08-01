@@ -29,16 +29,13 @@ const PREFLIGHT_CORS_HEADERS = {
  *  /api/installations/[id], confirmed against Next.js's own documented CORS example (a plain
  *  Response with conditionally-set headers is the framework's actual recommended approach; there
  *  is no built-in per-origin helper). No match -> omit the header; the browser blocks the read. */
-function buildCorsHeaders(reqOrigin: string | null, installationOrigin: string | undefined) {
-  const headers: Record<string, string> = {
+function buildCorsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor-id",
-    Vary: "Origin",
+    "Cache-Control": "no-store",
   };
-  if (installationOrigin && reqOrigin === installationOrigin) {
-    headers["Access-Control-Allow-Origin"] = installationOrigin;
-  }
-  return headers;
 }
 
 export async function OPTIONS() {
@@ -73,7 +70,7 @@ export async function POST(req: Request) {
       console.warn(`[Chat API] Missing installationId or visitorId`);
       return new Response(
         JSON.stringify({ error: "Missing required headers: x-cradle-installation-id, x-cradle-visitor-id" }),
-        { status: 400, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
+        { status: 400, headers: { ...buildCorsHeaders(), "Content-Type": "application/json" } }
       );
     }
 
@@ -82,11 +79,11 @@ export async function POST(req: Request) {
       console.warn(`[Chat API] Installation not found: ${installationId}`);
       return new Response(
         JSON.stringify({ error: "Installation not found" }),
-        { status: 404, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
+        { status: 404, headers: { ...buildCorsHeaders(), "Content-Type": "application/json" } }
       );
     }
 
-    const CORS_HEADERS = buildCorsHeaders(reqOrigin, installation.origin);
+    const CORS_HEADERS = buildCorsHeaders();
 
     const existingConversation = await store.getConversation(visitorId);
     const isNewConversation = !existingConversation || existingConversation.messages.length === 0;
@@ -232,7 +229,7 @@ Directives:
     console.error("[Chat API] Error in /api/chat:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
-      { status: 500, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
+      { status: 500, headers: { ...buildCorsHeaders(), "Content-Type": "application/json" } }
     );
   }
 }

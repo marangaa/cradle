@@ -12,16 +12,13 @@ const PREFLIGHT_CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor-id",
 };
 
-function buildCorsHeaders(reqOrigin: string | null, installationOrigin: string | undefined) {
-  const headers: Record<string, string> = {
+function buildCorsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor-id",
-    Vary: "Origin",
+    "Cache-Control": "no-store",
   };
-  if (installationOrigin && reqOrigin === installationOrigin) {
-    headers["Access-Control-Allow-Origin"] = installationOrigin;
-  }
-  return headers;
 }
 
 export async function OPTIONS() {
@@ -50,7 +47,7 @@ export async function POST(req: Request) {
       console.warn("[Chat Init API] Missing installationId");
       return new Response(
         JSON.stringify({ error: "Missing installationId" }),
-        { status: 400, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
+        { status: 400, headers: { ...buildCorsHeaders(), "Content-Type": "application/json" } }
       );
     }
 
@@ -59,11 +56,11 @@ export async function POST(req: Request) {
       console.warn(`[Chat Init API] Installation not found: ${installationId}`);
       return new Response(
         JSON.stringify({ error: "Installation not found" }),
-        { status: 404, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
+        { status: 404, headers: { ...buildCorsHeaders(), "Content-Type": "application/json" } }
       );
     }
 
-    const CORS_HEADERS = buildCorsHeaders(reqOrigin, installation.origin);
+    const CORS_HEADERS = buildCorsHeaders();
 
     const brandName = installation.brandProfile?.name || installation.name || "our business";
     const memories = visitorId ? await store.getVisitorMemories(visitorId) : [];
@@ -108,7 +105,7 @@ ${memoriesContext}`,
     console.error("[Chat Init API] Error in /api/chat/init route:", error);
     return new Response(
       JSON.stringify({ greeting: "Hi there! 👋 Welcome to our site. Ask me anything!" }),
-      { status: 200, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
+      { status: 200, headers: { ...buildCorsHeaders(), "Content-Type": "application/json" } }
     );
   }
 }
