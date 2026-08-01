@@ -1,4 +1,6 @@
-import { AbsoluteFill, Audio, Sequence, staticFile } from "remotion";
+import { TransitionSeries, linearTiming } from "@remotion/transitions";
+import { fade } from "@remotion/transitions/fade";
+import { AbsoluteFill, Audio, staticFile } from "remotion";
 import { ClosingScene, ConnectScene, LiveSiteScene, OpeningScene, ReviewScene, ShapeScene } from "../scenes";
 
 export type CradleLaunchProps = {
@@ -12,41 +14,56 @@ export type CradleLaunchProps = {
   };
 };
 
-/** The primary 42-second product film for Cradle. */
+/**
+ * The primary product film for Cradle.
+ * Total frames: ~1260 (42 seconds at 30fps)
+ */
 export const CradleLaunch = ({ narrationSrc, ...props }: CradleLaunchProps) => {
   return (
-    <AbsoluteFill style={{ backgroundColor: "#10110d" }}>
+    <AbsoluteFill style={{ backgroundColor: "#000000" }}>
       {narrationSrc ? <Audio src={staticFile(narrationSrc)} volume={0.95} /> : null}
 
-      {/* 01: Opening Teaser (0 - 5s / 150f) */}
-      <Sequence from={0} durationInFrames={150} premountFor={30}>
-        <OpeningScene />
-      </Sequence>
+      <TransitionSeries>
+        {/* 01: The Hook (0 - 5s) */}
+        <TransitionSeries.Sequence durationInFrames={165}>
+          <OpeningScene />
+        </TransitionSeries.Sequence>
+        
+        <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 15 })} />
 
-      {/* 02: Connect & Crawl (5 - 13s / 240f) */}
-      <Sequence from={150} durationInFrames={240} premountFor={30}>
-        <ConnectScene {...props} />
-      </Sequence>
+        {/* 02: The Reveal (5 - 12s) */}
+        <TransitionSeries.Sequence durationInFrames={225}>
+          <ConnectScene />
+        </TransitionSeries.Sequence>
+        
+        <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 15 })} />
 
-      {/* 03: Review Knowledge (13 - 21s / 240f) */}
-      <Sequence from={390} durationInFrames={240} premountFor={30}>
-        <ReviewScene />
-      </Sequence>
+        {/* 03: The Workflow - Connect (12 - 18s) */}
+        <TransitionSeries.Sequence durationInFrames={195}>
+          <ReviewScene />
+        </TransitionSeries.Sequence>
+        
+        <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 15 })} />
 
-      {/* 04: Shape & Companion (21 - 29s / 240f) */}
-      <Sequence from={630} durationInFrames={240} premountFor={30}>
-        <ShapeScene {...props} />
-      </Sequence>
+        {/* 04: The Workflow - Shape (18 - 24s) */}
+        <TransitionSeries.Sequence durationInFrames={195}>
+          <ShapeScene />
+        </TransitionSeries.Sequence>
+        
+        <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 15 })} />
 
-      {/* 05: Live Customer Site (29 - 36s / 210f) */}
-      <Sequence from={870} durationInFrames={210} premountFor={30}>
-        <LiveSiteScene />
-      </Sequence>
+        {/* 05: The Workflow - Live Site (24 - 30s) */}
+        <TransitionSeries.Sequence durationInFrames={195}>
+          <LiveSiteScene />
+        </TransitionSeries.Sequence>
 
-      {/* 06: Closing CTA Outro (36 - 42s / 180f) */}
-      <Sequence from={1080} durationInFrames={180} premountFor={30}>
-        <ClosingScene />
-      </Sequence>
+        <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 15 })} />
+
+        {/* 06: Outro (30 - 36s) */}
+        <TransitionSeries.Sequence durationInFrames={300}>
+          <ClosingScene />
+        </TransitionSeries.Sequence>
+      </TransitionSeries>
     </AbsoluteFill>
   );
 };

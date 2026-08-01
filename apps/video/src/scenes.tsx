@@ -1,6 +1,10 @@
-import { Easing, Img, OffthreadVideo, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { loadFont } from "@remotion/google-fonts/Inter";
+import { AbsoluteFill, Img, OffthreadVideo, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import type { CradleLaunchProps } from "./compositions/CradleLaunch.js";
 
+const { fontFamily } = loadFont();
+
+// Neobrutalist colors
 const colors = {
   ink: "#10110d",
   paper: "#f6f5eb",
@@ -10,7 +14,6 @@ const colors = {
   darkSlate: "#181a14",
   line: "#2e302a",
 };
-const font = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
 export const Grain = () => (
   <div
@@ -22,6 +25,7 @@ export const Grain = () => (
       backgroundSize: "6px 6px",
       mixBlendMode: "soft-light",
       pointerEvents: "none",
+      zIndex: 999,
     }}
   />
 );
@@ -35,10 +39,10 @@ export const Wordmark = ({ dark = true }: { dark?: boolean }) => (
       display: "flex",
       alignItems: "center",
       gap: 16,
-      fontFamily: font,
+      fontFamily,
       fontWeight: 900,
       fontSize: 32,
-      letterSpacing: "-0.07em",
+      letterSpacing: "-0.04em",
       color: dark ? colors.paper : colors.ink,
       zIndex: 50,
     }}
@@ -64,53 +68,32 @@ export const Wordmark = ({ dark = true }: { dark?: boolean }) => (
   </div>
 );
 
-const StickerBadge = ({ text, color = colors.acid, delay = 0, rotate = -4, style }: { text: string; color?: string; delay?: number; rotate?: number; style?: React.CSSProperties }) => {
+// Kinetic typography helper for bold neobrutalist reveals
+const NeoText = ({ text, delay = 0, size = 84, color = colors.ink, highlight = false }: { text: string; delay?: number; size?: number; color?: string; highlight?: boolean }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const scale = spring({ frame: frame - delay, fps, config: { damping: 12, stiffness: 200 } });
+  const progress = spring({ frame: frame - delay, fps, config: { damping: 16, stiffness: 120 } });
+  
   return (
-    <div
-      style={{
-        display: "inline-block",
-        padding: "10px 20px",
-        background: color,
-        color: colors.ink,
-        border: `4px solid ${colors.ink}`,
-        boxShadow: `6px 6px 0 ${colors.ink}`,
-        fontFamily: "monospace",
-        fontWeight: 900,
-        fontSize: 18,
-        letterSpacing: "0.02em",
-        textTransform: "uppercase",
-        transform: `scale(${scale}) rotate(${rotate}deg)`,
-        transformOrigin: "center center",
-        opacity: scale,
-        ...style,
-      }}
-    >
-      {text}
+    <div style={{ overflow: "hidden", display: "inline-block", padding: highlight ? "4px 16px" : 0, background: highlight ? colors.acid : "transparent", transform: highlight ? `rotate(-2deg)` : "none" }}>
+      <div
+        style={{
+          transform: `translateY(${interpolate(progress, [0, 1], [110, 0])}%)`,
+          fontSize: size,
+          fontWeight: 900,
+          color,
+          letterSpacing: "-0.04em",
+          lineHeight: 1.1,
+          fontFamily,
+        }}
+      >
+        {text}
+      </div>
     </div>
   );
 };
 
-const Reveal = ({ children, delay = 0, style }: { children: React.ReactNode; delay?: number; style?: React.CSSProperties }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const progress = spring({ frame: frame - delay, fps, config: { damping: 16, stiffness: 160 } });
-  return (
-    <div
-      style={{
-        opacity: progress,
-        transform: `translateY(${interpolate(progress, [0, 1], [40, 0])}px)`,
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-};
-
-const NeobrutalistBrowser = ({ children, title = "cradle.studio", dark = false, width = 1180, height = 680 }: { children: React.ReactNode; title?: string; dark?: boolean; width?: number; height?: number }) => (
+const NeobrutalistBrowser = ({ children, title = "cradlestudio.vercel.app", dark = false, width = 1180, height = 680 }: { children: React.ReactNode; title?: string; dark?: boolean; width?: number; height?: number }) => (
   <div
     style={{
       width,
@@ -119,7 +102,7 @@ const NeobrutalistBrowser = ({ children, title = "cradle.studio", dark = false, 
       borderRadius: 16,
       border: `4px solid ${colors.ink}`,
       background: dark ? colors.darkSlate : colors.paper,
-      boxShadow: `16px 16px 0 ${colors.ink}`,
+      boxShadow: `24px 24px 0 ${colors.ink}`,
       position: "relative",
     }}
   >
@@ -162,432 +145,229 @@ const NeobrutalistBrowser = ({ children, title = "cradle.studio", dark = false, 
   </div>
 );
 
-// ─── Scene 1: Opening Teaser ───────────────────────────────────────────────────
+// ─── Scene 1: The Hook ──────────────────────────────────────────────────────────
 
 export const OpeningScene = () => {
+  return (
+    <AbsoluteFill style={{ background: colors.paper, color: colors.ink, fontFamily }}>
+      <Wordmark dark={false} />
+      <Grain />
+      
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "100%", gap: 16 }}>
+        <NeoText text="Websites used to" delay={10} size={96} color={colors.ink} />
+        <NeoText text="have personality." delay={20} size={96} color={colors.ink} highlight />
+        <div style={{ height: 40 }} />
+        <NeoText text="Let's bring that back." delay={80} size={64} color={colors.cobalt} />
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// ─── Scene 2: The Reveal ────────────────────────────────────────────────────────
+
+export const ConnectScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const titleProgress = spring({ frame, fps, config: { damping: 14, stiffness: 140 } });
-  const videoScale = spring({ frame: frame - 15, fps, config: { damping: 15, stiffness: 170 } });
+  const videoProgress = spring({ frame: frame - 15, fps, config: { damping: 16, stiffness: 100 } });
 
   return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        background: colors.ink,
-        color: colors.paper,
-        overflow: "hidden",
-        fontFamily: font,
-      }}
-    >
+    <AbsoluteFill style={{ background: colors.ink, color: colors.paper, fontFamily }}>
+      <Wordmark dark={true} />
       <Grain />
-      <Wordmark />
 
-      <div
-        style={{
-          position: "absolute",
-          left: 100,
-          top: 180,
-          width: 950,
-          opacity: titleProgress,
-          transform: `translateY(${interpolate(titleProgress, [0, 1], [60, 0])}px)`,
-          zIndex: 20,
-        }}
-      >
-        <StickerBadge text="Character Infrastructure" color={colors.acid} rotate={-3} delay={5} />
-        <h1
-          style={{
-            fontSize: 110,
-            fontWeight: 900,
-            letterSpacing: "-0.08em",
-            lineHeight: 0.88,
-            marginTop: 28,
-            color: colors.paper,
-          }}
-        >
-          Your site does not need another <span style={{ color: colors.acid, textDecoration: "underline", textDecorationColor: colors.acid }}>chat bubble.</span>
-        </h1>
-        <p
-          style={{
-            fontSize: 32,
-            fontWeight: 700,
-            color: colors.coral,
-            marginTop: 24,
-            letterSpacing: "-0.03em",
-          }}
-        >
-          Give your product an animated character people remember.
-        </p>
+      <div style={{ position: "absolute", top: 120, width: "100%", textAlign: "center", zIndex: 20, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <NeoText text="An open-source programmable" delay={5} size={72} color={colors.paper} />
+        <NeoText text="web companion." delay={10} size={72} color={colors.paper} />
       </div>
 
-      {/* Embedded Characters Video Card */}
       <div
         style={{
           position: "absolute",
-          right: 90,
-          top: 150,
-          width: 680,
-          height: 720,
+          top: 320,
+          left: "50%",
+          marginLeft: -380,
+          width: 760,
+          height: 520,
           borderRadius: 24,
-          border: `5px solid ${colors.paper}`,
-          boxShadow: `20px 20px 0 ${colors.acid}`,
           overflow: "hidden",
-          opacity: videoScale,
-          transform: `scale(${videoScale}) rotate(3deg)`,
-          background: colors.darkSlate,
+          border: `6px solid ${colors.ink}`,
+          boxShadow: `24px 24px 0 ${colors.acid}`,
+          opacity: videoProgress,
+          background: colors.paper,
+          transform: `scale(${interpolate(videoProgress, [0, 1], [0.8, 1])}) translateY(${interpolate(videoProgress, [0, 1], [80, 0])}px) rotate(-2deg)`,
           zIndex: 10,
         }}
       >
         <OffthreadVideo
           src={staticFile("shots/characters.mp4")}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-          }}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
-        <div style={{ position: "absolute", bottom: 20, left: 20 }}>
-          <StickerBadge text="Petdex Companion Engine" color={colors.cobalt} style={{ color: colors.paper }} rotate={-2} />
-        </div>
       </div>
-    </div>
+    </AbsoluteFill>
   );
 };
 
-// ─── Scene 2: Connect & Crawl ──────────────────────────────────────────────────
-
-export const ConnectScene = ({ siteUrl = "qualra.xyz" }: CradleLaunchProps) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  const browserProgress = spring({ frame: frame - 10, fps, config: { damping: 16, stiffness: 150 } });
-
-  return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        background: colors.paper,
-        color: colors.ink,
-        fontFamily: font,
-        overflow: "hidden",
-      }}
-    >
-      <Wordmark dark={false} />
-
-      <Reveal delay={5} style={{ position: "absolute", left: 100, top: 140, width: 700, zIndex: 30 }}>
-        <StickerBadge text="01 / Connect Your Site" color={colors.cobalt} style={{ color: colors.paper }} rotate={-2} />
-        <h2 style={{ fontSize: 72, lineHeight: 0.92, fontWeight: 900, letterSpacing: "-0.075em", marginTop: 16 }}>
-          A URL is enough to begin.
-        </h2>
-      </Reveal>
-
-      {/* Main Studio Onboarding Shot */}
-      <div
-        style={{
-          position: "absolute",
-          left: 100,
-          top: 320,
-          opacity: browserProgress,
-          transform: `scale(${interpolate(browserProgress, [0, 1], [0.92, 1])}) translateY(${interpolate(browserProgress, [0, 1], [50, 0])}px)`,
-          zIndex: 10,
-        }}
-      >
-        <NeobrutalistBrowser title="cradlestudio.vercel.app" width={1120} height={660}>
-          <Img src={staticFile("shots/connect.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top left" }} />
-        </NeobrutalistBrowser>
-      </div>
-
-      {/* Floating Badges */}
-      <div style={{ position: "absolute", right: 100, top: 350, zIndex: 40 }}>
-        <StickerBadge text="Instant Site Crawling" color={colors.acid} rotate={5} delay={40} />
-      </div>
-      <div style={{ position: "absolute", right: 80, top: 480, zIndex: 40 }}>
-        <StickerBadge text="Brand Assets Extracted" color={colors.coral} style={{ color: colors.paper }} rotate={-3} delay={70} />
-      </div>
-      <div style={{ position: "absolute", right: 120, top: 610, zIndex: 40 }}>
-        <StickerBadge text="Zero Code Setup" color={colors.cobalt} style={{ color: colors.paper }} rotate={4} delay={100} />
-      </div>
-    </div>
-  );
-};
-
-// ─── Scene 3: Review Knowledge ─────────────────────────────────────────────────
+// ─── Scene 3: The Workflow (Knowledge) ──────────────────────────────────────────
 
 export const ReviewScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const browserProgress = spring({ frame: frame - 5, fps, config: { damping: 16, stiffness: 150 } });
+  const browserProgress = spring({ frame: frame - 15, fps, config: { damping: 16, stiffness: 90 } });
+  
+  // Cinematic slow zoom out and pan
+  const scale = interpolate(frame, [0, 300], [1.05, 0.95], { extrapolateRight: "clamp" });
+  const panY = interpolate(frame, [0, 300], [0, -40], { extrapolateRight: "clamp" });
 
   return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        background: colors.ink,
-        color: colors.paper,
-        fontFamily: font,
-        overflow: "hidden",
-      }}
-    >
+    <AbsoluteFill style={{ background: colors.paper, color: colors.ink, fontFamily }}>
+      <Wordmark dark={false} />
       <Grain />
-      <Wordmark />
+      
+      <div style={{ position: "absolute", left: 100, top: 220, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12 }}>
+        <NeoText text="1. Give it knowledge." delay={10} size={72} color={colors.ink} highlight />
+        <div style={{ opacity: spring({ frame: frame - 30, fps }), fontSize: 32, fontWeight: 700, width: 400, marginTop: 16, color: colors.line, lineHeight: 1.3 }}>
+          Connect any URL.<br/>The engine extracts your brand's essence instantly.
+        </div>
+      </div>
 
-      <Reveal delay={5} style={{ position: "absolute", left: 100, top: 140, width: 750, zIndex: 30 }}>
-        <StickerBadge text="02 / Review Knowledge" color={colors.acid} rotate={-3} />
-        <h2 style={{ fontSize: 72, lineHeight: 0.92, fontWeight: 900, letterSpacing: "-0.075em", marginTop: 16 }}>
-          Bounded, approved source of truth.
-        </h2>
-      </Reveal>
-
-      {/* Studio Review Shot */}
-      <div
-        style={{
-          position: "absolute",
-          left: 100,
-          top: 320,
+      <div style={{ position: "absolute", right: -50, top: 120, zIndex: 10, transform: `scale(${scale}) translateY(${panY}px)` }}>
+        <div style={{
           opacity: browserProgress,
-          transform: `scale(${interpolate(browserProgress, [0, 1], [0.92, 1])}) translateY(${interpolate(browserProgress, [0, 1], [40, 0])}px)`,
-          zIndex: 10,
-        }}
-      >
-        <NeobrutalistBrowser title="cradlestudio.vercel.app/review" width={1120} height={660} dark>
-          <Img src={staticFile("shots/review.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top left" }} />
-        </NeobrutalistBrowser>
+          transform: `translateY(${interpolate(browserProgress, [0, 1], [100, 0])}px) rotate(2deg)`,
+        }}>
+          <NeobrutalistBrowser title="cradlestudio.vercel.app" width={1000} height={700}>
+            <Img src={staticFile("shots/connect.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top left" }} />
+          </NeobrutalistBrowser>
+        </div>
       </div>
-
-      {/* Floating Badges */}
-      <div style={{ position: "absolute", right: 90, top: 360, zIndex: 40 }}>
-        <StickerBadge text="APPROVED KNOWLEDGE" color={colors.acid} rotate={-6} delay={35} />
-      </div>
-      <div style={{ position: "absolute", right: 110, top: 500, zIndex: 40 }}>
-        <StickerBadge text="NO HALLUCINATIONS" color={colors.coral} style={{ color: colors.paper }} rotate={4} delay={65} />
-      </div>
-    </div>
+    </AbsoluteFill>
   );
 };
 
-// ─── Scene 4: Shape & Character Catalog ───────────────────────────────────────
+// ─── Scene 4: The Workflow (Character) ──────────────────────────────────────────
 
-export const ShapeScene = ({ characterName = "Byte Bunny" }: CradleLaunchProps) => {
+export const ShapeScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const browserProgress = spring({ frame: frame - 5, fps, config: { damping: 16, stiffness: 150 } });
-  const videoProgress = spring({ frame: frame - 30, fps, config: { damping: 14, stiffness: 170 } });
+  const browserProgress = spring({ frame: frame - 10, fps, config: { damping: 16, stiffness: 90 } });
+  const panY = interpolate(frame, [0, 300], [0, -30], { extrapolateRight: "clamp" });
 
   return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        background: colors.paper,
-        color: colors.ink,
-        fontFamily: font,
-        overflow: "hidden",
-      }}
-    >
-      <Wordmark dark={false} />
-
-      <Reveal delay={5} style={{ position: "absolute", left: 100, top: 140, width: 800, zIndex: 30 }}>
-        <StickerBadge text="03 / Pick Your Companion" color={colors.cobalt} style={{ color: colors.paper }} rotate={-2} />
-        <h2 style={{ fontSize: 72, lineHeight: 0.92, fontWeight: 900, letterSpacing: "-0.075em", marginTop: 16 }}>
-          Petdex catalog & usage meters.
-        </h2>
-      </Reveal>
-
-      {/* Left: Studio Shape Screen Shot */}
-      <div
-        style={{
-          position: "absolute",
-          left: 100,
-          top: 320,
-          opacity: browserProgress,
-          transform: `scale(${interpolate(browserProgress, [0, 1], [0.92, 1])})`,
-          zIndex: 10,
-        }}
-      >
-        <NeobrutalistBrowser title="cradlestudio.vercel.app/shape" width={1020} height={660}>
-          <Img src={staticFile("shots/shape.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top left" }} />
-        </NeobrutalistBrowser>
-      </div>
-
-      {/* Right: Video Loop of Animated Petdex Character */}
-      <div
-        style={{
-          position: "absolute",
-          right: 90,
-          top: 260,
-          width: 640,
-          height: 680,
-          borderRadius: 20,
-          border: `5px solid ${colors.ink}`,
-          boxShadow: `16px 16px 0 ${colors.cobalt}`,
-          overflow: "hidden",
-          opacity: videoProgress,
-          transform: `scale(${videoProgress}) rotate(2deg)`,
-          background: colors.darkSlate,
-          zIndex: 20,
-        }}
-      >
-        <OffthreadVideo src={staticFile("shots/characters.mp4")} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        <div style={{ position: "absolute", bottom: 20, left: 20 }}>
-          <StickerBadge text="99 Conversations / Mo" color={colors.acid} rotate={-3} delay={45} />
+    <AbsoluteFill style={{ background: colors.ink, color: colors.paper, fontFamily }}>
+      <Wordmark dark={true} />
+      <Grain />
+      
+      <div style={{ position: "absolute", right: 100, top: 250, zIndex: 30, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12, textAlign: "right" }}>
+        <NeoText text="2. Pick a character." delay={10} size={72} color={colors.ink} highlight />
+        <div style={{ opacity: spring({ frame: frame - 30, fps }), fontSize: 32, fontWeight: 700, width: 400, marginTop: 16, color: colors.paper, lineHeight: 1.3 }}>
+          Browse the Petdex. Select the perfect companion.
         </div>
       </div>
-    </div>
+
+      <div style={{ position: "absolute", left: 60, top: 160, zIndex: 10, transform: `translateY(${panY}px)` }}>
+        <div style={{
+          opacity: browserProgress,
+          transform: `translateY(${interpolate(browserProgress, [0, 1], [100, 0])}px) rotate(-2deg)`,
+        }}>
+          <NeobrutalistBrowser title="cradlestudio.vercel.app/shape" width={900} height={660} dark>
+            <Img src={staticFile("shots/shape.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top left" }} />
+          </NeobrutalistBrowser>
+        </div>
+      </div>
+    </AbsoluteFill>
   );
 };
 
-// ─── Scene 5: Live Website Customer Experience ────────────────────────────────
+// ─── Scene 5: Live Site Deployment ──────────────────────────────────────────────
 
 export const LiveSiteScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const browserProgress = spring({ frame: frame - 5, fps, config: { damping: 16, stiffness: 150 } });
+  const browserProgress = spring({ frame: frame - 15, fps, config: { damping: 16, stiffness: 90 } });
+  const zoom = interpolate(frame, [0, 300], [0.95, 1], { extrapolateRight: "clamp" });
 
   return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        background: colors.ink,
-        color: colors.paper,
-        fontFamily: font,
-        overflow: "hidden",
-      }}
-    >
+    <AbsoluteFill style={{ background: colors.paper, color: colors.ink, fontFamily }}>
+      <Wordmark dark={false} />
       <Grain />
-      <Wordmark />
+      
+      <div style={{ position: "absolute", top: 100, width: "100%", textAlign: "center", zIndex: 30, display: "flex", justifyContent: "center" }}>
+        <NeoText text="3. Drop it on any site." delay={10} size={84} color={colors.ink} highlight />
+      </div>
 
-      <Reveal delay={5} style={{ position: "absolute", left: 100, top: 140, width: 800, zIndex: 30 }}>
-        <StickerBadge text="04 / Live Deployment" color={colors.acid} rotate={-3} />
-        <h2 style={{ fontSize: 72, lineHeight: 0.92, fontWeight: 900, letterSpacing: "-0.075em", marginTop: 16 }}>
-          Live on any customer website.
-        </h2>
-      </Reveal>
-
-      {/* Customer Site Shot */}
-      <div
-        style={{
-          position: "absolute",
-          left: 100,
-          top: 320,
-          opacity: browserProgress,
-          transform: `scale(${interpolate(browserProgress, [0, 1], [0.92, 1])}) translateY(${interpolate(browserProgress, [0, 1], [40, 0])}px)`,
-          zIndex: 10,
-        }}
-      >
-        <NeobrutalistBrowser title="qualra.xyz" width={1120} height={660} dark>
+      <div style={{ 
+        position: "absolute", 
+        top: 260, 
+        left: "50%", 
+        marginLeft: -560,
+        width: 1120, 
+        height: 680, 
+        zIndex: 10,
+        opacity: browserProgress,
+        transform: `translateY(${interpolate(browserProgress, [0, 1], [60, 0])}px) scale(${zoom})`,
+      }}>
+        <NeobrutalistBrowser title="qualra.xyz" width={1120} height={680} dark>
           <Img src={staticFile("shots/site.png")} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top left" }} />
         </NeobrutalistBrowser>
       </div>
-
-      {/* Floating Badges */}
-      <div style={{ position: "absolute", right: 90, top: 360, zIndex: 40 }}>
-        <StickerBadge text="LIVE WIDGET INGESTED" color={colors.acid} rotate={-4} delay={35} />
-      </div>
-      <div style={{ position: "absolute", right: 110, top: 500, zIndex: 40 }}>
-        <StickerBadge text="REACT 18 & 19 ZERO-CONFIG" color={colors.cobalt} style={{ color: colors.paper }} rotate={4} delay={65} />
-      </div>
-    </div>
+    </AbsoluteFill>
   );
 };
 
-// ─── Scene 6: Outro & Call to Action ──────────────────────────────────────────
+// ─── Scene 6: Outro ─────────────────────────────────────────────────────────────
 
 export const ClosingScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const textProgress = spring({ frame: frame - 5, fps, config: { damping: 14, stiffness: 140 } });
-  const videoProgress = spring({ frame: frame - 20, fps, config: { damping: 14, stiffness: 170 } });
-
   return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        background: colors.paper,
-        color: colors.ink,
-        fontFamily: font,
-        overflow: "hidden",
-      }}
-    >
-      <Wordmark dark={false} />
-
-      <div
-        style={{
-          position: "absolute",
-          left: 100,
-          top: 200,
-          width: 980,
-          opacity: textProgress,
-          transform: `translateY(${interpolate(textProgress, [0, 1], [50, 0])}px)`,
-          zIndex: 20,
-        }}
-      >
-        <StickerBadge text="Open Source Character Infrastructure" color={colors.cobalt} style={{ color: colors.paper }} rotate={-3} delay={5} />
-        <h1
+    <AbsoluteFill style={{ background: colors.ink, color: colors.paper, fontFamily }}>
+      <Grain />
+      
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "100%", gap: 20 }}>
+        <span
           style={{
-            fontSize: 105,
-            fontWeight: 900,
-            letterSpacing: "-0.08em",
-            lineHeight: 0.88,
-            marginTop: 28,
+            display: "grid",
+            width: 80,
+            height: 80,
+            placeItems: "center",
+            borderRadius: "20px",
+            background: colors.acid,
             color: colors.ink,
+            fontSize: 48,
+            fontWeight: 900,
+            border: `6px solid ${colors.ink}`,
+            boxShadow: `10px 10px 0 ${colors.coral}`,
+            opacity: spring({ frame: frame - 10, fps }),
+            transform: `scale(${spring({ frame: frame - 10, fps, config: { damping: 14 } })}) rotate(4deg)`,
+            marginBottom: 20
           }}
         >
-          Give your website a soul.
-        </h1>
-        <p
-          style={{
-            fontSize: 32,
-            fontWeight: 700,
-            color: colors.cobalt,
-            marginTop: 24,
-            letterSpacing: "-0.03em",
-          }}
-        >
-          Build & deploy in minutes with Cradle Studio.
-        </p>
-
-        <div style={{ marginTop: 40, display: "flex", alignItems: "center", gap: 24 }}>
-          <StickerBadge text="pnpm add @maranga/cradle" color={colors.acid} rotate={-2} delay={30} />
-          <StickerBadge text="https://cradlestudio.vercel.app" color={colors.coral} style={{ color: colors.paper }} rotate={2} delay={45} />
+          C
+        </span>
+        <NeoText text="Open-source." delay={20} size={64} color={colors.paper} />
+        <NeoText text="Framework-agnostic." delay={30} size={64} color={colors.paper} />
+        
+        <div style={{ height: 40 }} />
+        
+        <div style={{ 
+          opacity: spring({ frame: frame - 60, fps }), 
+          fontSize: 32, 
+          fontWeight: 900, 
+          color: colors.ink, 
+          background: colors.acid,
+          padding: "16px 32px",
+          border: `4px solid ${colors.ink}`,
+          boxShadow: `8px 8px 0 ${colors.coral}`,
+          transform: "rotate(-2deg)"
+        }}>
+          cradlestudio.vercel.app
         </div>
       </div>
-
-      {/* Closing Characters Video Card */}
-      <div
-        style={{
-          position: "absolute",
-          right: 90,
-          top: 180,
-          width: 680,
-          height: 680,
-          borderRadius: 24,
-          border: `5px solid ${colors.ink}`,
-          boxShadow: `20px 20px 0 ${colors.acid}`,
-          overflow: "hidden",
-          opacity: videoProgress,
-          transform: `scale(${videoProgress}) rotate(-3deg)`,
-          background: colors.darkSlate,
-          zIndex: 10,
-        }}
-      >
-        <OffthreadVideo src={staticFile("shots/characters.mp4")} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-      </div>
-    </div>
+    </AbsoluteFill>
   );
 };

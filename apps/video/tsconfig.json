@@ -2,7 +2,9 @@
   "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
-    "types": ["node"]
+    "types": ["node"],
+    "module": "esnext",
+    "moduleResolution": "bundler"
   },
   "include": ["src", "scripts", "remotion.config.ts"]
 }

@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@remotion/cli": "4.0.495",
+    "@remotion/google-fonts": "^4.0.503",
+    "@remotion/transitions": "^4.0.503",
     "dotenv": "^17.4.2",
     "remotion": "4.0.495"
   },
