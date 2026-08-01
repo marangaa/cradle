@@ -604,4 +604,38 @@
   if (typeof customElements !== "undefined" && !customElements.get("cradle-character")) {
     customElements.define("cradle-character", CradleCharacter);
   }
+  function getCharacter(siteId) {
+    if (typeof document === "undefined") return null;
+    if (siteId) {
+      const selector = 'cradle-character[site-id="' + CSS.escape(siteId) + '"]';
+      return document.querySelector(selector);
+    }
+    return document.querySelector("cradle-character");
+  }
+  var Cradle;
+  if (typeof window !== "undefined" && typeof customElements !== "undefined") {
+    const script = document.currentScript;
+    const siteId = script?.dataset.siteId;
+    if (siteId && !document.querySelector("cradle-character")) {
+      const mount = () => {
+        if (document.querySelector("cradle-character")) return;
+        const element = document.createElement("cradle-character");
+        element.setAttribute("site-id", siteId);
+        if (script?.dataset.placement) element.setAttribute("placement", script.dataset.placement);
+        if (script?.dataset.theme) element.setAttribute("theme", script.dataset.theme);
+        document.body.appendChild(element);
+      };
+      if (document.body) mount();
+      else document.addEventListener("DOMContentLoaded", mount, { once: true });
+    }
+    Cradle = window.Cradle = {
+      open: (siteId2) => getCharacter(siteId2)?.openPanel(),
+      close: (siteId2) => getCharacter(siteId2)?.closePanel(),
+      toggle: (siteId2) => getCharacter(siteId2)?.togglePanel(),
+      trigger: (action, siteId2) => getCharacter(siteId2)?.trigger(action),
+      resolveAction: (success, siteId2) => getCharacter(siteId2)?.resolveAction(success),
+      setState: (state, siteId2) => getCharacter(siteId2)?.setVisualState(state),
+      setContext: (context, siteId2) => getCharacter(siteId2)?.setContext(context)
+    };
+  }
 })();

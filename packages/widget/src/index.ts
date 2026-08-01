@@ -766,3 +766,85 @@ class CradleCharacter extends HTMLElementBase {
 if (typeof customElements !== "undefined" && !customElements.get("cradle-character")) {
   customElements.define("cradle-character", CradleCharacter);
 }
+
+function getCharacter(siteId?: string) {
+  if (typeof document === "undefined") return null;
+  if (siteId) {
+    const selector = 'cradle-character[site-id="' + CSS.escape(siteId) + '"]';
+    return document.querySelector(selector) as CradleCharacter | null;
+  }
+  return document.querySelector("cradle-character") as CradleCharacter | null;
+}
+
+/**
+ * Live-bound named export so `import { Cradle } from "@maranga/cradle"` works for bundler/npm
+ * consumers, not just the `window.Cradle` global the <script> tag path relies on. `undefined`
+ * anywhere this module is evaluated outside a browser (SSR, a Server Component's module graph) —
+ * callers should optional-chain (`Cradle?.setState(...)`), same as the window.Cradle convention
+ * used throughout this file and its README.
+ */
+export let Cradle: CradleController | undefined;
+
+/**
+ * Everything below touches a real browser global (customElements, document, window) at the top
+ * level, so it's guarded as a block — this module needs to be *importable* (even if inert) from
+ * a Next.js Server Component's module graph, not just executable in an actual browser.
+ */
+if (typeof window !== "undefined" && typeof customElements !== "undefined") {
+  /**
+   * Matches the standard single-tag embed pattern (Intercom, Crisp, and similar all work this
+   * way): <script src="https://runtime.example.com/widget.js" data-site-id="..."></script> and
+   * nothing else. If the loading <script> tag carries a data-site-id, auto-create the element
+   * instead of requiring the developer to also hand-write a <cradle-character> tag. Explicit
+   * <cradle-character> tags (used by the npm/React path, or for multiple companions on one page)
+   * still work exactly as before and take priority — this only fills in when nothing was written
+   * by hand.
+   */
+  const script = document.currentScript as HTMLScriptElement | null;
+  const siteId = script?.dataset.siteId;
+  if (siteId && !document.querySelector("cradle-character")) {
+    const mount = () => {
+      if (document.querySelector("cradle-character")) return;
+      const element = document.createElement("cradle-character");
+      element.setAttribute("site-id", siteId);
+      if (script?.dataset.placement) element.setAttribute("placement", script.dataset.placement);
+      if (script?.dataset.theme) element.setAttribute("theme", script.dataset.theme);
+      document.body.appendChild(element);
+    };
+
+    if (document.body) mount();
+    else document.addEventListener("DOMContentLoaded", mount, { once: true });
+  }
+
+  Cradle = window.Cradle = {
+    open: (siteId) => getCharacter(siteId)?.openPanel(),
+    close: (siteId) => getCharacter(siteId)?.closePanel(),
+    toggle: (siteId) => getCharacter(siteId)?.togglePanel(),
+    trigger: (action, siteId) => getCharacter(siteId)?.trigger(action),
+    resolveAction: (success, siteId) => getCharacter(siteId)?.resolveAction(success),
+    setState: (state, siteId) => getCharacter(siteId)?.setVisualState(state),
+    setContext: (context, siteId) => getCharacter(siteId)?.setContext(context),
+  };
+}
+
+type CradleCharacterElementProps = {
+  "site-id"?: string;
+  "api-base"?: string;
+  placement?: "floating" | "inline";
+  /** Boolean attribute. Present = skip the idle showcase; use when driving real state yourself. */
+  "no-cycle"?: boolean | "";
+  theme?: "neobrutalist" | "modern" | "cyberpunk" | "terminal" | "minimal" | "synthwave" | "paper";
+  "accent-color"?: string;
+  "primary-color"?: string;
+  "bg-color"?: string;
+  "text-color"?: string;
+  children?: unknown;
+};
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      "cradle-character": CradleCharacterElementProps & Record<string, unknown>;
+    }
+  }
+}

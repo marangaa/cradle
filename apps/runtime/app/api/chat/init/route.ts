@@ -4,17 +4,32 @@ import { store } from "../../../lib/store";
 
 export const maxDuration = 30;
 
-const CORS_HEADERS = {
+/** See apps/runtime/app/api/chat/route.ts for why the preflight can't be origin-scoped here —
+ *  same structural reason applies (installationId isn't visible to an OPTIONS preflight). */
+const PREFLIGHT_CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor-id",
 };
 
+function buildCorsHeaders(reqOrigin: string | null, installationOrigin: string | undefined) {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor-id",
+    Vary: "Origin",
+  };
+  if (installationOrigin && reqOrigin === installationOrigin) {
+    headers["Access-Control-Allow-Origin"] = installationOrigin;
+  }
+  return headers;
+}
+
 export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+  return new Response(null, { status: 204, headers: PREFLIGHT_CORS_HEADERS });
 }
 
 export async function POST(req: Request) {
+  const reqOrigin = req.headers.get("origin");
   try {
     const url = new URL(req.url);
     const headerInstallationId = req.headers.get("x-cradle-installation-id");
@@ -35,7 +50,7 @@ export async function POST(req: Request) {
       console.warn("[Chat Init API] Missing installationId");
       return new Response(
         JSON.stringify({ error: "Missing installationId" }),
-        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
       );
     }
 
@@ -44,9 +59,11 @@ export async function POST(req: Request) {
       console.warn(`[Chat Init API] Installation not found: ${installationId}`);
       return new Response(
         JSON.stringify({ error: "Installation not found" }),
-        { status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        { status: 404, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
       );
     }
+
+    const CORS_HEADERS = buildCorsHeaders(reqOrigin, installation.origin);
 
     const brandName = installation.brandProfile?.name || installation.name || "our business";
     const memories = visitorId ? await store.getVisitorMemories(visitorId) : [];
@@ -91,7 +108,7 @@ ${memoriesContext}`,
     console.error("[Chat Init API] Error in /api/chat/init route:", error);
     return new Response(
       JSON.stringify({ greeting: "Hi there! 👋 Welcome to our site. Ask me anything!" }),
-      { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
     );
   }
 }

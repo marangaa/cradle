@@ -8,17 +8,45 @@ export const maxDuration = 60;
 
 const FREE_TIER_MONTHLY_LIMIT = 99;
 
-const CORS_HEADERS = {
+/**
+ * The OPTIONS preflight structurally cannot know which installation this request is for —
+ * installationId only ever arrives via a custom header (x-cradle-installation-id) or the JSON
+ * body, and per the CORS spec neither is visible to a preflight (Access-Control-Request-Headers
+ * only announces header *names*, never values; preflights never carry a body). So the preflight
+ * has to stay permissive; real origin validation happens below, once the POST handler has
+ * actually loaded the installation and knows its registered origin — see buildCorsHeaders.
+ * This closes reading a real visitor's response cross-origin, but NOT quota consumption: the
+ * model call and DB writes already happened by the time origin is known. Fully closing that
+ * needs installationId visible at preflight time (e.g. as a URL query param too).
+ */
+const PREFLIGHT_CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor-id",
 };
 
+/** Reflects Origin only if it matches this installation's registered origin — same pattern as
+ *  /api/installations/[id], confirmed against Next.js's own documented CORS example (a plain
+ *  Response with conditionally-set headers is the framework's actual recommended approach; there
+ *  is no built-in per-origin helper). No match -> omit the header; the browser blocks the read. */
+function buildCorsHeaders(reqOrigin: string | null, installationOrigin: string | undefined) {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor-id",
+    Vary: "Origin",
+  };
+  if (installationOrigin && reqOrigin === installationOrigin) {
+    headers["Access-Control-Allow-Origin"] = installationOrigin;
+  }
+  return headers;
+}
+
 export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+  return new Response(null, { status: 204, headers: PREFLIGHT_CORS_HEADERS });
 }
 
 export async function POST(req: Request) {
+  const reqOrigin = req.headers.get("origin");
   try {
     const url = new URL(req.url);
     const headerInstallationId = req.headers.get("x-cradle-installation-id");
@@ -45,7 +73,7 @@ export async function POST(req: Request) {
       console.warn(`[Chat API] Missing installationId or visitorId`);
       return new Response(
         JSON.stringify({ error: "Missing required headers: x-cradle-installation-id, x-cradle-visitor-id" }),
-        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
       );
     }
 
@@ -54,9 +82,11 @@ export async function POST(req: Request) {
       console.warn(`[Chat API] Installation not found: ${installationId}`);
       return new Response(
         JSON.stringify({ error: "Installation not found" }),
-        { status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        { status: 404, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
       );
     }
+
+    const CORS_HEADERS = buildCorsHeaders(reqOrigin, installation.origin);
 
     const existingConversation = await store.getConversation(visitorId);
     const isNewConversation = !existingConversation || existingConversation.messages.length === 0;
@@ -202,7 +232,7 @@ Directives:
     console.error("[Chat API] Error in /api/chat:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
-      { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...buildCorsHeaders(reqOrigin, undefined), "Content-Type": "application/json" } }
     );
   }
 }
