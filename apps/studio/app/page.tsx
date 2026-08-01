@@ -1167,6 +1167,27 @@ export default function StudioHome() {
       <header className="studio-topbar">
         <Link className="brand" href="/"><span aria-hidden="true">C</span> Cradle</Link>
         <span className="topbar-actions">
+          <a
+            href="https://github.com/marangaa/cradle"
+            target="_blank"
+            rel="noreferrer"
+            className="button secondary"
+            style={{
+              height: 32,
+              minHeight: 32,
+              padding: "0 10px",
+              fontSize: ".68rem",
+              gap: 6,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+            <span>GitHub</span>
+          </a>
           {session && <button className="quiet-button" onClick={reset}>New project</button>}
           {authSession && (
             <button className="quiet-button" onClick={() => void authClient.signOut()}>
@@ -1310,11 +1331,21 @@ export default function StudioHome() {
             /* New user — show connect form */
             <section className="connect-screen">
               <div className="connect-copy">
-                <span className="eyebrow">Give your site a body</span>
-                <h1>Make your website feel <em>alive.</em></h1>
-                <p>Cradle helps you create a character for your website—one people can see, recognise, and return to.</p>
+                <span className="eyebrow">Open-Source Web Companion</span>
+                <h1>Websites used to have <em>personality.</em></h1>
+                <p>Cradle gives your site an animated companion with a working AI chatbot out of the box—or a pure, programmable UI layer driven by standard JavaScript.</p>
                 <div className="principles">
-                  <span>01. Map the site</span><span>02. Pick a body</span><span>03. Wire the behaviour</span>
+                  <span>01. Map your site</span>
+                  <span>02. Pick a Petdex body</span>
+                  <span>03. Paste 1 script tag</span>
+                  <a
+                    href="https://github.com/marangaa/cradle"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ textDecoration: "none", color: "inherit" }}
+                  >
+                    <span>⭐ Open Source on GitHub</span>
+                  </a>
                 </div>
               </div>
               <div className="connect-card">
