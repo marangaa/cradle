@@ -1361,18 +1361,18 @@ export default function StudioHome() {
                 <div style={{ marginTop: 24, display: "flex", alignItems: "center", gap: 14, border: "2px solid var(--ink)", background: "rgba(255,255,255,0.15)", backdropFilter: "blur(4px)", padding: "12px 16px", boxShadow: "4px 4px 0 var(--ink)", width: "max-content" }}>
                   <CatalogCharacter
                     companion={{
-                      slug: "boba",
-                      displayName: "Boba",
-                      description: "Default companion",
+                      slug: "homelander",
+                      displayName: "Homelander",
+                      description: "Featured Petdex character",
                       kind: "character",
-                      submittedBy: "Petdex",
-                      spritesheetUrl: "https://assets.petdex.dev/pets/boba/spritesheet.png",
-                      petJsonUrl: "https://assets.petdex.dev/pets/boba/pet.json"
+                      submittedBy: "Serhat",
+                      spritesheetUrl: "https://assets.petdex.dev/pets/homelander-dbbb6a60a484/sprite.webp",
+                      petJsonUrl: "https://assets.petdex.dev/pets/homelander-dbbb6a60a484/petjson.json"
                     }}
                   />
                   <div>
-                    <strong style={{ display: "block", color: "var(--white)", fontSize: ".88rem", fontWeight: 800 }}>Meet Boba 👋</strong>
-                    <span style={{ color: "var(--yellow)", fontSize: ".72rem", fontFamily: "var(--mono)", fontWeight: 700 }}>Live interactive mascot</span>
+                    <strong style={{ display: "block", color: "var(--white)", fontSize: ".88rem", fontWeight: 800 }}>Petdex Mascot 👋</strong>
+                    <span style={{ color: "var(--yellow)", fontSize: ".72rem", fontFamily: "var(--mono)", fontWeight: 700 }}>Live interactive character</span>
                   </div>
                 </div>
               </div>

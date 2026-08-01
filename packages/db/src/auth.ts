@@ -20,7 +20,6 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg" }),
   emailAndPassword: { enabled: true },
   plugins: [
-    nextCookies(),
     anonymous({
       onLinkAccount: async ({ anonymousUser, newUser }) => {
         // Re-assign all site installations owned by the temporary anonymous user to the new permanent user
@@ -30,5 +29,6 @@ export const auth = betterAuth({
           .where(eq(installations.ownerId, anonymousUser.user.id));
       },
     }),
+    nextCookies(),
   ],
 });
