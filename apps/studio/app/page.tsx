@@ -93,6 +93,32 @@ const KIND_LABELS: Record<KindFilter, string> = {
   all: "All", character: "Characters", creature: "Creatures", object: "Objects",
 };
 
+const DEFAULT_LANDING_COMPANION: ImportedCompanion = {
+  id: "default-landing-companion",
+  installationId: "default",
+  provider: "petdex",
+  slug: "homelander",
+  displayName: "Homelander",
+  description: "Featured Petdex companion",
+  kind: "character",
+  submittedBy: "Serhat",
+  spritesheetUrl: "https://assets.petdex.dev/pets/homelander-dbbb6a60a484/sprite.webp",
+  petJsonUrl: "https://assets.petdex.dev/pets/homelander-dbbb6a60a484/petjson.json",
+  sourceUrl: "https://assets.petdex.dev/pets/homelander-dbbb6a60a484/sprite.webp",
+  objectKey: "pets/homelander-dbbb6a60a484/sprite.webp",
+  checksum: "default",
+  columns: 8,
+  rows: 9,
+  cellWidth: 64,
+  cellHeight: 64,
+};
+
+const DEFAULT_LANDING_CHARACTER: Character = {
+  displayName: "Cradle Companion",
+  greeting: "Hi there! 👋 Enter your site URL to build a custom companion for your website.",
+  theme: "neobrutalist",
+};
+
 // ─── Fetchers (Native Next.js Rewrites to /api/runtime/*) ───────────────────────
 
 async function runtimeFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -939,11 +965,14 @@ export default function StudioHome() {
   const [copied, setCopied] = useState(false);
   const [claimModalOpen, setClaimModalOpen] = useState(false);
 
-  // ── Derived booleans ─────────────────────────────────────────────────────────
+  // ── Derived booleans & defaults ─────────────────────────────────────────────
   const reviewed   = (session?.knowledge.version ?? 0) > 1;
   const canShape   = Boolean(session && reviewed);
   const canGoLive  = Boolean(session && reviewed && companion);
-  const hasPreview = Boolean(character && companion && (screen === "shape" || screen === "live"));
+  const hasPreview = true;
+
+  const activeCompanion = companion ?? DEFAULT_LANDING_COMPANION;
+  const activeCharacter = character ?? DEFAULT_LANDING_CHARACTER;
 
   // ── Server state (TanStack Query) ─────────────────────────────────────────────
 
@@ -1357,24 +1386,6 @@ export default function StudioHome() {
               <div className="connect-copy">
                 <h1>Give your website a <em>character.</em></h1>
                 <p>An animated companion for your site. Connect your pages, pick a body from the catalog, and bring your site to life with one script tag.</p>
-
-                <div style={{ marginTop: 24, display: "flex", alignItems: "center", gap: 14, border: "2px solid var(--ink)", background: "rgba(255,255,255,0.15)", backdropFilter: "blur(4px)", padding: "12px 16px", boxShadow: "4px 4px 0 var(--ink)", width: "max-content" }}>
-                  <CatalogCharacter
-                    companion={{
-                      slug: "homelander",
-                      displayName: "Homelander",
-                      description: "Featured Petdex character",
-                      kind: "character",
-                      submittedBy: "Serhat",
-                      spritesheetUrl: "https://assets.petdex.dev/pets/homelander-dbbb6a60a484/sprite.webp",
-                      petJsonUrl: "https://assets.petdex.dev/pets/homelander-dbbb6a60a484/petjson.json"
-                    }}
-                  />
-                  <div>
-                    <strong style={{ display: "block", color: "var(--white)", fontSize: ".88rem", fontWeight: 800 }}>Petdex Mascot 👋</strong>
-                    <span style={{ color: "var(--yellow)", fontSize: ".72rem", fontFamily: "var(--mono)", fontWeight: 700 }}>Live interactive character</span>
-                  </div>
-                </div>
               </div>
               <div className="connect-card">
                 <span className="eyebrow">Start here / 01</span>
@@ -1651,16 +1662,14 @@ export default function StudioHome() {
             </section>
           )}
 
-          {/* Floating character preview */}
-          {hasPreview && character && companion && (
-            <CharacterPreview
-              character={character}
-              companion={companion}
-              overrideState={playgroundState}
-              installationId={session?.installation.id}
-              brandName={session?.brandProfile?.name || session?.installation.name}
-            />
-          )}
+          {/* Floating character preview — sits in the bottom-right corner */}
+          <CharacterPreview
+            character={activeCharacter}
+            companion={activeCompanion}
+            overrideState={playgroundState}
+            installationId={session?.installation.id}
+            brandName={session?.brandProfile?.name || session?.installation.name}
+          />
 
           {/* Claim Account Modal for anonymous users */}
           <ClaimAccountModal open={claimModalOpen} onClose={() => setClaimModalOpen(false)} />
