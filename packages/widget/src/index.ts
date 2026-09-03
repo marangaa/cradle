@@ -201,8 +201,20 @@ class CradleCharacter extends HTMLElementBase {
     this.visitorId = this.getOrCreateVisitorId();
     this.loadStoredMessages();
 
-    // Start PostHog-native telemetry — captures everything, classifies nothing.
-    globalTelemetry.init();
+    // Start PostHog-native telemetry + Client Watchdog
+    const posthogKey = this.getAttribute("posthog-key") || undefined;
+    const posthogHost = this.getAttribute("posthog-host") || undefined;
+
+    globalTelemetry.init({
+      posthogApiKey: posthogKey,
+      posthogHost: posthogHost,
+      onFrustration: (report) => {
+        console.log("[CradleWidget] Watchdog friction signal:", report.summary);
+        // Tier 1 Ambient Notification (Calm Computing):
+        // Shift mascot state to 'waiting' without popping an intrusive dialog
+        this.setVisualState("waiting");
+      },
+    });
 
     this.render();
     this.setupChatListeners();
@@ -596,7 +608,9 @@ class CradleCharacter extends HTMLElementBase {
           visitorId: this.visitorId,
           clientContext: {
             telemetry: globalTelemetry.buffer.recent(20),
+            frictionReport: globalTelemetry.getFrictionReport(),
             posthogSessionId: globalTelemetry.sessionId(),
+            sessionReplayUrl: globalTelemetry.sessionReplayUrl(),
             currentUrl: typeof window !== "undefined" ? window.location.href : undefined,
           },
         }),

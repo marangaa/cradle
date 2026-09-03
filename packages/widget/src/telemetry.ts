@@ -1,34 +1,43 @@
 /**
- * Cradle Telemetry
+ * Cradle Telemetry & Client Watchdog
  *
  * Thin wrapper around posthog-js. We initialise PostHog, let it observe the
- * host page, and store every raw CaptureResult in a ring buffer. Nothing is
- * classified or interpreted here — that is the caller's job.
+ * host page, and store every raw CaptureResult in a ring buffer.
  *
- * Session replays (how they work):
- *   PostHog bundles rrweb, which serialises the full DOM into a snapshot then
- *   streams incremental mutations, mouse moves, scrolls, inputs, and network
- *   requests as compressed binary frames. Those frames are streamed to
- *   PostHog's ingest API and can be played back frame-by-frame in the PostHog
- *   web app (app.posthog.com → Session Replay). If no api_host / project token
- *   is provided we set disable_session_recording: true so nothing leaves the
- *   device. If the site owner supplies their own PostHog project token we flip
- *   that off and they can watch full replays in their PostHog account.
+ * Architecture (Hierarchical Watchdog):
+ *   - PostHog-js acts as the Sensor (capturing $autocapture, $rageclick,
+ *     $dead_click, $pageview, $exception).
+ *   - The TelemetryBuffer maintains a chronological ring buffer of raw events.
+ *   - The Client Watchdog evaluates a real-time Friction Score (0-100) locally
+ *     at zero LLM cost. When friction crosses the threshold (>= 40), it triggers
+ *     an ambient notification (Tier 1) rather than a disruptive takeover.
+ *   - When the user engages, the distilled friction report is sent to the
+ *     server triage agent and Collins.
  *
- * Cloud vs. local:
- *   - No posthogApiKey supplied → before_send returns null → zero network
- *     egress. All events stay in this ring buffer only.
- *   - posthogApiKey supplied → events flow to PostHog cloud (or a self-hosted
- *     instance if posthogHost is set). Session replays are viewable there.
+ * Session replays:
+ *   - PostHog bundles rrweb. If a posthogApiKey is provided, replays stream
+ *     to PostHog and can be watched frame-by-frame with full network waterfalls.
+ *   - Without a key, disable_session_recording: true ensures zero network egress.
  */
 
 import { posthog, type PostHog, type CaptureResult } from "posthog-js";
+
+// ─── Friction & Watchdog Types ───────────────────────────────────────────────
+
+export interface FrictionReport {
+	score: number; // 0-100 friction score
+	isFrustrated: boolean; // score >= 40
+	lastFrictionType?: "rageclick" | "dead_click" | "exception" | "error";
+	lastTarget?: string;
+	recentFrictionCount: number;
+	summary: string;
+}
 
 // ─── Ring buffer ─────────────────────────────────────────────────────────────
 
 /**
  * Fixed-capacity ring buffer that keeps the N most recent raw PostHog
- * CaptureResult objects. No interpretation — raw data in, raw data out.
+ * CaptureResult objects, with real-time friction evaluation.
  */
 export class TelemetryBuffer {
 	private readonly slots: (CaptureResult | null)[];
@@ -66,6 +75,68 @@ export class TelemetryBuffer {
 		return this.all().slice(-n).reverse();
 	}
 
+	/**
+	 * Evaluates real-time friction over the last `windowMs` (default 15s).
+	 * Heuristic weights:
+	 *   - $rageclick: +40
+	 *   - $dead_click: +25
+	 *   - $exception: +35
+	 */
+	getFrictionReport(windowMs = 15000): FrictionReport {
+		const now = Date.now();
+		const cutoff = now - windowMs;
+		const events = this.all();
+
+		let score = 0;
+		let frictionCount = 0;
+		let lastFrictionType: FrictionReport["lastFrictionType"] = undefined;
+		let lastTarget: string | undefined = undefined;
+
+		for (const ev of events) {
+			const ts = ev.timestamp ? new Date(ev.timestamp).getTime() : now;
+			if (ts < cutoff) continue;
+
+			const name = ev.event;
+			const props = ev.properties as Record<string, any> | undefined;
+			const target =
+				(props?.$el_text as string) ||
+				(props?.$elements?.[0]?.tag_name as string) ||
+				(props?.$current_url as string) ||
+				undefined;
+
+			if (name === "$rageclick") {
+				score += 40;
+				frictionCount++;
+				lastFrictionType = "rageclick";
+				if (target) lastTarget = target;
+			} else if (name === "$dead_click") {
+				score += 25;
+				frictionCount++;
+				lastFrictionType = "dead_click";
+				if (target) lastTarget = target;
+			} else if (name === "$exception") {
+				score += 35;
+				frictionCount++;
+				lastFrictionType = "exception";
+			}
+		}
+
+		score = Math.min(score, 100);
+		const isFrustrated = score >= 40;
+		const summary = isFrustrated
+			? `Friction detected (score: ${score}/100, type: ${lastFrictionType || "unknown"}${lastTarget ? ` on "${lastTarget}"` : ""})`
+			: "Normal interaction";
+
+		return {
+			score,
+			isFrustrated,
+			lastFrictionType,
+			lastTarget,
+			recentFrictionCount: frictionCount,
+			summary,
+		};
+	}
+
 	clear(): void {
 		this.slots.fill(null);
 		this.head = 0;
@@ -93,6 +164,15 @@ export interface TelemetryConfig {
 	 * Receive the raw CaptureResult and do whatever you want with it.
 	 */
 	onEvent?: (event: CaptureResult) => void;
+
+	/**
+	 * Watchdog callback fired when friction signals exceed the threshold (score >= 40).
+	 * Triggers Tier 1 ambient indication in the widget.
+	 */
+	onFrustration?: (report: FrictionReport) => void;
+
+	/** Minimum time between onFrustration triggers (default 12000ms). */
+	frustrationCooldownMs?: number;
 }
 
 // ─── Main class ──────────────────────────────────────────────────────────────
@@ -101,6 +181,7 @@ export class WidgetTelemetry {
 	readonly buffer: TelemetryBuffer;
 	private ph: PostHog | null = null;
 	private started = false;
+	private lastFrustrationTrigger = 0;
 
 	constructor(bufferCapacity = 50) {
 		this.buffer = new TelemetryBuffer(bufferCapacity);
@@ -117,6 +198,7 @@ export class WidgetTelemetry {
 		const token = config.posthogApiKey ?? "phc_placeholder_local_only";
 		const host = config.posthogHost ?? "https://us.i.posthog.com";
 		const cloudEnabled = Boolean(config.posthogApiKey);
+		const cooldown = config.frustrationCooldownMs ?? 12000;
 
 		try {
 			this.ph = posthog.init(
@@ -130,8 +212,7 @@ export class WidgetTelemetry {
 					persistence: "memory",
 
 					// ── Capture features ──────────────────────────────────────────
-					// Turn everything on. PostHog handles the actual detection logic;
-					// we just store what it finds.
+					// PostHog handles the actual detection logic; we store what it finds.
 					autocapture: true,
 					rageclick: true,
 					capture_dead_clicks: true,
@@ -140,18 +221,23 @@ export class WidgetTelemetry {
 
 					// ── Session replay ────────────────────────────────────────────
 					// Only enable if the site owner provided a real project token.
-					// Without a key, replays would be recorded for nothing and
-					// there'd be nowhere to view them.
 					disable_session_recording: !cloudEnabled,
 
 					// ── Lifecycle hook ────────────────────────────────────────────
-					// Every assembled event passes through here. We push it into the
-					// ring buffer and call the optional onEvent callback.
-					// Returning null when cloudEnabled=false stops any network call.
 					before_send: (event: CaptureResult | null) => {
 						if (event) {
 							this.buffer.push(event);
 							config.onEvent?.(event);
+
+							// Client Watchdog: evaluate friction score
+							if (config.onFrustration) {
+								const report = this.buffer.getFrictionReport();
+								const now = Date.now();
+								if (report.isFrustrated && now - this.lastFrustrationTrigger > cooldown) {
+									this.lastFrustrationTrigger = now;
+									config.onFrustration(report);
+								}
+							}
 						}
 						return cloudEnabled ? event : null;
 					},
@@ -170,6 +256,11 @@ export class WidgetTelemetry {
 	/** The underlying PostHog instance, if initialised. */
 	get posthog(): PostHog | null {
 		return this.ph;
+	}
+
+	/** Current friction summary from the buffer. */
+	getFrictionReport(windowMs = 15000): FrictionReport {
+		return this.buffer.getFrictionReport(windowMs);
 	}
 
 	/**
@@ -195,11 +286,12 @@ export class WidgetTelemetry {
 		this.buffer.clear();
 	}
 
-	/** Stop and fully reset. Mostly useful in tests. */
+	/** Stop and fully reset. */
 	destroy(): void {
 		this.clearBuffer();
 		this.started = false;
 		this.ph = null;
+		this.lastFrustrationTrigger = 0;
 	}
 }
 

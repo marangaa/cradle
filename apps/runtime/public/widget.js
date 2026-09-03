@@ -8087,6 +8087,55 @@
     recent(n3 = 20) {
       return this.all().slice(-n3).reverse();
     }
+    /**
+     * Evaluates real-time friction over the last `windowMs` (default 15s).
+     * Heuristic weights:
+     *   - $rageclick: +40
+     *   - $dead_click: +25
+     *   - $exception: +35
+     */
+    getFrictionReport(windowMs = 15e3) {
+      const now = Date.now();
+      const cutoff = now - windowMs;
+      const events = this.all();
+      let score = 0;
+      let frictionCount = 0;
+      let lastFrictionType = void 0;
+      let lastTarget = void 0;
+      for (const ev of events) {
+        const ts2 = ev.timestamp ? new Date(ev.timestamp).getTime() : now;
+        if (ts2 < cutoff) continue;
+        const name = ev.event;
+        const props = ev.properties;
+        const target = props?.$el_text || props?.$elements?.[0]?.tag_name || props?.$current_url || void 0;
+        if (name === "$rageclick") {
+          score += 40;
+          frictionCount++;
+          lastFrictionType = "rageclick";
+          if (target) lastTarget = target;
+        } else if (name === "$dead_click") {
+          score += 25;
+          frictionCount++;
+          lastFrictionType = "dead_click";
+          if (target) lastTarget = target;
+        } else if (name === "$exception") {
+          score += 35;
+          frictionCount++;
+          lastFrictionType = "exception";
+        }
+      }
+      score = Math.min(score, 100);
+      const isFrustrated = score >= 40;
+      const summary = isFrustrated ? `Friction detected (score: ${score}/100, type: ${lastFrictionType || "unknown"}${lastTarget ? ` on "${lastTarget}"` : ""})` : "Normal interaction";
+      return {
+        score,
+        isFrustrated,
+        lastFrictionType,
+        lastTarget,
+        recentFrictionCount: frictionCount,
+        summary
+      };
+    }
     clear() {
       this.slots.fill(null);
       this.head = 0;
@@ -8097,6 +8146,7 @@
     buffer;
     ph = null;
     started = false;
+    lastFrustrationTrigger = 0;
     constructor(bufferCapacity = 50) {
       this.buffer = new TelemetryBuffer(bufferCapacity);
     }
@@ -8110,6 +8160,7 @@
       const token = config.posthogApiKey ?? "phc_placeholder_local_only";
       const host = config.posthogHost ?? "https://us.i.posthog.com";
       const cloudEnabled = Boolean(config.posthogApiKey);
+      const cooldown = config.frustrationCooldownMs ?? 12e3;
       try {
         this.ph = _u.init(
           token,
@@ -8120,8 +8171,7 @@
             // host page that has its own storage strategy.
             persistence: "memory",
             // ── Capture features ──────────────────────────────────────────
-            // Turn everything on. PostHog handles the actual detection logic;
-            // we just store what it finds.
+            // PostHog handles the actual detection logic; we store what it finds.
             autocapture: true,
             rageclick: true,
             capture_dead_clicks: true,
@@ -8129,17 +8179,20 @@
             capture_exceptions: true,
             // ── Session replay ────────────────────────────────────────────
             // Only enable if the site owner provided a real project token.
-            // Without a key, replays would be recorded for nothing and
-            // there'd be nowhere to view them.
             disable_session_recording: !cloudEnabled,
             // ── Lifecycle hook ────────────────────────────────────────────
-            // Every assembled event passes through here. We push it into the
-            // ring buffer and call the optional onEvent callback.
-            // Returning null when cloudEnabled=false stops any network call.
             before_send: (event) => {
               if (event) {
                 this.buffer.push(event);
                 config.onEvent?.(event);
+                if (config.onFrustration) {
+                  const report = this.buffer.getFrictionReport();
+                  const now = Date.now();
+                  if (report.isFrustrated && now - this.lastFrustrationTrigger > cooldown) {
+                    this.lastFrustrationTrigger = now;
+                    config.onFrustration(report);
+                  }
+                }
               }
               return cloudEnabled ? event : null;
             }
@@ -8156,6 +8209,10 @@
     /** The underlying PostHog instance, if initialised. */
     get posthog() {
       return this.ph;
+    }
+    /** Current friction summary from the buffer. */
+    getFrictionReport(windowMs = 15e3) {
+      return this.buffer.getFrictionReport(windowMs);
     }
     /**
      * PostHog session ID for the current session.
@@ -8176,11 +8233,12 @@
     clearBuffer() {
       this.buffer.clear();
     }
-    /** Stop and fully reset. Mostly useful in tests. */
+    /** Stop and fully reset. */
     destroy() {
       this.clearBuffer();
       this.started = false;
       this.ph = null;
+      this.lastFrustrationTrigger = 0;
     }
   };
   var globalTelemetry = new WidgetTelemetry();
@@ -9008,7 +9066,16 @@
       }
       this.visitorId = this.getOrCreateVisitorId();
       this.loadStoredMessages();
-      globalTelemetry.init();
+      const posthogKey = this.getAttribute("posthog-key") || void 0;
+      const posthogHost = this.getAttribute("posthog-host") || void 0;
+      globalTelemetry.init({
+        posthogApiKey: posthogKey,
+        posthogHost,
+        onFrustration: (report) => {
+          console.log("[CradleWidget] Watchdog friction signal:", report.summary);
+          this.setVisualState("waiting");
+        }
+      });
       this.render();
       this.setupChatListeners();
       void this.loadManifest();
@@ -9340,7 +9407,9 @@
             visitorId: this.visitorId,
             clientContext: {
               telemetry: globalTelemetry.buffer.recent(20),
+              frictionReport: globalTelemetry.getFrictionReport(),
               posthogSessionId: globalTelemetry.sessionId(),
+              sessionReplayUrl: globalTelemetry.sessionReplayUrl(),
               currentUrl: typeof window !== "undefined" ? window.location.href : void 0
             }
           })

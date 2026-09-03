@@ -27,3 +27,27 @@
     * PostHog's AI Observability links frontend browser sessions (`$session_id`) to backend LLM conversations (`$ai_session_id`) via `tracing_headers: ['api.qualra.xyz']` (which injects `X-POSTHOG-DISTINCT-ID` and `X-POSTHOG-SESSION-ID`).
     * Captures `$ai_generation` traces (inputs, completions, tokens, latency, cost).
     * Enables `posthog.captureTraceFeedback(traceId, feedback)` and `posthog.get_session_replay_url()`, allowing PMs and agents to watch the exact session replay where a user struggled.
+
+### Architecture Update: The Hierarchical Watchdog & Agent Loop (Closing the Circuit)
+* **The Question Evaluated**: Should we constantly stream raw browser events directly to the primary LLM (Collins) or use a subagent/watchdog?
+* **Research Verdict & Mathematical Rationale**:
+  * **Do NOT stream raw browser events directly to Collins**:
+    * **Quadratic Token Explosion ($O(S^2)$)**: In multi-step agent loops (AI SDK `ToolLoopAgent`), all intermediate steps resubmit the growing context. 200 raw clickstream events per 2-minute session generates 15,000–30,000 redundant tokens per turn.
+    * **Latency Penalties**: Ingesting huge JSON trees adds 2–4s to Time-To-First-Token (TTFT).
+    * **Cognitive Backlash**: Human-Computer Interaction research (Horvitz CHI '99, Iqbal & Bailey 2005/2011, Ju & Leifer 2008) proves unprompted interruptions during fine subtasks cause 90%+ dismissal rates.
+* **The 4-Tier Graduated Intervention Pipeline Built**:
+  1. **Tier 0: Client Watchdog (in `telemetry.ts`)**:
+     * Zero-LLM-cost, deterministic heuristic running inside `TelemetryBuffer`.
+     * Calculates real-time **Friction Score** ($S \in [0, 100]$):
+       * `$rageclick`: $+40$ (Euclidean radius $\le 30$px, $\ge 3$ clicks in $\le 1$s, excluding text-selection and steppers).
+       * `$dead_click`: $+25$ (MutationObserver confirms 0 DOM mutations, 0 scroll, 0 navigation in 2.5s).
+       * `$exception` / network failure: $+35$.
+  2. **Tier 1: Ambient Peripheral Indication (Calm Computing)**:
+     * When $S \ge 40$, Cradle mascot shifts state (`idle` $\rightarrow$ `waiting`), indicating situational readiness without intrusive screen popups.
+  3. **Tier 2: Triage Subagent / Product Memory Lookup**:
+     * When the user engages or severe blockage occurs ($S \ge 75$), client passes a condensed 10-event slice.
+     * `resolve_current_screen` matches current URL against `ProductScreen` embeddings and `ProductRecipe` graph from Qualra's autonomous explorer.
+  4. **Tier 3: Collins Conversational Guidance & Hands Execution**:
+     * Collins receives a 100-token pre-digested summary: *"User hit 3 dead clicks on '#export-btn' on /reports. Verified recipe 'Export CSV' available."*
+     * Collins greets user with natural situational empathy and invokes `widget_guide` to trigger on-screen spotlights directly on the target elements.
+
