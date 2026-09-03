@@ -1,3 +1,6 @@
+import { globalTelemetry } from "./telemetry.js";
+import { startSpotlightGuide, dismissSpotlight } from "./spotlight.js";
+
 /**
  * Canonical Petdex row -> state map. Confirmed against Petdex's own "State viewer" UI copy
  * (idle, running-right, running-left, waving, jumping, failed, waiting, running, review), so
@@ -198,6 +201,14 @@ class CradleCharacter extends HTMLElementBase {
     this.visitorId = this.getOrCreateVisitorId();
     this.loadStoredMessages();
 
+    // Start in-memory telemetry observer for rage clicks & user actions
+    globalTelemetry.init({
+      onRageClick: (rageEvent: unknown) => {
+        console.log("[CradleWidget] User frustration detected via rage click:", rageEvent);
+        this.setVisualState("waiting");
+      },
+    });
+
     this.render();
     this.setupChatListeners();
     void this.loadManifest();
@@ -207,6 +218,8 @@ class CradleCharacter extends HTMLElementBase {
     this.petAnimations.forEach((animation) => animation.cancel());
     this.petAnimations = [];
     this.stopCycle();
+    globalTelemetry.destroy();
+    dismissSpotlight();
   }
 
   private getOrCreateVisitorId(): string {
@@ -586,6 +599,11 @@ class CradleCharacter extends HTMLElementBase {
           })),
           installationId: this.siteId,
           visitorId: this.visitorId,
+          clientContext: {
+            telemetry: globalTelemetry.getPromptContext(),
+            posthogSessionId: globalTelemetry.getSessionId(),
+            currentUrl: typeof window !== "undefined" ? window.location.href : undefined,
+          },
         }),
       });
 
@@ -611,7 +629,14 @@ class CradleCharacter extends HTMLElementBase {
       const handleSsePayload = (payload: string) => {
         if (!payload || payload === "[DONE]") return;
         try {
-          const event = JSON.parse(payload) as { type?: string; delta?: string; data?: { emote?: string } };
+          const event = JSON.parse(payload) as {
+            type?: string;
+            delta?: string;
+            data?: { emote?: string; steps?: unknown[] };
+            toolName?: string;
+            args?: { steps?: unknown[] };
+          };
+
           if (event.type === "text-delta" && typeof event.delta === "string") {
             streamedRaw += event.delta;
           } else if (event.type === "data-emote") {
@@ -620,6 +645,16 @@ class CradleCharacter extends HTMLElementBase {
               console.log(`[CradleWidget] data-emote received: "${emote}"`);
               this.explicitState = true;
               this.setVisualState(emote as PetdexState);
+            }
+          } else if (
+            event.type === "tool-call" ||
+            event.toolName === "widget_guide" ||
+            event.type === "data-guide"
+          ) {
+            const guideData = event.args || event.data;
+            if (guideData?.steps && Array.isArray(guideData.steps)) {
+              console.log("[CradleWidget] Executing Driver.js spotlight guide:", guideData.steps);
+              startSpotlightGuide(guideData.steps as any);
             }
           }
         } catch {

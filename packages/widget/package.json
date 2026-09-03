@@ -4,17 +4,33 @@
   "type": "module",
   "license": "Apache-2.0",
   "description": "Framework-free animated website characters for Cradle.",
-  "keywords": ["web-components", "custom-elements", "widget", "animation", "cradle"],
-  "repository": { "type": "git", "url": "git+https://github.com/marangaa/cradle.git", "directory": "packages/widget" },
+  "keywords": [
+    "web-components",
+    "custom-elements",
+    "widget",
+    "animation",
+    "cradle"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marangaa/cradle.git",
+    "directory": "packages/widget"
+  },
   "homepage": "https://github.com/marangaa/cradle#readme",
-  "bugs": { "url": "https://github.com/marangaa/cradle/issues" },
-  "files": ["dist"],
+  "bugs": {
+    "url": "https://github.com/marangaa/cradle/issues"
+  },
+  "files": [
+    "dist"
+  ],
   "sideEffects": true,
   "types": "./dist/widget.d.ts",
   "module": "./dist/widget.js",
   "unpkg": "./dist/widget.iife.js",
   "jsdelivr": "./dist/widget.iife.js",
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/widget.d.ts",
@@ -24,6 +40,18 @@
     "./script": "./dist/widget.iife.js",
     "./widget.js": "./dist/widget.iife.js"
   },
-  "scripts": { "dev": "tsup --watch", "build": "tsup", "check-types": "tsc --noEmit", "prepack": "tsup" },
-  "devDependencies": { "@repo/typescript-config": "workspace:*", "tsup": "^8.5.1" }
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "prepack": "tsup"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "tsup": "^8.5.1"
+  },
+  "dependencies": {
+    "driver.js": "^1.8.0",
+    "posthog-js": "^1.425.1"
+  }
 }
