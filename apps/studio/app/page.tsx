@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AccountGate, ClaimAccountModal } from "./components/account-gate";
+import { ConversationsView } from "./components/conversations-view";
 import { authClient } from "./lib/auth-client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -57,6 +58,19 @@ type StudioSession = {
   knowledge: Knowledge;
   character: Character;
   brandProfile: BrandProfile | null;
+};
+type ConversationRecord = {
+  id: string;
+  installationId: string;
+  visitorId: string;
+  messages: Array<{
+    id?: string;
+    role?: "user" | "assistant" | "system";
+    content?: string;
+    parts?: Array<{ type: string; text?: string }>;
+  }>;
+  createdAt: string;
+  updatedAt: string;
 };
 type CatalogCompanion = {
   slug: string;
@@ -1062,6 +1076,8 @@ export default function StudioHome() {
     refetchInterval: 15_000,
   });
 
+  const [shapeSubTab, setShapeSubTab] = useState<"customizer" | "conversations">("customizer");
+
   /**
    * Paginated Petdex catalog — server-side filtering & pagination (24 per page).
    */
@@ -1528,53 +1544,65 @@ export default function StudioHome() {
           {/* ── Screen: Shape ── */}
           {screen === "shape" && character && (
             <section className="workflow-screen shape-screen" key="shape">
-              <div className="workflow-heading">
-                <span className="eyebrow">Make it yours</span>
-                <h1>Set it up for your site.</h1>
-                <p>Give your character a name and select a visual theme for your site.</p>
-              </div>
-              <div className="shape-layout">
-                {/* ── Monthly Conversations Meter ── */}
-                <div className="usage-meter-card" style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
-                  padding: "16px 20px",
-                  border: "2px solid var(--ink)",
-                  background: "var(--white)",
-                  boxShadow: "3.5px 3.5px 0px var(--ink)",
-                  marginBottom: 16,
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: "1.1rem" }}>⚡</span>
-                      <strong style={{ fontSize: ".85rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: ".04em", fontFamily: "var(--mono)" }}>
-                        Monthly Conversations
-                      </strong>
-                    </div>
-                    <span style={{ fontFamily: "var(--mono)", fontSize: ".88rem", fontWeight: 800 }}>
-                      {usageData?.conversationCount ?? 0} / {usageData?.limit ?? 99} used
-                    </span>
-                  </div>
-
-                  <div style={{ height: 12, width: "100%", background: "#f4f4f0", border: "2px solid var(--ink)", overflow: "hidden", position: "relative" }}>
-                    <div style={{
-                      height: "100%",
-                      width: `${Math.min(((usageData?.conversationCount ?? 0) / (usageData?.limit ?? 99)) * 100, 100)}%`,
-                      background: (usageData?.conversationCount ?? 0) >= (usageData?.limit ?? 99) ? "#ef4444" : (usageData?.conversationCount ?? 0) > 80 ? "#f59e0b" : "var(--yellow)",
-                      transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-                    }} />
-                  </div>
-
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".72rem", color: "var(--muted)", fontWeight: 600 }}>
-                    <span>Resets automatically every 30 days</span>
-                    <span style={{ fontFamily: "var(--mono)", fontWeight: 700, color: (usageData?.conversationCount ?? 0) >= 99 ? "#ef4444" : "var(--ink)" }}>
-                      {Math.max((usageData?.limit ?? 99) - (usageData?.conversationCount ?? 0), 0)} conversations remaining
-                    </span>
-                  </div>
+              <div className="workflow-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
+                <div>
+                  <h1>{shapeSubTab === "customizer" ? "Set it up for your site." : "Visitor Conversations"}</h1>
+                  <p>{shapeSubTab === "customizer" ? "Give your character a name, visual theme, and greeting for your site." : "Review real visitor interactions and monitor your monthly conversation quota."}</p>
                 </div>
 
-                <form className="character-form" onSubmit={saveCharacter}>
+                {/* ── Subtabs next to counter ── */}
+                <div style={{ display: "flex", gap: 8, background: "var(--paper)", padding: 4, border: "2px solid var(--ink)", boxShadow: "3px 3px 0px var(--ink)" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShapeSubTab("customizer")}
+                    style={{
+                      padding: "8px 16px",
+                      fontWeight: 800,
+                      fontSize: ".82rem",
+                      fontFamily: "var(--mono)",
+                      border: shapeSubTab === "customizer" ? "2px solid var(--ink)" : "2px solid transparent",
+                      background: shapeSubTab === "customizer" ? "var(--yellow)" : "transparent",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    🎨 Mascot Setup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShapeSubTab("conversations")}
+                    style={{
+                      padding: "8px 16px",
+                      fontWeight: 800,
+                      fontSize: ".82rem",
+                      fontFamily: "var(--mono)",
+                      border: shapeSubTab === "conversations" ? "2px solid var(--ink)" : "2px solid transparent",
+                      background: shapeSubTab === "conversations" ? "var(--yellow)" : "transparent",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span>💬 Visitor Chats</span>
+                    <span style={{
+                      padding: "2px 6px",
+                      fontSize: ".70rem",
+                      background: (usageData?.conversationCount ?? 0) >= (usageData?.limit ?? 99) ? "#ef4444" : "var(--ink)",
+                      color: "#fff",
+                      fontWeight: 900,
+                    }}>
+                      {usageData?.conversationCount ?? 0}/{usageData?.limit ?? 99}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {shapeSubTab === "customizer" ? (
+                <>
+                  <div className="shape-layout">
+                    <form className="character-form" onSubmit={saveCharacter}>
                   <div className="theme-grid-container">
                     <span className="grid-label">Character Name</span>
                     <input
@@ -1701,8 +1729,15 @@ export default function StudioHome() {
                   </p>
                 )}
               </section>
-            </section>
+            </>
+          ) : (
+            <ConversationsView
+              installationId={session.installation.id}
+              characterName={character.displayName}
+            />
           )}
+        </section>
+      )}
 
           {/* ── Screen: Live ── */}
           {screen === "live" && companion && character && (

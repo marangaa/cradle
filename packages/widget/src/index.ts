@@ -484,11 +484,13 @@ class CradleCharacter extends HTMLElementBase {
       return;
     }
 
-    msgContainer.innerHTML = this.localMessages.map((m) => `
-      <div class="msg ${m.role === "user" ? "user-msg" : "assistant-msg"}">
-        ${m.content}
-      </div>
-    `).join("");
+    msgContainer.innerHTML = "";
+    for (const m of this.localMessages) {
+      const bubble = document.createElement("div");
+      bubble.className = `msg ${m.role === "user" ? "user-msg" : "assistant-msg"}`;
+      bubble.textContent = m.content;
+      msgContainer.appendChild(bubble);
+    }
 
     msgContainer.scrollTop = msgContainer.scrollHeight;
   }
@@ -575,15 +577,49 @@ class CradleCharacter extends HTMLElementBase {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
+      let sseBuffer = "";
       let streamedRaw = "";
+
+      const handleSsePayload = (payload: string) => {
+        if (!payload || payload === "[DONE]") return;
+        try {
+          const event = JSON.parse(payload) as { type?: string; delta?: string; data?: { emote?: string } };
+          if (event.type === "text-delta" && typeof event.delta === "string") {
+            streamedRaw += event.delta;
+          } else if (event.type === "data-emote") {
+            const emote = event.data?.emote;
+            if (emote && STATE_ORDER.includes(emote as PetdexState)) {
+              console.log(`[CradleWidget] data-emote received: "${emote}"`);
+              this.explicitState = true;
+              this.setVisualState(emote as PetdexState);
+            }
+          }
+        } catch {
+          // Non-JSON SSE payload — append raw text
+          streamedRaw += payload;
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
-        streamedRaw += chunk;
 
-        // Check for emote tag [cradle:emote:<emote>]
+        if (chunk.includes("data:")) {
+          sseBuffer += chunk;
+          const lines = sseBuffer.split("\n");
+          sseBuffer = lines.pop() ?? "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith("data:")) {
+              handleSsePayload(trimmed.slice(5).trim());
+            }
+          }
+        } else {
+          streamedRaw += chunk;
+        }
+
+        // Check for in-band emote tag [cradle:emote:<emote>]
         const emoteMatch = chunk.match(/\[cradle:emote:([a-z-]+)\]/i);
         if (emoteMatch?.[1] && STATE_ORDER.includes(emoteMatch[1] as PetdexState)) {
           const emote = emoteMatch[1] as PetdexState;
@@ -592,7 +628,7 @@ class CradleCharacter extends HTMLElementBase {
           this.setVisualState(emote);
         }
 
-        // Clean out emote tags from visible chat text
+        // Clean out in-band emote tags from visible chat text
         const cleanedText = streamedRaw.replace(/\[cradle:emote:[a-z-]+\]/gi, "");
 
         const target = this.localMessages.find((m) => m.id === assistantMsgId);
@@ -600,6 +636,10 @@ class CradleCharacter extends HTMLElementBase {
           target.content = cleanedText || "…";
           this.renderStoredMessages();
         }
+      }
+
+      if (sseBuffer.trim().startsWith("data:")) {
+        handleSsePayload(sseBuffer.trim().slice(5).trim());
       }
 
       const finalCleanText = streamedRaw.replace(/\[cradle:emote:[a-z-]+\]/gi, "");

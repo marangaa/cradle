@@ -25,6 +25,7 @@ export interface CradleStore {
   /** Creates the visitor row if it doesn't exist yet (id is client-generated), else touches lastSeenAt. */
   touchVisitor(installationId: string, visitorId: string): Promise<Visitor>;
   getConversation(visitorId: string): Promise<ConversationRecord | null>;
+  listConversations(installationId: string, limit?: number): Promise<ConversationRecord[]>;
   saveConversation(record: ConversationRecord): Promise<void>;
 
   getVisitorMemories(visitorId: string): Promise<VisitorMemoryFact[]>;
@@ -80,6 +81,12 @@ export class MemoryStore implements CradleStore {
     return visitor;
   }
   async getConversation(visitorId: string) { return this.conversationsByVisitor.get(visitorId) ?? null; }
+  async listConversations(installationId: string, limit = 20) {
+    return Array.from(this.conversationsByVisitor.values())
+      .filter((c) => c.installationId === installationId)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, limit);
+  }
   async saveConversation(record: ConversationRecord) { this.conversationsByVisitor.set(record.visitorId, record); }
 
   async getVisitorMemories(visitorId: string) { return [...(this.memoriesByVisitor.get(visitorId)?.values() ?? [])]; }
@@ -291,6 +298,24 @@ export class PostgresStore implements CradleStore {
     const row = await this.database.query.conversations.findFirst({ where: eq(conversations.visitorId, visitorId), orderBy: [desc(conversations.updatedAt)] });
     if (!row) return null;
     return { id: row.id, installationId: row.installationId, visitorId: row.visitorId, messages: row.messages as unknown[], createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() };
+  }
+
+  async listConversations(installationId: string, limit = 20): Promise<ConversationRecord[]> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(installationId);
+    if (!isUuid) return [];
+    const rows = await this.database.query.conversations.findMany({
+      where: eq(conversations.installationId, installationId),
+      orderBy: [desc(conversations.updatedAt)],
+      limit,
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      installationId: row.installationId,
+      visitorId: row.visitorId,
+      messages: row.messages as unknown[],
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }));
   }
 
   async saveConversation(record: ConversationRecord): Promise<void> {

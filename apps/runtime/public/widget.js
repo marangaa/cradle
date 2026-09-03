@@ -359,11 +359,13 @@
         ].join("");
         return;
       }
-      msgContainer.innerHTML = this.localMessages.map((m) => `
-      <div class="msg ${m.role === "user" ? "user-msg" : "assistant-msg"}">
-        ${m.content}
-      </div>
-    `).join("");
+      msgContainer.innerHTML = "";
+      for (const m of this.localMessages) {
+        const bubble = document.createElement("div");
+        bubble.className = `msg ${m.role === "user" ? "user-msg" : "assistant-msg"}`;
+        bubble.textContent = m.content;
+        msgContainer.appendChild(bubble);
+      }
       msgContainer.scrollTop = msgContainer.scrollHeight;
     }
     async fetchInitialGreeting(baseUrl) {
@@ -439,12 +441,43 @@
         if (!res.body) throw new Error("No response body received.");
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
+        let sseBuffer = "";
         let streamedRaw = "";
+        const handleSsePayload = (payload) => {
+          if (!payload || payload === "[DONE]") return;
+          try {
+            const event = JSON.parse(payload);
+            if (event.type === "text-delta" && typeof event.delta === "string") {
+              streamedRaw += event.delta;
+            } else if (event.type === "data-emote") {
+              const emote = event.data?.emote;
+              if (emote && STATE_ORDER.includes(emote)) {
+                console.log(`[CradleWidget] data-emote received: "${emote}"`);
+                this.explicitState = true;
+                this.setVisualState(emote);
+              }
+            }
+          } catch {
+            streamedRaw += payload;
+          }
+        };
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
-          streamedRaw += chunk;
+          if (chunk.includes("data:")) {
+            sseBuffer += chunk;
+            const lines = sseBuffer.split("\n");
+            sseBuffer = lines.pop() ?? "";
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith("data:")) {
+                handleSsePayload(trimmed.slice(5).trim());
+              }
+            }
+          } else {
+            streamedRaw += chunk;
+          }
           const emoteMatch = chunk.match(/\[cradle:emote:([a-z-]+)\]/i);
           if (emoteMatch?.[1] && STATE_ORDER.includes(emoteMatch[1])) {
             const emote = emoteMatch[1];
@@ -458,6 +491,9 @@
             target.content = cleanedText || "\u2026";
             this.renderStoredMessages();
           }
+        }
+        if (sseBuffer.trim().startsWith("data:")) {
+          handleSsePayload(sseBuffer.trim().slice(5).trim());
         }
         const finalCleanText = streamedRaw.replace(/\[cradle:emote:[a-z-]+\]/gi, "");
         console.log(`[CradleWidget] Stream finished cleanly. Total length: ${finalCleanText.length} chars`);

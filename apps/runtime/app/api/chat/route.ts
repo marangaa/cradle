@@ -205,19 +205,24 @@ Directives:
           },
         }),
       },
-      onFinish: async ({ responseMessages }) => {
-        console.log(`[Chat API] Stream completed onFinish -> generated ${responseMessages.length} response messages`);
+      onFinish: async ({ text }) => {
         try {
+          const assistantText = text.replace(/\[cradle:emote:[a-z-]+\]/gi, "").trim();
+          const assistantMsg: UIMessage = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            parts: [{ type: "text", text: assistantText }],
+          };
           const existingConv = await store.getConversation(visitorId);
           await store.saveConversation({
             id: existingConv?.id || crypto.randomUUID(),
             installationId,
             visitorId,
-            messages: [...messages, ...responseMessages] as unknown[],
+            messages: [...messages, assistantMsg],
             createdAt: existingConv?.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           });
-          console.log(`[Chat API] Conversation saved successfully for visitorId: ${visitorId}`);
+          console.log(`[Chat API] Conversation saved cleanly for visitorId: ${visitorId}`);
         } catch (err) {
           console.error("[Chat API] Failed to save conversation:", err);
         }
