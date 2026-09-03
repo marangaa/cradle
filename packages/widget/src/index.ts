@@ -201,7 +201,7 @@ class CradleCharacter extends HTMLElementBase {
     this.visitorId = this.getOrCreateVisitorId();
     this.loadStoredMessages();
 
-    // Start in-memory user interaction journal
+    // Start PostHog-native telemetry — captures everything, classifies nothing.
     globalTelemetry.init();
 
     this.render();
@@ -595,7 +595,8 @@ class CradleCharacter extends HTMLElementBase {
           installationId: this.siteId,
           visitorId: this.visitorId,
           clientContext: {
-            telemetry: globalTelemetry.getTimeline(),
+            telemetry: globalTelemetry.buffer.recent(20),
+            posthogSessionId: globalTelemetry.sessionId(),
             currentUrl: typeof window !== "undefined" ? window.location.href : undefined,
           },
         }),
