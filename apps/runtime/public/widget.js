@@ -87,6 +87,29 @@
     isBusy = false;
     characterName = "Assistant";
     isLoaded = false;
+    static get observedAttributes() {
+      return ["sprite-url", "preview-url", "theme"];
+    }
+    attributeChangedCallback(name, oldValue, newValue) {
+      if (oldValue === newValue) return;
+      if ((name === "sprite-url" || name === "preview-url") && newValue) {
+        void this.setSpriteUrl(newValue);
+      } else if (name === "theme" && newValue) {
+        this.theme = newValue;
+        const shell = this.shadow?.querySelector(".shell");
+        if (shell) shell.dataset.theme = newValue;
+      }
+    }
+    async setSpriteUrl(url) {
+      if (!url) return;
+      await this.configureAtlas({
+        url,
+        columns: 8,
+        rows: 9,
+        stateRows: STATE_ROWS
+      });
+      this.startCycle();
+    }
     connectedCallback() {
       this.siteId = this.getAttribute("site-id") ?? this.getAttribute("installation-id") ?? "";
       this.apiBase = this.getAttribute("api-base") ?? INFERRED_API_BASE ?? "";
@@ -220,7 +243,8 @@
       this.currentState = state;
       const atlas = this.atlas;
       if (!atlas) return MIN_STATE_DURATION_MS;
-      const row = atlas.stateRows[state] ?? atlas.stateRows.idle ?? 0;
+      const stateRowMap = atlas.stateRows ?? STATE_ROWS;
+      const row = stateRowMap[state] ?? STATE_ROWS[state] ?? 0;
       const duration = this.animateCompanions(atlas, row);
       this.emit("cradle:state", { ...this.eventContext(), state });
       return duration;
@@ -532,7 +556,10 @@
         if (this.localMessages.length === 0) {
           void this.fetchInitialGreeting(baseUrl);
         }
-        if (manifest.assets?.atlas) {
+        const overrideUrl = this.getAttribute("sprite-url") || this.getAttribute("preview-url");
+        if (overrideUrl) {
+          await this.setSpriteUrl(overrideUrl);
+        } else if (manifest.assets?.atlas) {
           await this.configureAtlas(manifest.assets.atlas);
           this.startCycle();
         } else {
@@ -682,7 +709,8 @@
       trigger: (action, siteId2) => getCharacter(siteId2)?.trigger(action),
       resolveAction: (success, siteId2) => getCharacter(siteId2)?.resolveAction(success),
       setState: (state, siteId2) => getCharacter(siteId2)?.setVisualState(state),
-      setContext: (context, siteId2) => getCharacter(siteId2)?.setContext(context)
+      setContext: (context, siteId2) => getCharacter(siteId2)?.setContext(context),
+      setSprite: (url, siteId2) => getCharacter(siteId2)?.setSpriteUrl(url)
     };
   }
 })();

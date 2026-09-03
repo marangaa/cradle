@@ -53,6 +53,7 @@ type CradleController = {
   /** Accepts only the 9 real spritesheet states — there is nothing else to set. */
   setState(state: PetdexState, siteId?: string): void;
   setContext(context: Record<string, unknown>, siteId?: string): void;
+  setSprite(url: string, siteId?: string): void;
 };
 
 export type { PetdexState, PetAtlas, Character, CradleAction, CradleController };
@@ -153,6 +154,32 @@ class CradleCharacter extends HTMLElementBase {
   private isBusy = false;
   private characterName = "Assistant";
   private isLoaded = false;
+
+  static get observedAttributes() {
+    return ["sprite-url", "preview-url", "theme"];
+  }
+
+  attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
+    if (oldValue === newValue) return;
+    if ((name === "sprite-url" || name === "preview-url") && newValue) {
+      void this.setSpriteUrl(newValue);
+    } else if (name === "theme" && newValue) {
+      this.theme = newValue;
+      const shell = this.shadow?.querySelector(".shell") as HTMLElement | null;
+      if (shell) shell.dataset.theme = newValue;
+    }
+  }
+
+  async setSpriteUrl(url: string) {
+    if (!url) return;
+    await this.configureAtlas({
+      url,
+      columns: 8,
+      rows: 9,
+      stateRows: STATE_ROWS,
+    });
+    this.startCycle();
+  }
 
   connectedCallback() {
     this.siteId = this.getAttribute("site-id") ?? this.getAttribute("installation-id") ?? "";
@@ -307,7 +334,8 @@ class CradleCharacter extends HTMLElementBase {
     this.currentState = state;
     const atlas = this.atlas;
     if (!atlas) return MIN_STATE_DURATION_MS;
-    const row = atlas.stateRows[state] ?? atlas.stateRows.idle ?? 0;
+    const stateRowMap = atlas.stateRows ?? STATE_ROWS;
+    const row = stateRowMap[state] ?? STATE_ROWS[state] ?? 0;
     const duration = this.animateCompanions(atlas, row);
     this.emit("cradle:state", { ...this.eventContext(), state });
     return duration;
@@ -684,7 +712,10 @@ class CradleCharacter extends HTMLElementBase {
         void this.fetchInitialGreeting(baseUrl);
       }
 
-      if (manifest.assets?.atlas) {
+      const overrideUrl = this.getAttribute("sprite-url") || this.getAttribute("preview-url");
+      if (overrideUrl) {
+        await this.setSpriteUrl(overrideUrl);
+      } else if (manifest.assets?.atlas) {
         await this.configureAtlas(manifest.assets.atlas);
         this.startCycle();
       } else {
@@ -879,6 +910,7 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     resolveAction: (success, siteId) => getCharacter(siteId)?.resolveAction(success),
     setState: (state, siteId) => getCharacter(siteId)?.setVisualState(state),
     setContext: (context, siteId) => getCharacter(siteId)?.setContext(context),
+    setSprite: (url, siteId) => getCharacter(siteId)?.setSpriteUrl(url),
   };
 }
 
@@ -889,6 +921,8 @@ type CradleCharacterElementProps = {
   /** Boolean attribute. Present = skip the idle showcase; use when driving real state yourself. */
   "no-cycle"?: boolean | "";
   theme?: "neobrutalist" | "modern" | "cyberpunk" | "terminal" | "minimal" | "synthwave" | "paper";
+  "sprite-url"?: string;
+  "preview-url"?: string;
   "accent-color"?: string;
   "primary-color"?: string;
   "bg-color"?: string;
