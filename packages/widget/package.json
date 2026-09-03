@@ -51,7 +51,6 @@
     "tsup": "^8.5.1"
   },
   "dependencies": {
-    "driver.js": "^1.8.0",
-    "posthog-js": "^1.425.1"
+    "driver.js": "^1.8.0"
   }
 }

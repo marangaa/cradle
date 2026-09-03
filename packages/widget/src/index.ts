@@ -201,13 +201,8 @@ class CradleCharacter extends HTMLElementBase {
     this.visitorId = this.getOrCreateVisitorId();
     this.loadStoredMessages();
 
-    // Start in-memory telemetry observer for rage clicks & user actions
-    globalTelemetry.init({
-      onRageClick: (rageEvent: unknown) => {
-        console.log("[CradleWidget] User frustration detected via rage click:", rageEvent);
-        this.setVisualState("waiting");
-      },
-    });
+    // Start in-memory user interaction journal
+    globalTelemetry.init();
 
     this.render();
     this.setupChatListeners();
@@ -600,8 +595,7 @@ class CradleCharacter extends HTMLElementBase {
           installationId: this.siteId,
           visitorId: this.visitorId,
           clientContext: {
-            telemetry: globalTelemetry.getPromptContext(),
-            posthogSessionId: globalTelemetry.getSessionId(),
+            telemetry: globalTelemetry.getTimeline(),
             currentUrl: typeof window !== "undefined" ? window.location.href : undefined,
           },
         }),

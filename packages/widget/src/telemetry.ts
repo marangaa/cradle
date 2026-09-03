@@ -1,200 +1,198 @@
-import { posthog, type PostHog, type CaptureResult } from "posthog-js";
-
-export interface TelemetryEventSummary {
-	event: string;
+export interface RawUserEvent {
+	type: "click" | "input" | "navigation" | "error";
 	timestamp: number;
 	url: string;
 	target?: string;
 	text?: string;
+	metadata?: Record<string, unknown>;
 }
 
-export class TelemetryRingBuffer {
-	private buffer: (TelemetryEventSummary | null)[];
+/**
+ * Bounded in-memory event journal.
+ * Captures and stores raw user interactions chronologically without classification.
+ */
+export class UserEventJournal {
+	private events: (RawUserEvent | null)[];
 	private capacity: number;
 	private pointer = 0;
 	private count = 0;
 
-	constructor(capacity = 25) {
+	constructor(capacity = 50) {
 		this.capacity = capacity;
-		this.buffer = new Array(capacity).fill(null);
+		this.events = new Array(capacity).fill(null);
 	}
 
-	public push(event: TelemetryEventSummary): void {
-		this.buffer[this.pointer] = event;
+	public record(event: RawUserEvent): void {
+		this.events[this.pointer] = event;
 		this.pointer = (this.pointer + 1) % this.capacity;
 		if (this.count < this.capacity) {
 			this.count++;
 		}
 	}
 
-	public getRecentEvents(): TelemetryEventSummary[] {
+	public getEvents(): RawUserEvent[] {
 		if (this.count === 0) return [];
-		const result: TelemetryEventSummary[] = [];
+		const result: RawUserEvent[] = [];
 		const startIndex = this.count < this.capacity ? 0 : this.pointer;
 
 		for (let i = 0; i < this.count; i++) {
 			const idx = (startIndex + i) % this.capacity;
-			const item = this.buffer[idx];
+			const item = this.events[idx];
 			if (item) result.push(item);
 		}
 		return result;
 	}
 
-	public toPromptContext(): string {
-		const events = this.getRecentEvents();
-		if (events.length === 0) return "No prior user actions recorded on this page.";
+	public toTimeline(): string {
+		const list = this.getEvents();
+		if (list.length === 0) return "No recorded user actions on this page.";
 
 		const now = Date.now();
-		const lines = events.map((e) => {
-			const elapsedSec = Math.max(0, Math.round((now - e.timestamp) / 1000));
-			const timeLabel = elapsedSec === 0 ? "just now" : `${elapsedSec}s ago`;
+		return list
+			.map((e) => {
+				const elapsedSec = Math.max(0, Math.round((now - e.timestamp) / 1000));
+				const timeLabel = elapsedSec === 0 ? "just now" : `${elapsedSec}s ago`;
 
-			if (e.event === "$rageclick") {
-				return `• [${timeLabel}] RAGE CLICK on ${e.target ?? "element"} (${e.text ? '"' + e.text + '"' : ""}) at ${e.url}`;
-			}
-			if (e.event === "$dead_click") {
-				return `• [${timeLabel}] DEAD CLICK on ${e.target ?? "element"} (${e.text ? '"' + e.text + '"' : ""})`;
-			}
-			if (e.event === "$pageview") {
-				return `• [${timeLabel}] Navigated to ${e.url}`;
-			}
-			if (e.event === "$exception") {
-				return `• [${timeLabel}] Client error: ${e.text ?? "unknown"}`;
-			}
-			return `• [${timeLabel}] Action ${e.event} on ${e.target ?? "element"} (${e.text ? '"' + e.text + '"' : ""})`;
-		});
-
-		return lines.join("\n");
+				switch (e.type) {
+					case "click":
+						return `• [${timeLabel}] Clicked ${e.target || "element"} (${e.text ? '"' + e.text + '"' : ""}) on ${e.url}`;
+					case "input":
+						return `• [${timeLabel}] Input on ${e.target || "input"} on ${e.url}`;
+					case "navigation":
+						return `• [${timeLabel}] Navigated to ${e.url}`;
+					case "error":
+						return `• [${timeLabel}] Error on ${e.url}: ${e.text || "unknown"}`;
+				}
+			})
+			.join("\n");
 	}
 
 	public clear(): void {
-		this.buffer.fill(null);
+		this.events.fill(null);
 		this.pointer = 0;
 		this.count = 0;
 	}
 }
 
-export interface TelemetryConfig {
-	posthogApiKey?: string;
-	posthogHost?: string;
-	onRageClick?: (event: TelemetryEventSummary) => void;
-}
-
+/**
+ * Telemetry capture engine.
+ * Pure recording of user interactions: clicks, form inputs, route changes, errors.
+ * No opinionated heuristics, no rage click classification, no external cloud dependencies.
+ */
 export class WidgetTelemetry {
-	private ringBuffer: TelemetryRingBuffer;
-	private posthogInstance: PostHog | null = null;
-	private isListening = false;
+	private journal = new UserEventJournal(50);
+	private cleanupFns: Array<() => void> = [];
+	private isRunning = false;
 
-	constructor(capacity = 25) {
-		this.ringBuffer = new TelemetryRingBuffer(capacity);
-	}
+	public init(): void {
+		if (this.isRunning || typeof window === "undefined") return;
+		this.isRunning = true;
 
-	public init(config: TelemetryConfig = {}): void {
-		if (this.isListening || typeof window === "undefined") return;
-		this.isListening = true;
+		// 1. Capture clicks
+		const handleClick = (e: MouseEvent) => {
+			const el = e.target as HTMLElement | null;
+			if (!el || el.closest("cradle-character") || el.closest("[data-cradle-widget]")) {
+				return;
+			}
 
-		// PostHog Native Engine: handles autocapture, rageclicks, dead clicks,
-		// SPA pageviews, exceptions, and DOM sanitization out-of-the-box.
-		const projectToken = config.posthogApiKey || "cradle_local_telemetry";
-		const apiHost = config.posthogHost || "https://us.i.posthog.com";
+			const targetSelector = this.getElementSelector(el);
+			const label = (el.innerText || el.getAttribute("aria-label") || el.getAttribute("title") || "").slice(0, 50).trim();
 
-		try {
-			this.posthogInstance = posthog.init(
-				projectToken,
-				{
-					api_host: apiHost,
-					defaults: "2026-05-30",
-					persistence: "memory",
-					autocapture: {
-						css_selector_ignorelist: [
-							"cradle-character",
-							"[data-cradle-widget]",
-							".ph-no-autocapture",
-							"[data-ph-no-autocapture]",
-						],
-					},
-					rageclick: {
-						threshold_px: 30,
-						click_count: 3,
-						timeout_ms: 1000,
-						content_ignorelist: true,
-						ignore_text_selection: true,
-						css_selector_ignorelist: ["cradle-character", "[data-cradle-widget]"],
-					},
-					capture_dead_clicks: true,
-					capture_pageview: "history_change",
-					capture_exceptions: true,
-					disable_session_recording: true,
-					// The canonical lifecycle hook: every sanitized event passes here!
-					before_send: (event: CaptureResult | null) => {
-						if (event) {
-							this.handleCapturedEvent(event, config);
-						}
-						// If no external PostHog key was provided, prevent network egress
-						if (!config.posthogApiKey) {
-							return null;
-						}
-						return event;
-					},
-				},
-				"cradle_widget",
-			);
-		} catch (e) {
-			console.warn("[cradle-telemetry] PostHog native initialization error:", e);
-		}
-	}
-
-	private handleCapturedEvent(event: CaptureResult, config: TelemetryConfig): void {
-		const props = (event.properties as Record<string, unknown>) || {};
-		const elements = (props.$elements as Array<Record<string, unknown>>) || [];
-		const primaryElement = elements[0];
-
-		const target =
-			(primaryElement?.tag_name as string) ||
-			(props.$el_text as string) ||
-			"interactive element";
-
-		const text =
-			(props.$el_text as string) ||
-			(primaryElement?.text as string) ||
-			undefined;
-
-		const url =
-			(props.$current_url as string) ||
-			(typeof window !== "undefined"
-				? window.location.pathname + window.location.search
-				: "/");
-
-		const summary: TelemetryEventSummary = {
-			event: event.event,
-			timestamp: event.timestamp ? new Date(event.timestamp).getTime() : Date.now(),
-			url,
-			target,
-			text: text ? String(text).slice(0, 40).trim() : undefined,
+			this.journal.record({
+				type: "click",
+				timestamp: Date.now(),
+				url: window.location.pathname + window.location.search,
+				target: targetSelector,
+				text: label || undefined,
+			});
 		};
 
-		this.ringBuffer.push(summary);
+		window.addEventListener("click", handleClick, true);
+		this.cleanupFns.push(() => window.removeEventListener("click", handleClick, true));
 
-		if (event.event === "$rageclick") {
-			config.onRageClick?.(summary);
-		}
+		// 2. Capture form input changes
+		const handleInput = (e: Event) => {
+			const el = e.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+			if (!el || el.closest("cradle-character") || el.closest("[data-cradle-widget]")) {
+				return;
+			}
+
+			const isPassword = el.getAttribute("type") === "password";
+			const targetSelector = this.getElementSelector(el);
+
+			this.journal.record({
+				type: "input",
+				timestamp: Date.now(),
+				url: window.location.pathname + window.location.search,
+				target: targetSelector,
+				text: isPassword ? "[masked]" : undefined,
+			});
+		};
+
+		window.addEventListener("change", handleInput, true);
+		this.cleanupFns.push(() => window.removeEventListener("change", handleInput, true));
+
+		// 3. Capture navigation / route changes
+		const handleNav = () => {
+			this.journal.record({
+				type: "navigation",
+				timestamp: Date.now(),
+				url: window.location.pathname + window.location.search,
+			});
+		};
+
+		window.addEventListener("popstate", handleNav);
+		window.addEventListener("hashchange", handleNav);
+		this.cleanupFns.push(() => {
+			window.removeEventListener("popstate", handleNav);
+			window.removeEventListener("hashchange", handleNav);
+		});
+
+		// 4. Capture runtime errors
+		const handleError = (e: ErrorEvent) => {
+			this.journal.record({
+				type: "error",
+				timestamp: Date.now(),
+				url: window.location.pathname + window.location.search,
+				text: (e.message || "Script error").slice(0, 100),
+			});
+		};
+
+		window.addEventListener("error", handleError);
+		this.cleanupFns.push(() => window.removeEventListener("error", handleError));
 	}
 
-	public getPromptContext(): string {
-		return this.ringBuffer.toPromptContext();
+	public getTimeline(): string {
+		return this.journal.toTimeline();
 	}
 
-	public getSessionId(): string | undefined {
-		return this.posthogInstance?.get_session_id();
-	}
-
-	public getSessionReplayUrl(): string | undefined {
-		return this.posthogInstance?.get_session_replay_url?.();
+	public getEvents(): RawUserEvent[] {
+		return this.journal.getEvents();
 	}
 
 	public destroy(): void {
-		this.ringBuffer.clear();
-		this.isListening = false;
+		for (const fn of this.cleanupFns) fn();
+		this.cleanupFns = [];
+		this.journal.clear();
+		this.isRunning = false;
+	}
+
+	private getElementSelector(el: HTMLElement): string {
+		if (el.id) return `#${el.id}`;
+		const testId = el.getAttribute("data-testid") || el.getAttribute("data-cy");
+		if (testId) return `[data-testid="${testId}"]`;
+
+		const tag = el.tagName.toLowerCase();
+		const role = el.getAttribute("role");
+		if (role) return `${tag}[role="${role}"]`;
+
+		const name = el.getAttribute("name");
+		if (name) return `${tag}[name="${name}"]`;
+
+		const firstClass = Array.from(el.classList).find(
+			(c) => !c.startsWith("cradle") && !c.includes(":") && c.length < 30
+		);
+		return firstClass ? `${tag}.${firstClass}` : tag;
 	}
 }
 
