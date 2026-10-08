@@ -1,73 +1,96 @@
 import { driver, type DriveStep } from "driver.js";
 import "driver.js/dist/driver.css";
+import type { GuideStep } from "./guide.js";
+import { bestLabelMatch, type LabelCandidate } from "./match.js";
 
-export interface SpotlightStep {
-	element: string; // CSS selector, text, or test ID
-	title: string;
-	description: string;
-	side?: "top" | "right" | "bottom" | "left";
-	align?: "start" | "center" | "end";
+export type SpotlightStep = GuideStep;
+
+const CANDIDATE_SELECTOR = [
+  "a",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "summary",
+  "label",
+  "h1,h2,h3,h4,h5,h6",
+  "[role='button']",
+  "[role='link']",
+  "[role='tab']",
+  "[role='checkbox']",
+  "[role='menuitem']",
+  "[aria-label]",
+  "[title]",
+].join(",");
+
+function roleBucket(el: Element): string {
+  const explicit = el.getAttribute("role");
+  if (explicit) return explicit;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "a") return "link";
+  if (tag === "button" || tag === "summary") return "button";
+  if (tag === "input") {
+    const type = (el as HTMLInputElement).type;
+    if (type === "button" || type === "submit" || type === "reset") return "button";
+    if (type === "checkbox" || type === "radio") return "checkbox";
+    return "input";
+  }
+  if (tag === "select" || tag === "textarea") return "input";
+  if (/^h[1-6]$/.test(tag)) return "heading";
+  return "other";
+}
+
+function isVisible(el: Element): boolean {
+  if (el.closest("cradle-character")) return false;
+  if (el.closest("[aria-hidden='true'],[hidden]")) return false;
+  const rects = (el as HTMLElement).getClientRects();
+  if (rects.length === 0) return false;
+  const style = getComputedStyle(el);
+  return style.visibility !== "hidden" && style.display !== "none";
+}
+
+function accessibleName(el: Element): string {
+  const aria = el.getAttribute("aria-label");
+  if (aria) return aria;
+  const labelledBy = el.getAttribute("aria-labelledby");
+  if (labelledBy) {
+    const text = labelledBy
+      .split(/s+/)
+      .map((id) => document.getElementById(id)?.textContent ?? "")
+      .join(" ")
+      .trim();
+    if (text) return text;
+  }
+  if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) {
+    const labelText = Array.from(el.labels ?? [])
+      .map((l) => l.textContent ?? "")
+      .join(" ")
+      .trim();
+    if (labelText) return labelText;
+    if (el instanceof HTMLInputElement && (el.type === "button" || el.type === "submit" || el.type === "reset") && el.value) {
+      return el.value;
+    }
+    if (el.getAttribute("placeholder")) return el.getAttribute("placeholder") as string;
+  }
+  const text = (el.textContent ?? "").trim();
+  if (text) return text;
+  return el.getAttribute("title") ?? el.getAttribute("alt") ?? "";
 }
 
 /**
- * 4-Tier Self-Healing DOM Locator:
- * 1. Primary selector (id, class, data-testid)
- * 2. Semantic ARIA attribute locator
- * 3. Text content matching (buttons, links, labels)
- * 4. XPath evaluation
+ * Finds the visible element a step points at by its label (what a person can read), optionally
+ * narrowed by a role hint. Never evaluates the label as a selector or XPath, so model output
+ * cannot be used to probe or inject into the host page.
  */
-export function resolveElement(selectorOrQuery: string): Element | null {
-	if (!selectorOrQuery || typeof document === "undefined") return null;
-
-	// 1. Direct CSS Selector
-	try {
-		const el = document.querySelector(selectorOrQuery);
-		if (el) return el;
-	} catch {
-		// Invalid selector syntax, fall through to heuristics
-	}
-
-	// 2. Data attribute or ID shorthand
-	try {
-		const byId = document.getElementById(selectorOrQuery.replace(/^#/, ""));
-		if (byId) return byId;
-
-		const byTestId = document.querySelector(`[data-testid="${selectorOrQuery}"]`);
-		if (byTestId) return byTestId;
-	} catch {
-		// Fall through
-	}
-
-	// 3. Text content matching across interactive elements
-	const cleanText = selectorOrQuery.toLowerCase().trim();
-	const candidates = Array.from(
-		document.querySelectorAll("button, a, input, [role='button'], label, h1, h2, h3, h4"),
-	);
-
-	for (const cand of candidates) {
-		const text = (cand.textContent || cand.getAttribute("aria-label") || cand.getAttribute("placeholder") || "").toLowerCase().trim();
-		if (text === cleanText || (cleanText.length > 3 && text.includes(cleanText))) {
-			return cand;
-		}
-	}
-
-	// 4. XPath Fallback
-	try {
-		const xpathResult = document.evaluate(
-			`.//*[contains(text(), '${selectorOrQuery}')]`,
-			document.body,
-			null,
-			XPathResult.FIRST_ORDERED_NODE_TYPE,
-			null,
-		);
-		if (xpathResult.singleNodeValue instanceof Element) {
-			return xpathResult.singleNodeValue;
-		}
-	} catch {
-		// XPath failed
-	}
-
-	return null;
+export function resolveElementByLabel(label: string, roleHint?: string): Element | null {
+  if (!label || typeof document === "undefined") return null;
+  const elements = Array.from(document.querySelectorAll(CANDIDATE_SELECTOR)).filter(isVisible);
+  const candidates: LabelCandidate[] = elements.map((el) => ({
+    name: accessibleName(el),
+    role: roleBucket(el),
+  }));
+  const index = bestLabelMatch(candidates, label, roleHint);
+  return index >= 0 ? (elements[index] ?? null) : null;
 }
 
 function ensureSpotlightStyles() {
@@ -162,7 +185,7 @@ export function startSpotlightGuide(
 	const driveSteps: DriveStep[] = [];
 
 	for (const s of steps) {
-		const resolved = resolveElement(s.element);
+		const resolved = resolveElementByLabel(s.label, s.role);
 		if (resolved) {
 			driveSteps.push({
 				element: resolved as HTMLElement,
@@ -175,7 +198,7 @@ export function startSpotlightGuide(
 				},
 			});
 		} else {
-			console.warn(`[cradle-spotlight] Element not found: "${s.element}"`);
+			console.warn(`[cradle-spotlight] No visible element labelled "${s.label}"`);
 		}
 	}
 

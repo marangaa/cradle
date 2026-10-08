@@ -5,7 +5,7 @@ import { store } from "../../../lib/store";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor-id",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor, x-cradle-visitor-id, x-cradle-user-id, x-cradle-user-hash, x-cradle-user-email, x-cradle-user-name",
   "Cache-Control": "no-store",
 };
 

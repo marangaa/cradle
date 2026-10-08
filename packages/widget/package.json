@@ -1,6 +1,6 @@
 {
   "name": "@maranga/cradle",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "type": "module",
   "license": "Apache-2.0",
   "description": "Framework-free animated website characters for Cradle.",
@@ -44,13 +44,16 @@
     "dev": "tsup --watch",
     "build": "tsup",
     "check-types": "tsc --noEmit",
+    "test": "tsx --test src/*.test.ts",
     "prepack": "tsup"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "tsup": "^8.5.1"
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.1"
   },
   "dependencies": {
+    "ai": "^7.0.31",
     "driver.js": "^1.8.0",
     "posthog-js": "^1.425.1"
   }

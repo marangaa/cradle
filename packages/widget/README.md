@@ -230,6 +230,9 @@ tell it about.
 |---|---|---|
 | `site-id` | Yes | UUID of your Cradle installation |
 | `api-base` | Only without a `<script src>` | Runtime origin; auto-inferred when loaded via script tag |
+| `chat-endpoint` | No | Full chat URL; defaults to `{api-base}/api/chat` |
+| `user-id` / `user-hash` | No | Signed-in user; `user-hash` = HMAC-SHA256(secret, user-id) computed by YOUR server. See CONNECTOR.md |
+| `user-email` / `user-name` | No | Optional, with `user-id` |
 | `placement` | No | `"floating"` (default) or `"inline"` |
 | `no-cycle` | No | Boolean attribute (presence = on). Disables the idle showcase — the default chatbot already sets this implicitly; set it yourself if you're bringing your own backend |
 | `theme` | No | One of `neobrutalist` (default) `modern` `cyberpunk` `terminal` `minimal` `synthwave` `paper` — overrides whatever theme was picked in Studio |

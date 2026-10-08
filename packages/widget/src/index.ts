@@ -1,5 +1,15 @@
 import { globalTelemetry } from "./telemetry.js";
 import { startSpotlightGuide, dismissSpotlight } from "./spotlight.js";
+import {
+  CradleChat,
+  messageText,
+  parseStoredMessages,
+  serializeMessages,
+  type CradleDataPart,
+  type CradleMessage,
+} from "./chat.js";
+import { isGuidePartType, parseGuideSteps } from "./guide.js";
+import { buildIdentityHeaders, DEFAULT_DISCLOSURE, readHostUser, type HostUser } from "./identity.js";
 
 /**
  * Canonical Petdex row -> state map. Confirmed against Petdex's own "State viewer" UI copy
@@ -45,6 +55,13 @@ type Character = {
   theme?: string;
 };
 
+type Manifest = {
+  character: Character;
+  /** AI disclosure text. The widget always shows it; a built-in default is used if absent. */
+  disclosure?: string;
+  assets: { atlas: PetAtlas | null } | null;
+};
+
 type CradleAction = string | { type: string; value?: string; [key: string]: unknown };
 
 type CradleController = {
@@ -57,9 +74,14 @@ type CradleController = {
   setState(state: PetdexState, siteId?: string): void;
   setContext(context: Record<string, unknown>, siteId?: string): void;
   setSprite(url: string, siteId?: string): void;
+  /**
+   * Set or clear the signed-in user. The `hash` MUST be computed by your backend; see
+   * CONNECTOR.md. Passing null returns to anonymous visitor identity.
+   */
+  setUser(user: HostUser | null, siteId?: string): void;
 };
 
-export type { PetdexState, PetAtlas, Character, CradleAction, CradleController };
+export type { PetdexState, PetAtlas, Character, CradleAction, CradleController, HostUser };
 
 declare global {
   interface Window {
@@ -123,12 +145,6 @@ function detectRowFrameCounts(image: HTMLImageElement, columns: number, rows: nu
 const HTMLElementBase: typeof HTMLElement =
   typeof HTMLElement !== "undefined" ? HTMLElement : (class {} as unknown as typeof HTMLElement);
 
-interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-}
-
 /** Framework-free custom element for an animated, programmable website character with built-in persistent AI chat. */
 class CradleCharacter extends HTMLElementBase {
   private readonly shadow = this.attachShadow({ mode: "open" });
@@ -153,19 +169,30 @@ class CradleCharacter extends HTMLElementBase {
   private explicitState = false;
   private cycleStep = 0;
   private currentState: PetdexState = "idle";
-  private localMessages: ChatMessage[] = [];
+  private chat: CradleChat | null = null;
+  private hostUser: HostUser | null = null;
+  private chatEndpoint = "";
+  private disclosure = DEFAULT_DISCLOSURE;
+  private lastStatus = "ready";
+  private chatError: string | null = null;
+  private renderQueued = false;
+  private handledGuides = new Set<string>();
+  private handledEmoteTags = new Set<string>();
   private isBusy = false;
   private characterName = "Assistant";
   private isLoaded = false;
 
   static get observedAttributes() {
-    return ["sprite-url", "preview-url", "theme"];
+    return ["sprite-url", "preview-url", "theme", "user-id", "user-hash", "user-email", "user-name"];
   }
 
   attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
     if (oldValue === newValue) return;
     if ((name === "sprite-url" || name === "preview-url") && newValue) {
       void this.setSpriteUrl(newValue);
+    } else if (name.startsWith("user-")) {
+      // Read lazily on every request, so a host that signs in later just updates attributes.
+      this.hostUser = readHostUser((n) => this.getAttribute(n));
     } else if (name === "theme" && newValue) {
       this.theme = newValue;
       const shell = this.shadow?.querySelector(".shell") as HTMLElement | null;
@@ -198,8 +225,11 @@ class CradleCharacter extends HTMLElementBase {
       );
     }
 
+    this.hostUser = readHostUser((n) => this.getAttribute(n));
+    this.chatEndpoint =
+      this.getAttribute("chat-endpoint") || `${this.apiBase.replace(/\/$/, "")}/api/chat`;
     this.visitorId = this.getOrCreateVisitorId();
-    this.loadStoredMessages();
+    this.chat = this.createChat();
 
     // Start PostHog-native telemetry + Client Watchdog
     const posthogKey = this.getAttribute("posthog-key") || undefined;
@@ -241,23 +271,131 @@ class CradleCharacter extends HTMLElementBase {
     }
   }
 
-  private loadStoredMessages() {
+  /** History is cached per site and per signed-in user, so shared browsers never mix threads. */
+  private storageKey(): string {
+    return `cradle_chat_${this.siteId}${this.hostUser ? `:${this.hostUser.id}` : ""}`;
+  }
+
+  private loadStoredMessages(): CradleMessage[] {
     try {
-      const stored = localStorage.getItem(`cradle_chat_${this.siteId}`);
-      if (stored) {
-        this.localMessages = JSON.parse(stored);
-      }
+      return parseStoredMessages(localStorage.getItem(this.storageKey()));
     } catch {
-      this.localMessages = [];
+      return [];
     }
   }
 
   private saveStoredMessages() {
     try {
-      localStorage.setItem(`cradle_chat_${this.siteId}`, JSON.stringify(this.localMessages));
+      localStorage.setItem(this.storageKey(), serializeMessages(this.chat?.messages ?? []));
     } catch {
       // Ignore localStorage errors
     }
+  }
+
+  /**
+   * Chat on the AI SDK's framework-agnostic core (see chat.ts). The backend contract is the
+   * standard UI message stream; identity rides headers, resolved fresh on every request.
+   */
+  private createChat(): CradleChat {
+    return new CradleChat({
+      api: this.chatEndpoint,
+      initialMessages: this.loadStoredMessages(),
+      headers: () =>
+        buildIdentityHeaders({ siteId: this.siteId, visitorId: this.visitorId, user: this.hostUser }),
+      body: () => ({
+        installationId: this.siteId,
+        visitorId: this.visitorId,
+        clientContext: {
+          telemetry: globalTelemetry.buffer.recent(20),
+          frictionReport: globalTelemetry.getFrictionReport(),
+          posthogSessionId: globalTelemetry.sessionId(),
+          sessionReplayUrl: globalTelemetry.sessionReplayUrl(),
+          currentUrl: typeof window !== "undefined" ? window.location.href : undefined,
+        },
+      }),
+      onData: (part) => this.handleDataPart(part),
+      onChange: () => this.onChatChange(),
+      onError: (error) => {
+        this.chatError = error.message || "Sorry, something went wrong. Please try again.";
+      },
+    });
+  }
+
+  /** `data-emote` and the spotlight guide arrive as AI SDK data parts (transient or not). */
+  private handleDataPart(part: CradleDataPart) {
+    if (part.type === "data-emote") {
+      const emote = (part.data as { emote?: unknown } | undefined)?.emote;
+      if (typeof emote === "string" && STATE_ORDER.includes(emote as PetdexState)) {
+        this.explicitState = true;
+        this.setVisualState(emote as PetdexState);
+      }
+    } else if (isGuidePartType(part.type)) {
+      const steps = parseGuideSteps(part.data);
+      if (steps.length > 0) startSpotlightGuide(steps);
+    }
+  }
+
+  private onChatChange() {
+    const chat = this.chat;
+    if (!chat) return;
+    const status = chat.status;
+    const previous = this.lastStatus;
+    this.lastStatus = status;
+    this.isBusy = status === "submitted" || status === "streaming";
+    if (status === "submitted") this.chatError = null;
+
+    // Guides can also arrive as a `widget_guide` tool part; run each call once.
+    const last = chat.messages.at(-1);
+    if (last?.role === "assistant") {
+      for (const part of last.parts) {
+        if (part.type === "tool-widget_guide") {
+          const tool = part as { toolCallId?: string; state?: string; input?: unknown };
+          if (!tool.toolCallId || this.handledGuides.has(tool.toolCallId)) continue;
+          if (tool.state !== "input-available" && tool.state !== "output-available") continue;
+          this.handledGuides.add(tool.toolCallId);
+          const steps = parseGuideSteps(tool.input);
+          if (steps.length > 0) startSpotlightGuide(steps);
+        } else if (part.type === "text") {
+          // Legacy in-band tag from backends that predate data parts.
+          const tag = part.text.match(/\[cradle:emote:([a-z-]+)\]/i)?.[1];
+          const key = `${last.id}:${tag}`;
+          if (tag && STATE_ORDER.includes(tag as PetdexState) && !this.handledEmoteTags.has(key)) {
+            this.handledEmoteTags.add(key);
+            this.explicitState = true;
+            this.setVisualState(tag as PetdexState);
+          }
+        }
+      }
+    }
+
+    if (previous !== status && (previous === "submitted" || previous === "streaming")) {
+      if (status === "ready") {
+        this.saveStoredMessages();
+        this.resolveAction(true);
+      } else if (status === "error") {
+        this.saveStoredMessages();
+        this.resolveAction(false);
+      }
+    }
+    this.queueRender();
+  }
+
+  private queueRender() {
+    if (this.renderQueued) return;
+    this.renderQueued = true;
+    const run = () => {
+      this.renderQueued = false;
+      this.renderMessages();
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+    else setTimeout(run, 16);
+  }
+
+  /** Replaces the signed-in user (null = anonymous). Takes effect on the next message. */
+  setUser(user: HostUser | null) {
+    this.hostUser = user;
+    for (const name of ["user-id", "user-hash", "user-email", "user-name"]) this.removeAttribute(name);
+    this.emit("cradle:user", this.eventContext());
   }
 
   /** Opens the character and emits an activation event for the host experience. */
@@ -391,6 +529,7 @@ class CradleCharacter extends HTMLElementBase {
       '.built-in-chat{width:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;background:transparent;overflow:visible}',
 
       /* Messages Stream */
+      '.disclosure{margin:0;padding:6px 10px;font-size:0.72rem;line-height:1.35;background:var(--cradle-bg,#ffffff);color:var(--cradle-text,#09090b);border-radius:10px;border:1px solid rgba(9,9,11,0.2);align-self:stretch;box-sizing:border-box}',
       '.chat-messages{display:flex;flex-direction:column;gap:10px;padding:8px 4px;max-height:calc(100vh - 160px);min-height:40px;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none}',
       '.chat-messages::-webkit-scrollbar{display:none}',
       '.msg{max-width:85%;padding:10px 14px;font-size:0.86rem;line-height:1.45;word-break:break-word;white-space:pre-wrap;box-sizing:border-box}',
@@ -456,7 +595,8 @@ class CradleCharacter extends HTMLElementBase {
         '<section class="panel" hidden aria-label="Website character">' +
           '<slot>' +
             '<div class="built-in-chat">' +
-              '<div class="chat-messages" tabindex="0">' +
+              '<p class="disclosure" role="note"></p>' +
+                '<div class="chat-messages" tabindex="0" role="log" aria-live="polite">' +
                 '<div class="msg assistant-msg greeting-msg">' +
                   '<p class="greeting" style="margin:0">Hi there! 👋 Ask me anything.</p>' +
                 '</div>' +
@@ -491,7 +631,8 @@ class CradleCharacter extends HTMLElementBase {
       this.dragged = false;
     });
 
-    this.renderStoredMessages();
+    this.renderDisclosure();
+    this.renderMessages();
   }
 
   private setupChatListeners() {
@@ -519,218 +660,68 @@ class CradleCharacter extends HTMLElementBase {
     }
   }
 
-  private renderStoredMessages() {
+  private renderDisclosure() {
+    const el = this.shadow.querySelector(".disclosure") as HTMLElement | null;
+    if (el) el.textContent = this.disclosure;
+  }
+
+  private renderMessages() {
     const msgContainer = this.shadow.querySelector(".chat-messages") as HTMLElement | null;
     if (!msgContainer) return;
-
-    if (this.localMessages.length === 0) {
-      msgContainer.innerHTML = [
-        '<div class="msg assistant-msg greeting-msg">',
-          '<p class="greeting" style="margin:0">Hi there! 👋 Ask me anything.</p>',
-        '</div>',
-      ].join("");
-      return;
-    }
+    const messages = this.chat?.messages ?? [];
+    const nearBottom = msgContainer.scrollHeight - msgContainer.scrollTop - msgContainer.clientHeight < 40;
 
     msgContainer.innerHTML = "";
-    for (const m of this.localMessages) {
+    if (this.greetingText && messages.length === 0) {
+      const greeting = document.createElement("div");
+      greeting.className = "msg assistant-msg greeting-msg";
+      const p = document.createElement("p");
+      p.className = "greeting";
+      p.style.margin = "0";
+      p.textContent = this.greetingText;
+      greeting.appendChild(p);
+      msgContainer.appendChild(greeting);
+    }
+
+    for (const m of messages) {
+      const text = visibleText(m);
+      if (!text) continue;
       const bubble = document.createElement("div");
       bubble.className = `msg ${m.role === "user" ? "user-msg" : "assistant-msg"}`;
-      bubble.textContent = m.content;
+      bubble.textContent = text;
       msgContainer.appendChild(bubble);
     }
 
-    msgContainer.scrollTop = msgContainer.scrollHeight;
+    const last = messages.at(-1);
+    if (this.isBusy && !(last?.role === "assistant" && visibleText(last))) {
+      const typing = document.createElement("div");
+      typing.className = "msg assistant-msg";
+      typing.textContent = "\u2026";
+      msgContainer.appendChild(typing);
+    }
+    if (this.chatError) {
+      const err = document.createElement("div");
+      err.className = "msg assistant-msg";
+      err.setAttribute("role", "alert");
+      err.textContent = this.chatError;
+      msgContainer.appendChild(err);
+    }
+
+    const sendBtn = this.shadow.querySelector(".send-btn") as HTMLButtonElement | null;
+    if (sendBtn) sendBtn.disabled = this.isBusy;
+    if (nearBottom || this.isBusy) msgContainer.scrollTop = msgContainer.scrollHeight;
   }
 
-  private async fetchInitialGreeting(baseUrl: string) {
-    console.log(`[CradleWidget] Fetching initial greeting from ${baseUrl}/api/chat/init`);
-    try {
-      const res = await fetch(`${baseUrl}/api/chat/init`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-cradle-installation-id": this.siteId,
-          "x-cradle-visitor-id": this.visitorId,
-        },
-        body: JSON.stringify({ installationId: this.siteId, visitorId: this.visitorId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        console.log(`[CradleWidget] Initial greeting response:`, data);
-        if (data.greeting) {
-          const greetingEl = this.shadow.querySelector(".greeting") as HTMLElement | null;
-          if (greetingEl) greetingEl.textContent = data.greeting;
-        }
-      } else {
-        console.warn(`[CradleWidget] Initial greeting fetch failed status: ${res.status}`);
-      }
-    } catch (err) {
-      console.warn(`[CradleWidget] Initial greeting fetch error:`, err);
-    }
-  }
+  private greetingText = "Hi there! 👋 Ask me anything.";
 
   private async sendChatMessage(text: string) {
-    console.log(`[CradleWidget] Sending chat message: "${text}"`);
-    this.isBusy = true;
-    const sendBtn = this.shadow.querySelector(".send-btn") as HTMLButtonElement | null;
-    if (sendBtn) sendBtn.disabled = true;
-
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: text };
-    this.localMessages.push(userMsg);
-    this.renderStoredMessages();
-
-    const assistantMsgId = crypto.randomUUID();
-    const assistantMsg: ChatMessage = { id: assistantMsgId, role: "assistant", content: "…" };
-    this.localMessages.push(assistantMsg);
-    this.renderStoredMessages();
-
+    const chat = this.chat;
+    if (!chat) return;
     this.explicitState = true;
     this.setVisualState("review");
-
-    try {
-      const baseUrl = (this.apiBase || "").replace(/\/$/, "");
-      const res = await fetch(`${baseUrl}/api/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-cradle-installation-id": this.siteId,
-          "x-cradle-visitor-id": this.visitorId,
-        },
-        body: JSON.stringify({
-          messages: this.localMessages.slice(0, -1).map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            parts: [{ type: "text", text: m.content }],
-          })),
-          installationId: this.siteId,
-          visitorId: this.visitorId,
-          clientContext: {
-            telemetry: globalTelemetry.buffer.recent(20),
-            frictionReport: globalTelemetry.getFrictionReport(),
-            posthogSessionId: globalTelemetry.sessionId(),
-            sessionReplayUrl: globalTelemetry.sessionReplayUrl(),
-            currentUrl: typeof window !== "undefined" ? window.location.href : undefined,
-          },
-        }),
-      });
-
-      if (!res.ok) {
-        let errText = `Chat request failed with status ${res.status}`;
-        try {
-          const json = await res.json();
-          if (json.message || json.error) errText = json.message || json.error;
-        } catch {
-          // ignore
-        }
-        console.error(`[CradleWidget] HTTP ${res.status} error:`, errText);
-        throw new Error(errText);
-      }
-
-      if (!res.body) throw new Error("No response body received.");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let sseBuffer = "";
-      let streamedRaw = "";
-
-      const handleSsePayload = (payload: string) => {
-        if (!payload || payload === "[DONE]") return;
-        try {
-          const event = JSON.parse(payload) as {
-            type?: string;
-            delta?: string;
-            data?: { emote?: string; steps?: unknown[] };
-            toolName?: string;
-            args?: { steps?: unknown[] };
-          };
-
-          if (event.type === "text-delta" && typeof event.delta === "string") {
-            streamedRaw += event.delta;
-          } else if (event.type === "data-emote") {
-            const emote = event.data?.emote;
-            if (emote && STATE_ORDER.includes(emote as PetdexState)) {
-              console.log(`[CradleWidget] data-emote received: "${emote}"`);
-              this.explicitState = true;
-              this.setVisualState(emote as PetdexState);
-            }
-          } else if (
-            event.type === "tool-call" ||
-            event.toolName === "widget_guide" ||
-            event.type === "data-guide"
-          ) {
-            const guideData = event.args || event.data;
-            if (guideData?.steps && Array.isArray(guideData.steps)) {
-              console.log("[CradleWidget] Executing Driver.js spotlight guide:", guideData.steps);
-              startSpotlightGuide(guideData.steps as any);
-            }
-          }
-        } catch {
-          // Non-JSON SSE payload — append raw text
-          streamedRaw += payload;
-        }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-
-        if (chunk.includes("data:")) {
-          sseBuffer += chunk;
-          const lines = sseBuffer.split("\n");
-          sseBuffer = lines.pop() ?? "";
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith("data:")) {
-              handleSsePayload(trimmed.slice(5).trim());
-            }
-          }
-        } else {
-          streamedRaw += chunk;
-        }
-
-        // Check for in-band emote tag [cradle:emote:<emote>]
-        const emoteMatch = chunk.match(/\[cradle:emote:([a-z-]+)\]/i);
-        if (emoteMatch?.[1] && STATE_ORDER.includes(emoteMatch[1] as PetdexState)) {
-          const emote = emoteMatch[1] as PetdexState;
-          console.log(`[CradleWidget] setEmote triggered from stream: "${emote}"`);
-          this.explicitState = true;
-          this.setVisualState(emote);
-        }
-
-        // Clean out in-band emote tags from visible chat text
-        const cleanedText = streamedRaw.replace(/\[cradle:emote:[a-z-]+\]/gi, "");
-
-        const target = this.localMessages.find((m) => m.id === assistantMsgId);
-        if (target) {
-          target.content = cleanedText || "…";
-          this.renderStoredMessages();
-        }
-      }
-
-      if (sseBuffer.trim().startsWith("data:")) {
-        handleSsePayload(sseBuffer.trim().slice(5).trim());
-      }
-
-      const finalCleanText = streamedRaw.replace(/\[cradle:emote:[a-z-]+\]/gi, "");
-      console.log(`[CradleWidget] Stream finished cleanly. Total length: ${finalCleanText.length} chars`);
-      this.saveStoredMessages();
-      this.resolveAction(true);
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : "Sorry, something went wrong. Please try again.";
-      console.error(`[CradleWidget] sendChatMessage caught error:`, errMsg);
-      const target = this.localMessages.find((m) => m.id === assistantMsgId);
-      if (target) {
-        target.content = errMsg;
-        this.renderStoredMessages();
-      }
-      this.resolveAction(false);
-    } finally {
-      this.isBusy = false;
-      if (sendBtn) sendBtn.disabled = false;
-    }
+    // Status, streaming, abort and error handling all live in AbstractChat; this component only
+    // reacts through onChatChange(). sendMessage resolves after the stream ends or fails.
+    await chat.sendMessage({ text });
   }
 
   private async loadManifest() {
@@ -738,9 +729,8 @@ class CradleCharacter extends HTMLElementBase {
       const baseUrl = (this.apiBase || "").replace(/\/$/, "");
       const response = await fetch(baseUrl + "/api/installations/" + this.siteId);
       if (!response.ok) throw new Error("The character manifest could not be loaded.");
-      const manifest = await response.json() as { character: Character; assets: { atlas: PetAtlas | null } | null };
+      const manifest = await response.json() as Manifest;
       const shell = this.shadow.querySelector(".shell") as HTMLElement;
-      const greeting = this.shadow.querySelector(".greeting") as HTMLElement;
 
       shell.dataset.placement = this.placement;
       this.characterName = manifest.character.displayName || "Assistant";
@@ -748,13 +738,10 @@ class CradleCharacter extends HTMLElementBase {
       this.theme = resolvedTheme;
       shell.dataset.theme = resolvedTheme;
 
-      if (greeting && manifest.character.greeting) {
-        greeting.textContent = manifest.character.greeting;
-      }
-
-      if (this.localMessages.length === 0) {
-        void this.fetchInitialGreeting(baseUrl);
-      }
+      this.greetingText = manifest.character.greeting || "Hi there! \u{1F44B} Ask me anything.";
+      this.disclosure = manifest.disclosure?.trim() || DEFAULT_DISCLOSURE;
+      this.renderDisclosure();
+      this.renderMessages();
 
       const overrideUrl = this.getAttribute("sprite-url") || this.getAttribute("preview-url");
       if (overrideUrl) {
@@ -897,6 +884,29 @@ if (typeof customElements !== "undefined" && !customElements.get("cradle-charact
   customElements.define("cradle-character", CradleCharacter);
 }
 
+/** Attributes the single-tag embed copies from `data-*` on the script onto the element. */
+const SCRIPT_ATTRIBUTES = [
+  "api-base",
+  "chat-endpoint",
+  "placement",
+  "theme",
+  "no-cycle",
+  "accent-color",
+  "primary-color",
+  "bg-color",
+  "text-color",
+  "posthog-key",
+  "posthog-host",
+  "user-id",
+  "user-hash",
+  "user-email",
+  "user-name",
+] as const;
+
+function visibleText(message: CradleMessage): string {
+  return messageText(message).trim();
+}
+
 function getCharacter(siteId?: string) {
   if (typeof document === "undefined") return null;
   if (siteId) {
@@ -937,8 +947,11 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
       if (document.querySelector("cradle-character")) return;
       const element = document.createElement("cradle-character");
       element.setAttribute("site-id", siteId);
-      if (script?.dataset.placement) element.setAttribute("placement", script.dataset.placement);
-      if (script?.dataset.theme) element.setAttribute("theme", script.dataset.theme);
+      // Every documented attribute can be set as a data-* attribute on the script tag.
+      for (const name of SCRIPT_ATTRIBUTES) {
+        const value = script?.getAttribute(`data-${name}`);
+        if (value) element.setAttribute(name, value);
+      }
       document.body.appendChild(element);
     };
 
@@ -955,6 +968,7 @@ if (typeof window !== "undefined" && typeof customElements !== "undefined") {
     setState: (state, siteId) => getCharacter(siteId)?.setVisualState(state),
     setContext: (context, siteId) => getCharacter(siteId)?.setContext(context),
     setSprite: (url, siteId) => getCharacter(siteId)?.setSpriteUrl(url),
+    setUser: (user, siteId) => getCharacter(siteId)?.setUser(user),
   };
 }
 
@@ -965,6 +979,11 @@ type CradleCharacterElementProps = {
   /** Boolean attribute. Present = skip the idle showcase; use when driving real state yourself. */
   "no-cycle"?: boolean | "";
   theme?: "neobrutalist" | "modern" | "cyberpunk" | "terminal" | "minimal" | "synthwave" | "paper";
+  "chat-endpoint"?: string;
+  "user-id"?: string;
+  "user-hash"?: string;
+  "user-email"?: string;
+  "user-name"?: string;
   "sprite-url"?: string;
   "preview-url"?: string;
   "accent-color"?: string;

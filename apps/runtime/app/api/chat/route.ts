@@ -22,7 +22,7 @@ const FREE_TIER_MONTHLY_LIMIT = 99;
 const PREFLIGHT_CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor-id",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor, x-cradle-visitor-id, x-cradle-user-id, x-cradle-user-hash, x-cradle-user-email, x-cradle-user-name",
 };
 
 /** Reflects Origin only if it matches this installation's registered origin — same pattern as
@@ -33,7 +33,7 @@ function buildCorsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor-id",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-cradle-installation-id, x-cradle-visitor, x-cradle-visitor-id, x-cradle-user-id, x-cradle-user-hash, x-cradle-user-email, x-cradle-user-name",
     "Cache-Control": "no-store",
   };
 }
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   try {
     const url = new URL(req.url);
     const headerInstallationId = req.headers.get("x-cradle-installation-id");
-    const headerVisitorId = req.headers.get("x-cradle-visitor-id");
+    const headerVisitorId = (req.headers.get("x-cradle-visitor") ?? req.headers.get("x-cradle-visitor-id"));
 
     const body = await req.json() as {
       messages?: UIMessage[];
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     if (!installationId || !visitorId) {
       console.warn(`[Chat API] Missing installationId or visitorId`);
       return new Response(
-        JSON.stringify({ error: "Missing required headers: x-cradle-installation-id, x-cradle-visitor-id" }),
+        JSON.stringify({ error: "Missing required headers: x-cradle-installation-id, x-cradle-visitor, x-cradle-visitor-id, x-cradle-user-id, x-cradle-user-hash, x-cradle-user-email, x-cradle-user-name" }),
         { status: 400, headers: { ...buildCorsHeaders(), "Content-Type": "application/json" } }
       );
     }
