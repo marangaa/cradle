@@ -325,7 +325,7 @@ importers:
   packages/widget:
     dependencies:
       ai:
-        specifier: ^7.0.31
+        specifier: ~7.0.31
         version: 7.0.31(zod@4.4.3)
       driver.js:
         specifier: ^1.8.0

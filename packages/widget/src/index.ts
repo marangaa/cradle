@@ -146,6 +146,9 @@ const HTMLElementBase: typeof HTMLElement =
   typeof HTMLElement !== "undefined" ? HTMLElement : (class {} as unknown as typeof HTMLElement);
 
 /** Framework-free custom element for an animated, programmable website character with built-in persistent AI chat. */
+/** Shown to visitors for any chat failure; details are only logged to the console. */
+const CHAT_ERROR_MESSAGE = "Sorry, something went wrong. Please try again.";
+
 class CradleCharacter extends HTMLElementBase {
   private readonly shadow = this.attachShadow({ mode: "open" });
   private petAnimations: Animation[] = [];
@@ -257,6 +260,8 @@ class CradleCharacter extends HTMLElementBase {
     this.stopCycle();
     globalTelemetry.destroy();
     dismissSpotlight();
+    // Abort any in-flight chat request so a removed widget does not keep streaming.
+    void this.chat?.stop();
   }
 
   private getOrCreateVisitorId(): string {
@@ -316,13 +321,26 @@ class CradleCharacter extends HTMLElementBase {
       onData: (part) => this.handleDataPart(part),
       onChange: () => this.onChatChange(),
       onError: (error) => {
-        this.chatError = error.message || "Sorry, something went wrong. Please try again.";
+        // Visitors get a fixed friendly message; the real error (which can carry
+        // server details) goes to the console for the host developer only.
+        console.error("[cradle] chat error:", error);
+        this.chatError = CHAT_ERROR_MESSAGE;
       },
     });
   }
 
   /** `data-emote` and the spotlight guide arrive as AI SDK data parts (transient or not). */
   private handleDataPart(part: CradleDataPart) {
+    // A throw here would abort the stream mid-response, so a DOM/spotlight
+    // problem must never escape (https://ai-sdk.dev/docs/ai-sdk-ui/chatbot).
+    try {
+      this.applyDataPart(part);
+    } catch (error) {
+      console.error("[cradle] failed to handle data part:", part.type, error);
+    }
+  }
+
+  private applyDataPart(part: CradleDataPart) {
     if (part.type === "data-emote") {
       const emote = (part.data as { emote?: unknown } | undefined)?.emote;
       if (typeof emote === "string" && STATE_ORDER.includes(emote as PetdexState)) {

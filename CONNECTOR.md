@@ -43,7 +43,7 @@ Your backend may use only the last message and keep history itself (Qualra does)
 | `x-cradle-visitor-id` | Same value; legacy spelling still sent for 0.1.x backends |
 | `x-cradle-user-id` | Host-asserted user id (only when the host sets `user-id`) |
 | `x-cradle-user-hash` | Host-computed signature of the user id |
-| `x-cradle-user-email`, `x-cradle-user-name` | Optional, host-asserted |
+| `x-cradle-user-email`, `x-cradle-user-name` | Optional, host-asserted. The hash proves the user id, not the mailbox: a backend should treat the email as an unconfirmed claim (Qualra emails it a confirmation link before any consent) |
 
 User header values are percent-encoded UTF-8 (`encodeURIComponent`); decode them. If your backend is cross-origin, list all of these in `Access-Control-Allow-Headers`.
 
