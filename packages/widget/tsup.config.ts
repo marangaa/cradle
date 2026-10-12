@@ -25,6 +25,11 @@ export default defineConfig([
     entry: { "widget.iife": "src/index.ts" },
     format: ["iife"],
     platform: "browser",
+    // This file is what customers load with a <script> tag, so ship it minified.
+    minify: true,
+    // The spotlight library's base CSS would otherwise be emitted as a separate .css file that a
+    // single <script> embed never loads, leaving popovers unpositioned. Inline it into the JS.
+    injectStyle: true,
     clean: false,
     // tsup's default IIFE naming appends ".global" (dist/widget.iife.global.js) — every reference
     // to this file elsewhere in the repo (package.json exports/unpkg/jsdelivr,
