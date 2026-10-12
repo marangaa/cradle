@@ -1,6 +1,6 @@
 # Connecting a backend to the Cradle widget
 
-Cradle's widget (`@maranga/cradle`, 0.2.0) talks to any backend that speaks the **AI SDK UI message stream**. Cradle's own runtime and [Qualra](https://www.qualra.xyz) are two such backends. This page is the contract.
+Cradle's widget (`@maranga/cradle`, 0.2.0) talks to any backend that speaks the **AI SDK UI message stream**. This page is the contract. Cradle's own runtime (`apps/runtime`) is the reference implementation.
 
 ## 1. Endpoints
 
@@ -9,7 +9,7 @@ Cradle's widget (`@maranga/cradle`, 0.2.0) talks to any backend that speaks the 
 | `GET {api-base}/api/installations/{site-id}` | Manifest: character, greeting, **disclosure**, sprite atlas |
 | `POST {chat-endpoint}` (default `{api-base}/api/chat`) | One chat turn, streamed |
 
-`chat-endpoint` is optional; set it (attribute `chat-endpoint`, or `data-chat-endpoint` on the script tag) when your chat URL carries extra query parameters, for example Qualra's `/api/chat?key=<key>`. The `/api/chat/init` call used by 0.1.x is gone: greeting and disclosure come from the manifest.
+`chat-endpoint` is optional; set it (attribute `chat-endpoint`, or `data-chat-endpoint` on the script tag) when your chat URL carries extra query parameters, for example `/api/chat?key=<key>`. The `/api/chat/init` call used by 0.1.x is gone: greeting and disclosure come from the manifest.
 
 ### Manifest
 
@@ -32,7 +32,7 @@ The widget uses the AI SDK's `DefaultChatTransport` (built on `AbstractChat`), s
   "clientContext": { "telemetry": [], "frictionReport": {}, "posthogSessionId": "", "sessionReplayUrl": "", "currentUrl": "" } }
 ```
 
-Your backend may use only the last message and keep history itself (Qualra does).
+Your backend may use only the last message and keep history itself.
 
 ### Identity headers
 
@@ -43,7 +43,7 @@ Your backend may use only the last message and keep history itself (Qualra does)
 | `x-cradle-visitor-id` | Same value; legacy spelling still sent for 0.1.x backends |
 | `x-cradle-user-id` | Host-asserted user id (only when the host sets `user-id`) |
 | `x-cradle-user-hash` | Host-computed signature of the user id |
-| `x-cradle-user-email`, `x-cradle-user-name` | Optional, host-asserted. The hash proves the user id, not the mailbox: a backend should treat the email as an unconfirmed claim (Qualra emails it a confirmation link before any consent) |
+| `x-cradle-user-email`, `x-cradle-user-name` | Optional, host-asserted. The hash proves the user id, not the mailbox: a backend should treat the email as an unconfirmed claim (for example, send a confirmation link before using it for anything) |
 
 User header values are percent-encoded UTF-8 (`encodeURIComponent`); decode them. If your backend is cross-origin, list all of these in `Access-Control-Allow-Headers`.
 
@@ -52,10 +52,10 @@ User header values are percent-encoded UTF-8 (`encodeURIComponent`); decode them
 The widget cannot verify identity. The host's **server** computes
 
 ```
-user-hash = hex( HMAC-SHA256( workspaceSecret, userId ) )
+user-hash = hex( HMAC-SHA256( siteSecret, userId ) )
 ```
 
-and renders `user-id` and `user-hash` into the page. The backend recomputes the HMAC and compares in constant time. **An unverified `user-id` must be ignored** (fall back to the anonymous visitor id). Never put the secret in the browser. Qualra generates and rotates the secret in dashboard settings.
+and renders `user-id` and `user-hash` into the page. The backend recomputes the HMAC and compares in constant time. **An unverified `user-id` must be ignored** (fall back to the anonymous visitor id). Never put the secret in the browser. The backend generates and stores `siteSecret` per site, and should let the site owner rotate it.
 
 Attributes (or `data-*` on the script tag): `user-id`, `user-hash`, `user-email`, `user-name`. At runtime: `window.Cradle.setUser({ id, hash, email, name })` or `setUser(null)`. Chat history in localStorage is keyed per user.
 
@@ -114,4 +114,4 @@ pnpm --filter @maranga/cradle build      # outputs packages/widget/dist/widget.i
 npx serve packages/widget/dist -l 4173   # any static server, CORS enabled
 ```
 
-In Qualra set `NEXT_PUBLIC_CRADLE_WIDGET_URL=http://localhost:4173/widget.iife.js`. 0.2.0 is not published; publish it (`npm publish` in `packages/widget`) before deploying Qualra with the pinned `0.2.0` CDN URL.
+Point your page's embed `src` at `http://localhost:4173/widget.iife.js` to use the local build. 0.2.0 is not published yet; publish it (`npm publish` in `packages/widget`) before pointing production embeds at the pinned `0.2.0` CDN URL.

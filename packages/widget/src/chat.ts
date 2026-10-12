@@ -79,7 +79,7 @@ class CradleChatState implements ChatState<CradleMessage> {
 }
 
 export type CradleChatOptions = {
-  /** Full URL of the chat endpoint, e.g. `https://app.qualra.xyz/api/chat?key=...`. */
+  /** Full URL of the chat endpoint, e.g. `https://api.example.com/api/chat?key=...`. */
   api: string;
   /** Resolved on every request, so identity can change without rebuilding the chat. */
   headers: () => Record<string, string>;

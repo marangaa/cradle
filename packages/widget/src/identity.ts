@@ -5,7 +5,7 @@
  * - `user`: optional host-asserted identity. The host's BACKEND signs the user id and renders
  *   `user-id` + `user-hash` (plus optional `user-email`, `user-name`) as attributes. The widget
  *   only forwards them; it cannot verify anything. Backends must verify `user-hash` themselves
- *   (Qualra: HMAC-SHA256 of the user id with a per-workspace secret) and ignore an unverified
+ *   (see CONNECTOR.md: HMAC-SHA256 of the user id with a per-site secret) and ignore an unverified
  *   `user-id`.
  *
  * Header values are percent-encoded UTF-8 so names and ids outside Latin-1 survive HTTP.
